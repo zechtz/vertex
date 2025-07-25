@@ -9,16 +9,28 @@ on:
 jobs:
   build:
     name: Build Binaries
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Build for multiple platforms
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
-        exclude:
-          # Exclude combinations that don't make sense or aren't supported
-          - goos: windows
+        include:
+          # Linux builds on Ubuntu
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux  
             goarch: arm64
+          # macOS builds on macOS (native compilation)
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-14
+            goos: darwin
+            goarch: arm64
+          # Windows builds on Ubuntu with cross-compilation
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
 
     steps:
     - name: Checkout code
@@ -48,14 +60,27 @@ jobs:
 
     - name: Install cross-compilation tools
       run: |
-        # Install cross-compilation tools for CGO
-        sudo apt-get update
-        sudo apt-get install -y gcc-multilib gcc-mingw-w64
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          # Linux/Ubuntu setup
+          sudo apt-get update
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            sudo apt-get install -y gcc-mingw-w64
+          elif [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          else
+            sudo apt-get install -y gcc-multilib
+          fi
+        elif [[ "${{ matrix.os }}" == macos* ]]; then
+          # macOS setup - use native compilation
+          echo "Using native macOS compilation"
+        fi
 
     - name: Set up cross-compilation environment
       run: |
         if [ "${{ matrix.goos }}" = "windows" ]; then
           echo "CC=x86_64-w64-mingw32-gcc" >> $GITHUB_ENV
+        elif [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
         fi
 
     - name: Build binary
@@ -73,15 +98,19 @@ jobs:
         # Build with optimizations
         go build -ldflags="-s -w -X main.version=${GITHUB_REF#refs/tags/}" -o "${BINARY_NAME}"
         
-        # Create checksum
-        sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+        # Create checksum (different commands for different OS)
+        if [[ "${{ matrix.os }}" == macos* ]]; then
+          shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+        else
+          sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+        fi
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
         path: |
-          nest-up-*
+          nest-up-${{ matrix.goos }}-${{ matrix.goarch }}*
           *.sha256
 
   release:
