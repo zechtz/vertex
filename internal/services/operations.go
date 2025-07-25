@@ -185,7 +185,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	// fmt.Printf("The command to run is: %s", cmd)
 
 	// Set process group for proper cleanup
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	SetProcessGroup(cmd)
 
 	// Set environment variables for the process
 	cmd.Env = os.Environ() // Start with current environment
@@ -335,19 +335,19 @@ func (sm *Manager) stopService(service *models.Service) error {
 	log.Printf("Stopping service %s (PID: %d)", service.Name, service.PID)
 
 	// Get the process group ID and kill the entire group
-	if pgid, err := syscall.Getpgid(service.Cmd.Process.Pid); err != nil {
+	if pgid, err := GetProcessGroup(service.Cmd.Process.Pid); err != nil {
 		log.Printf("Failed to get process group for %s: %v", service.Name, err)
 		// Fallback to killing just the main process
 		if err := service.Cmd.Process.Kill(); err != nil {
 			return err
 		}
 	} else {
-		// Kill the entire process group (negative PID)
-		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+		// Kill the entire process group
+		if err := KillProcessGroup(pgid); err != nil {
 			log.Printf("Failed to terminate process group for %s: %v", service.Name, err)
-			// Try SIGKILL if SIGTERM fails
-			if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
-				log.Printf("Failed to kill process group for %s: %v", service.Name, err)
+			// Try force kill if regular kill fails
+			if err := ForceKillProcessGroup(pgid); err != nil {
+				log.Printf("Failed to force kill process group for %s: %v", service.Name, err)
 				// Fallback to killing just the main process
 				if err := service.Cmd.Process.Kill(); err != nil {
 					return err

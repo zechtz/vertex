@@ -219,7 +219,6 @@ func (sm *Manager) isProcessRunning(pid int) bool {
 		return false
 	}
 
-	// Use syscall to check if process exists (signal 0)
-	err := syscall.Kill(pid, 0)
-	return err == nil
+	// Use platform-specific function to check if process exists
+	return IsProcessRunning(pid)
 }

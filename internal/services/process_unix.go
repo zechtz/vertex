@@ -36,3 +36,10 @@ func KillProcessGroup(pgid int) error {
 func ForceKillProcessGroup(pgid int) error {
 	return syscall.Kill(-pgid, syscall.SIGKILL)
 }
+
+// IsProcessRunning checks if a process is running on Unix systems
+func IsProcessRunning(pid int) bool {
+	// Use signal 0 to check if process exists
+	err := syscall.Kill(pid, 0)
+	return err == nil
+}

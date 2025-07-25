@@ -215,8 +215,8 @@ func (sm *Manager) GracefulShutdown() {
 		service.Mutex.Lock()
 		if service.Cmd != nil && service.Cmd.Process != nil {
 			log.Printf("[INFO] %s - Force cleaning up remaining process for %s (PID: %d)", time.Now().Format("2006-01-02 15:04:05"), service.Name, service.PID)
-			if pgid, err := syscall.Getpgid(service.Cmd.Process.Pid); err == nil {
-				syscall.Kill(-pgid, syscall.SIGKILL)
+			if pgid, err := GetProcessGroup(service.Cmd.Process.Pid); err == nil {
+				ForceKillProcessGroup(pgid)
 			} else {
 				service.Cmd.Process.Kill()
 			}
