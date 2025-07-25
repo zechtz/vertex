@@ -90,6 +90,17 @@ function AppContent() {
           ),
         );
 
+        // Clear loading states when service status changes
+        setServiceLoadingStates((prev) => ({
+          ...prev,
+          [updatedService.name]: {
+            starting: updatedService.status === "running" ? false : prev[updatedService.name]?.starting || false,
+            stopping: updatedService.status === "stopped" ? false : prev[updatedService.name]?.stopping || false,
+            restarting: false, // Always clear restarting state on any update
+            checkingHealth: false, // Always clear health check state on any update
+          },
+        }));
+
         // Update selected service if it's the one that was updated
         if (selectedService && selectedService.name === updatedService.name) {
           setSelectedService(updatedService);
@@ -185,6 +196,9 @@ function AppContent() {
       addToast(
         toast.success("Service starting", `${serviceName} is now starting up`),
       );
+      
+      // Don't clear loading state here - let WebSocket updates handle it
+      // The loading state will be cleared when we receive a status update via WebSocket
     } catch (error) {
       console.error("Failed to start service:", error);
       addToast(
@@ -195,8 +209,7 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-    } finally {
-      // Clear loading state for this service
+      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], starting: false },
@@ -223,6 +236,8 @@ function AppContent() {
       addToast(
         toast.success("Service stopping", `${serviceName} is shutting down`),
       );
+      
+      // Don't clear loading state here - let WebSocket updates handle it
     } catch (error) {
       console.error("Failed to stop service:", error);
       addToast(
@@ -233,8 +248,7 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-    } finally {
-      // Clear loading state for this service
+      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], stopping: false },
@@ -264,6 +278,8 @@ function AppContent() {
           `${serviceName} is being restarted`,
         ),
       );
+      
+      // Don't clear loading state here - let WebSocket updates handle it
     } catch (error) {
       console.error("Failed to restart service:", error);
       addToast(
@@ -274,8 +290,7 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-    } finally {
-      // Clear loading state for this service
+      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], restarting: false },
@@ -305,6 +320,14 @@ function AppContent() {
           `Checking ${serviceName} health status`,
         ),
       );
+      
+      // Clear health check loading state after a short delay since health checks are quick
+      setTimeout(() => {
+        setServiceLoadingStates((prev) => ({
+          ...prev,
+          [serviceName]: { ...prev[serviceName], checkingHealth: false },
+        }));
+      }, 1000);
     } catch (error) {
       console.error("Failed to check service health:", error);
       addToast(
@@ -315,8 +338,7 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-    } finally {
-      // Clear loading state for this service
+      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], checkingHealth: false },
