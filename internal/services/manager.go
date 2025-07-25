@@ -6,7 +6,6 @@ import (
 	"log"
 	"sort"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
