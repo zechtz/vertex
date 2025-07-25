@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -19,7 +20,29 @@ import (
 	"github.com/zechtz/nest-up/web"
 )
 
+// Version information (set by build flags)
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 func main() {
+	// Handle version flag
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("NeST Service Manager %s\n", version)
+		fmt.Printf("Commit: %s\n", commit)
+		fmt.Printf("Built: %s\n", date)
+		os.Exit(0)
+	}
+
+	// Display startup information
+	logMessage(fmt.Sprintf("Starting NeST Service Manager %s", version))
+
 	// Initialize database first
 	db, err := database.NewDatabase()
 	if err != nil {

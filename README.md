@@ -279,6 +279,40 @@ nest-up/
 | **nest-contract** | nest_contract | 8818 | Contract management |
 | **nest-dsms** | nest_dsms | 8812 | Document management |
 
+## 🚀 Automated Releases
+
+The project includes CI/CD pipelines for both GitHub Actions and GitLab CI that automatically build and release binaries when you push a version tag.
+
+### Creating a Release
+
+1. **Tag a version**:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **Automated builds** will create binaries for:
+   - **Linux**: x64, ARM64
+   - **macOS**: x64, ARM64 (Intel + Apple Silicon)
+   - **Windows**: x64
+   - **Docker**: Multi-platform container images
+
+3. **GitHub/GitLab releases** are created automatically with:
+   - Pre-built binaries for all platforms
+   - SHA256 checksums for verification
+   - Release notes with download instructions
+   - Docker images (optional)
+
+### CI/CD Features
+
+- ✅ **Automated testing** on all platforms
+- ✅ **Frontend build** with npm/Node.js
+- ✅ **Cross-compilation** with CGO support
+- ✅ **Release creation** with assets and notes
+- ✅ **Docker images** pushed to registries
+- ✅ **Checksum generation** for security
+- ✅ **Version injection** from git tags
+
 ## 🔨 Development
 
 ### Prerequisites
@@ -346,20 +380,30 @@ This approach provides:
 
 ### Building for Distribution
 
-To create a distribution-ready binary with embedded frontend:
+#### Quick Build (Recommended)
 
 ```bash
-# Build frontend assets first
-cd web
-npm install
-npm run build
-cd ..
+# Use the build script (includes version info)
+./build.sh
 
-# Build optimized binary with embedded UI
+# Or build manually
+cd web && npm run build && cd ..
 CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up
+```
 
-# Optional: Compress with UPX (if available)
-upx --best nest-up
+#### Release Build (All Platforms)
+
+```bash
+# Build for all supported platforms
+./release.sh v1.0.0
+
+# This creates:
+# - nest-up-linux-amd64
+# - nest-up-linux-arm64  
+# - nest-up-darwin-amd64
+# - nest-up-darwin-arm64
+# - nest-up-windows-amd64.exe
+# - checksums.txt
 ```
 
 > **Note**: The frontend must be built before the Go binary, as the `web/embed.go` file uses `//go:embed dist/*` to embed the React build artifacts directly into the binary.

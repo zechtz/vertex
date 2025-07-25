@@ -55,3 +55,6 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+
+# Release files
+release/

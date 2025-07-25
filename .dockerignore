@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+.claude/
+
+# Build artifacts
+nest-up
+*.exe
+*.db
+
+# Development files
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (will be installed during build)
+web/node_modules/
+
+# Logs
+*.log
+
+# Test files
+*_test.go
+coverage.out
