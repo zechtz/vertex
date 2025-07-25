@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/zechtz/nest-up/internal/database"
 	"github.com/zechtz/nest-up/internal/handlers"
 	"github.com/zechtz/nest-up/internal/services"
+	"github.com/zechtz/nest-up/web"
 )
 
 func main() {
@@ -48,7 +50,13 @@ func main() {
 	// Setup routes
 	r := mux.NewRouter()
 	handler.RegisterRoutes(r)
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/dist/")))
+	
+	// Serve embedded frontend assets
+	uiFS, err := fs.Sub(web.EmbeddedUI, "dist")
+	if err != nil {
+		log.Fatal("Failed to access embedded UI:", err)
+	}
+	r.PathPrefix("/").Handler(http.FileServer(http.FS(uiFS)))
 
 	// Create HTTP server
 	server := &http.Server{
