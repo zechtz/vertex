@@ -114,7 +114,6 @@ jobs:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             nest-up-${{ matrix.goos }}-${{ matrix.goarch }}*
-            *.sha256
 
   release:
     name: Create Release
@@ -173,13 +172,10 @@ jobs:
           echo '```' >> release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             nest-up-*
-            *.sha256
           body_path: release-notes.md
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
