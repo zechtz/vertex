@@ -39,8 +39,10 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/services/{name}/health", h.checkHealthHandler).Methods("POST")
 	r.HandleFunc("/api/services/{name}/logs", h.getLogsHandler).Methods("GET")
 	r.HandleFunc("/api/services/{name}/logs", h.clearLogsHandler).Methods("DELETE")
+	r.HandleFunc("/api/services/{name}/metrics", h.getServiceMetricsHandler).Methods("GET")
 	r.HandleFunc("/api/services/start-all", h.startAllHandler).Methods("POST")
 	r.HandleFunc("/api/services/stop-all", h.stopAllHandler).Methods("POST")
+	r.HandleFunc("/api/system/metrics", h.getSystemMetricsHandler).Methods("GET")
 	r.HandleFunc("/api/services/fix-lombok", h.fixLombokHandler).Methods("POST")
 	r.HandleFunc("/api/environment/setup", h.setupEnvironmentHandler).Methods("POST")
 	r.HandleFunc("/api/environment/sync", h.syncEnvironmentHandler).Methods("POST")
@@ -600,6 +602,80 @@ func (h *Handler) getEnvironmentStatusHandler(w http.ResponseWriter, r *http.Req
 	response := map[string]interface{}{
 		"status":      status,
 		"environment": currentEnv,
+	}
+	
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handler) getServiceMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	vars := mux.Vars(r)
+	serviceName := vars["name"]
+
+	service, exists := h.serviceManager.GetService(serviceName)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Service '%s' not found", serviceName), http.StatusNotFound)
+		return
+	}
+
+	service.Mutex.RLock()
+	metrics := map[string]interface{}{
+		"serviceName":    service.Name,
+		"cpuPercent":     service.CPUPercent,
+		"memoryUsage":    service.MemoryUsage,
+		"memoryPercent":  service.MemoryPercent,
+		"diskUsage":      service.DiskUsage,
+		"networkRx":      service.NetworkRx,
+		"networkTx":      service.NetworkTx,
+		"metrics":        service.Metrics,
+		"status":         service.Status,
+		"healthStatus":   service.HealthStatus,
+		"pid":            service.PID,
+		"uptime":         service.Uptime,
+		"lastStarted":    service.LastStarted,
+		"timestamp":      time.Now(),
+	}
+	service.Mutex.RUnlock()
+
+	json.NewEncoder(w).Encode(metrics)
+}
+
+func (h *Handler) getSystemMetricsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Get system resource summary
+	summary := h.serviceManager.GetSystemResourceSummary()
+	
+	// Add individual service metrics
+	services := h.serviceManager.GetServices()
+	serviceMetrics := make([]map[string]interface{}, 0)
+	
+	for _, service := range services {
+		if service.Status == "running" {
+			serviceMetric := map[string]interface{}{
+				"name":           service.Name,
+				"cpuPercent":     service.CPUPercent,
+				"memoryUsage":    service.MemoryUsage,
+				"memoryPercent":  service.MemoryPercent,
+				"diskUsage":      service.DiskUsage,
+				"networkRx":      service.NetworkRx,
+				"networkTx":      service.NetworkTx,
+				"status":         service.Status,
+				"healthStatus":   service.HealthStatus,
+				"uptime":         service.Uptime,
+				"errorRate":      service.Metrics.ErrorRate,
+				"requestCount":   service.Metrics.RequestCount,
+			}
+			serviceMetrics = append(serviceMetrics, serviceMetric)
+		}
+	}
+	
+	response := map[string]interface{}{
+		"summary":  summary,
+		"services": serviceMetrics,
 	}
 	
 	json.NewEncoder(w).Encode(response)

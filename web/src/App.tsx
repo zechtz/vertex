@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Server, Database, Settings, Cog } from "lucide-react";
+import { Server, Database, Settings, Cog, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Service, Configuration } from "@/types";
@@ -11,6 +11,7 @@ import { ServiceEnvModal } from "@/components/ServiceEnvModal/ServiceEnvModal";
 import { GlobalEnvModal } from "@/components/GlobalEnvModal/GlobalEnvModal";
 import { GlobalConfigModal } from "@/components/GlobalConfigModal/GlobalConfigModal";
 import { ConfigurationManager } from "@/components/ConfigurationManager/ConfigurationManager";
+import { SystemMetricsModal } from "@/components/SystemMetricsModal/SystemMetricsModal";
 import {
   ToastProvider,
   ToastContainer,
@@ -57,6 +58,7 @@ function AppContent() {
 
   // Modal state
   const [showConfigManager, setShowConfigManager] = useState(false);
+  const [showSystemMetrics, setShowSystemMetrics] = useState(false);
   const [showServiceConfig, setShowServiceConfig] = useState(false);
   const [showServiceFiles, setShowServiceFiles] = useState(false);
   const [showServiceEnv, setShowServiceEnv] = useState(false);
@@ -733,6 +735,14 @@ function AppContent() {
             <div className="flex gap-3">
               <Button
                 variant="outline"
+                onClick={() => setShowSystemMetrics(true)}
+                className="hover:bg-green-50 hover:text-green-600 hover:border-green-200"
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Metrics
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setShowGlobalConfig(true)}
                 className="hover:bg-gray-50 hover:text-gray-600 hover:border-gray-200"
               >
@@ -886,6 +896,11 @@ function AppContent() {
         <GlobalEnvModal
           isOpen={showGlobalEnv}
           onClose={() => setShowGlobalEnv(false)}
+        />
+
+        <SystemMetricsModal
+          isOpen={showSystemMetrics}
+          onClose={() => setShowSystemMetrics(false)}
         />
 
         <ConfigurationManager

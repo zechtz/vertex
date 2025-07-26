@@ -83,27 +83,13 @@ func (sm *Manager) checkServiceHealth(service *models.Service) {
 	}
 
 	// Perform HTTP health check with authentication
-	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequest("GET", service.HealthURL, nil)
+	client := sm.createHealthCheckClient()
+	req, err := sm.createHealthCheckRequest(service.HealthURL)
 	if err != nil {
 		service.HealthStatus = "unhealthy"
 		sm.updateServiceInDB(service)
 		sm.broadcastUpdate(service)
 		return
-	}
-
-	// Add basic auth for Spring Boot services
-	if strings.Contains(service.HealthURL, "actuator/health") {
-		// Get credentials from environment variables
-		username := os.Getenv("CONFIG_USERNAME")
-		password := os.Getenv("CONFIG_PASSWORD")
-		if username == "" {
-			username = "nest"
-		}
-		if password == "" {
-			password = "1kzwjz2nzegt3nest@ppra.go.tza1q@BmM0Oo"
-		}
-		req.SetBasicAuth(username, password)
 	}
 
 	resp, err := client.Do(req)
@@ -220,4 +206,33 @@ func (sm *Manager) isProcessRunning(pid int) bool {
 
 	// Use platform-specific function to check if process exists
 	return IsProcessRunning(pid)
+}
+
+// createHealthCheckClient creates an HTTP client for health checks
+func (sm *Manager) createHealthCheckClient() *http.Client {
+	return &http.Client{Timeout: 5 * time.Second}
+}
+
+// createHealthCheckRequest creates an HTTP request for health checks with authentication
+func (sm *Manager) createHealthCheckRequest(healthURL string) (*http.Request, error) {
+	req, err := http.NewRequest("GET", healthURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add basic auth for Spring Boot services
+	if strings.Contains(healthURL, "actuator/health") {
+		// Get credentials from environment variables
+		username := os.Getenv("CONFIG_USERNAME")
+		password := os.Getenv("CONFIG_PASSWORD")
+		if username == "" {
+			username = "nest"
+		}
+		if password == "" {
+			password = "1kzwjz2nzegt3nest@ppra.go.tza1q@BmM0Oo"
+		}
+		req.SetBasicAuth(username, password)
+	}
+
+	return req, nil
 }

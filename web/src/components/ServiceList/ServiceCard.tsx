@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Service } from "@/types";
 import { ButtonSpinner } from "@/components/ui/spinner";
+import ResourceMetrics from "@/components/ResourceMetrics/ResourceMetrics";
+import PerformanceMetrics from "@/components/PerformanceMetrics/PerformanceMetrics";
 
 interface ServiceCardProps {
   service: Service;
@@ -123,6 +125,23 @@ export function ServiceCard({
             <p className="text-sm text-muted-foreground">
               {service.description}
             </p>
+          </div>
+        )}
+
+        {/* Resource Metrics */}
+        {service.status === "running" && service.pid > 0 && (
+          <div className="mt-3 space-y-3">
+            <ResourceMetrics
+              cpuPercent={service.cpuPercent || 0}
+              memoryUsage={service.memoryUsage || 0}
+              memoryPercent={service.memoryPercent || 0}
+              diskUsage={service.diskUsage || 0}
+              networkRx={service.networkRx || 0}
+              networkTx={service.networkTx || 0}
+            />
+            {service.metrics && (
+              <PerformanceMetrics metrics={service.metrics} />
+            )}
           </div>
         )}
       </CardHeader>

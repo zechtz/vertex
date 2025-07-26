@@ -26,12 +26,33 @@ type Service struct {
 	Cmd          *exec.Cmd         `json:"-"`
 	Logs         []LogEntry        `json:"logs"`
 	Mutex        sync.RWMutex      `json:"-"`
+	// Resource monitoring fields
+	CPUPercent    float64           `json:"cpuPercent"`
+	MemoryUsage   uint64            `json:"memoryUsage"`   // in bytes
+	MemoryPercent float32           `json:"memoryPercent"`
+	DiskUsage     uint64            `json:"diskUsage"`     // in bytes
+	NetworkRx     uint64            `json:"networkRx"`     // bytes received
+	NetworkTx     uint64            `json:"networkTx"`     // bytes transmitted
+	Metrics       ServiceMetrics    `json:"metrics"`
 }
 
 type LogEntry struct {
 	Timestamp string `json:"timestamp"`
 	Level     string `json:"level"`
 	Message   string `json:"message"`
+}
+
+type ServiceMetrics struct {
+	ResponseTimes []ResponseTime `json:"responseTimes"`
+	ErrorRate     float64        `json:"errorRate"`
+	RequestCount  uint64         `json:"requestCount"`
+	LastChecked   time.Time      `json:"lastChecked"`
+}
+
+type ResponseTime struct {
+	Timestamp time.Time     `json:"timestamp"`
+	Duration  time.Duration `json:"duration"`
+	Status    int           `json:"status"`
 }
 
 type EnvVar struct {

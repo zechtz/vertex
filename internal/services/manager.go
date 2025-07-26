@@ -62,6 +62,9 @@ func NewManager(config models.Config, db *database.Database) (*Manager, error) {
 	// Start health check routine
 	go sm.healthCheckRoutine()
 
+	// Start resource metrics collection
+	go sm.startMetricsCollection()
+
 	return sm, nil
 }
 
@@ -361,4 +364,9 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 	sm.broadcastUpdate(service)
 	
 	return nil
+}
+
+// GetSystemResourceSummary returns overall system resource usage summary
+func (sm *Manager) GetSystemResourceSummary() map[string]interface{} {
+	return sm.getSystemResourceSummary()
 }

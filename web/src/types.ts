@@ -5,6 +5,19 @@ export interface EnvVar {
   isRequired: boolean;
 }
 
+export interface ResponseTime {
+  timestamp: string;
+  duration: number; // in nanoseconds
+  status: number;
+}
+
+export interface ServiceMetrics {
+  responseTimes: ResponseTime[];
+  errorRate: number;
+  requestCount: number;
+  lastChecked: string;
+}
+
 export interface Service {
   name: string;
   dir: string;
@@ -22,6 +35,14 @@ export interface Service {
   isEnabled: boolean;
   envVars: { [key: string]: EnvVar };
   logs: LogEntry[];
+  // Resource monitoring fields
+  cpuPercent?: number;
+  memoryUsage?: number;   // in bytes
+  memoryPercent?: number;
+  diskUsage?: number;     // in bytes
+  networkRx?: number;     // bytes received
+  networkTx?: number;     // bytes transmitted
+  metrics?: ServiceMetrics;
 }
 
 export interface LogEntry {
