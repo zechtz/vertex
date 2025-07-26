@@ -3,6 +3,7 @@ package services
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -26,6 +27,15 @@ func (sm *Manager) StartService(serviceName string) error {
 
 	if !exists {
 		return fmt.Errorf("service %s not found", serviceName)
+	}
+
+	// Check and wait for dependencies
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	log.Printf("[INFO] Checking dependencies for %s", serviceName)
+	if err := sm.dependencyManager.WaitForDependencies(ctx, serviceName); err != nil {
+		return fmt.Errorf("dependency check failed for %s: %w", serviceName, err)
 	}
 
 	return sm.startService(service)
@@ -66,32 +76,61 @@ func (sm *Manager) RestartService(serviceName string) error {
 }
 
 func (sm *Manager) StartAllServices() error {
-	// Get all services and sort by order
+	// Get all services and determine dependency-aware startup order
 	sm.mutex.RLock()
-	services := make([]*models.Service, 0, len(sm.services))
-	for _, service := range sm.services {
-		services = append(services, service)
+	serviceNames := make([]string, 0, len(sm.services))
+	for name := range sm.services {
+		serviceNames = append(serviceNames, name)
 	}
 	sm.mutex.RUnlock()
 
-	sort.Slice(services, func(i, j int) bool {
-		return services[i].Order < services[j].Order
-	})
+	// Get optimal startup order based on dependencies
+	orderedNames, err := sm.dependencyManager.GetStartupOrder(serviceNames)
+	if err != nil {
+		log.Printf("[WARN] Failed to determine dependency-based startup order: %v. Using default order.", err)
+		// Fallback to original ordering
+		services := make([]*models.Service, 0, len(sm.services))
+		sm.mutex.RLock()
+		for _, service := range sm.services {
+			services = append(services, service)
+		}
+		sm.mutex.RUnlock()
+		
+		sort.Slice(services, func(i, j int) bool {
+			return services[i].Order < services[j].Order
+		})
+		
+		for _, service := range services {
+			orderedNames = append(orderedNames, service.Name)
+		}
+	}
+
+	log.Printf("[INFO] Starting services in dependency order: %v", orderedNames)
 
 	go func() {
-		for _, service := range services {
+		for _, serviceName := range orderedNames {
+			sm.mutex.RLock()
+			service, exists := sm.services[serviceName]
+			sm.mutex.RUnlock()
+
+			if !exists {
+				log.Printf("Service %s not found, skipping", serviceName)
+				continue
+			}
+
 			service.Mutex.RLock()
 			status := service.Status
 			service.Mutex.RUnlock()
 
-			if status != "running" {
-				if err := sm.startService(service); err != nil {
-					log.Printf("Failed to start service %s: %v", service.Name, err)
+			if status != "running" && service.IsEnabled {
+				log.Printf("[INFO] Starting service %s in dependency order", serviceName)
+				if err := sm.StartService(serviceName); err != nil {
+					log.Printf("Failed to start service %s: %v", serviceName, err)
 					continue
 				}
-				time.Sleep(5 * time.Second) // Wait before starting next service
 			}
 		}
+		log.Printf("[INFO] Completed dependency-aware service startup")
 	}()
 
 	return nil
