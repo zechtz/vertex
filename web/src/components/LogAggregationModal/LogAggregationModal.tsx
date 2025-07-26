@@ -9,7 +9,7 @@ interface LogAggregationModalProps {
   services: Service[];
 }
 
-export function LogAggregationModal({ isOpen, onClose, services }: LogAggregationModalProps) {
+export function LogAggregationModal({ isOpen, onClose, services = [] }: LogAggregationModalProps) {
   if (!isOpen) return null;
 
   return (
