@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Server, Database, Settings, Cog, BarChart3, FileText } from "lucide-react";
+import { Server, Database, Settings, Cog, BarChart3, FileText, Network, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Service, Configuration } from "@/types";
@@ -13,6 +13,8 @@ import { GlobalConfigModal } from "@/components/GlobalConfigModal/GlobalConfigMo
 import { ConfigurationManager } from "@/components/ConfigurationManager/ConfigurationManager";
 import { SystemMetricsModal } from "@/components/SystemMetricsModal/SystemMetricsModal";
 import { LogAggregationModal } from "@/components/LogAggregationModal/LogAggregationModal";
+import { ServiceTopologyModal } from "@/components/ServiceTopologyModal/ServiceTopologyModal";
+import { DependencyManagerModal } from "@/components/DependencyManagerModal/DependencyManagerModal";
 import {
   ToastProvider,
   ToastContainer,
@@ -61,6 +63,8 @@ function AppContent() {
   const [showConfigManager, setShowConfigManager] = useState(false);
   const [showSystemMetrics, setShowSystemMetrics] = useState(false);
   const [showLogAggregation, setShowLogAggregation] = useState(false);
+  const [showTopology, setShowTopology] = useState(false);
+  const [showDependencies, setShowDependencies] = useState(false);
   const [showServiceConfig, setShowServiceConfig] = useState(false);
   const [showServiceFiles, setShowServiceFiles] = useState(false);
   const [showServiceEnv, setShowServiceEnv] = useState(false);
@@ -753,6 +757,22 @@ function AppContent() {
               </Button>
               <Button
                 variant="outline"
+                onClick={() => setShowTopology(true)}
+                className="hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
+              >
+                <Network className="h-4 w-4 mr-2" />
+                Topology
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowDependencies(true)}
+                className="hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
+              >
+                <GitBranch className="h-4 w-4 mr-2" />
+                Dependencies
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setShowGlobalConfig(true)}
                 className="hover:bg-gray-50 hover:text-gray-600 hover:border-gray-200"
               >
@@ -917,6 +937,17 @@ function AppContent() {
         <LogAggregationModal
           isOpen={showLogAggregation}
           onClose={() => setShowLogAggregation(false)}
+          services={services}
+        />
+
+        <ServiceTopologyModal
+          isOpen={showTopology}
+          onClose={() => setShowTopology(false)}
+        />
+
+        <DependencyManagerModal
+          isOpen={showDependencies}
+          onClose={() => setShowDependencies(false)}
           services={services}
         />
 
