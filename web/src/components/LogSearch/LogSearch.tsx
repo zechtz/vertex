@@ -26,7 +26,7 @@ interface LogSearchProps {
   className?: string;
 }
 
-export function LogSearch({ services, className = '' }: LogSearchProps) {
+export function LogSearch({ services = [], className = '' }: LogSearchProps) {
   const [searchText, setSearchText] = useState('');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedLevels, setSelectedLevels] = useState<string[]>(['INFO', 'WARN', 'ERROR']);
@@ -37,9 +37,13 @@ export function LogSearch({ services, className = '' }: LogSearchProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [isSearching, setIsSearching] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const logLevels = ['INFO', 'WARN', 'ERROR', 'DEBUG', 'TRACE'];
   const resultsPerPage = 50;
+
+  // Ensure services is an array
+  const safeServices = Array.isArray(services) ? services : [];
 
   // Auto-search when filters change
   useEffect(() => {
@@ -55,6 +59,7 @@ export function LogSearch({ services, className = '' }: LogSearchProps) {
   const performSearch = async () => {
     try {
       setIsSearching(true);
+      setError(null);
 
       const searchCriteria = {
         serviceNames: selectedServices,
@@ -79,10 +84,11 @@ export function LogSearch({ services, className = '' }: LogSearchProps) {
       }
 
       const data: LogSearchResponse = await response.json();
-      setSearchResults(data.results);
-      setTotalCount(data.totalCount);
+      setSearchResults(Array.isArray(data.results) ? data.results : []);
+      setTotalCount(data.totalCount || 0);
     } catch (error) {
       console.error('Log search failed:', error);
+      setError(error instanceof Error ? error.message : 'Search failed');
       setSearchResults([]);
       setTotalCount(0);
     } finally {
@@ -184,6 +190,23 @@ export function LogSearch({ services, className = '' }: LogSearchProps) {
 
   return (
     <div className={`space-y-6 ${className}`}>
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="text-red-600 text-sm">
+              <strong>Error:</strong> {error}
+            </div>
+            <button 
+              onClick={() => setError(null)}
+              className="ml-auto text-red-600 hover:text-red-800"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Search Controls */}
       <Card>
         <CardHeader>
@@ -219,20 +242,24 @@ export function LogSearch({ services, className = '' }: LogSearchProps) {
               Services ({selectedServices.length === 0 ? 'All' : selectedServices.length} selected)
             </label>
             <div className="flex flex-wrap gap-2">
-              {services.map((service) => (
-                <Button
-                  key={service.name}
-                  variant={selectedServices.includes(service.name) ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => toggleService(service.name)}
-                  className="text-xs"
-                >
-                  {service.name}
-                  {service.status === 'running' && (
-                    <div className="ml-1 w-2 h-2 bg-green-500 rounded-full"></div>
-                  )}
-                </Button>
-              ))}
+              {safeServices.length === 0 ? (
+                <div className="text-sm text-gray-500">No services available</div>
+              ) : (
+                safeServices.map((service) => (
+                  <Button
+                    key={service.name}
+                    variant={selectedServices.includes(service.name) ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => toggleService(service.name)}
+                    className="text-xs"
+                  >
+                    {service.name}
+                    {service.status === 'running' && (
+                      <div className="ml-1 w-2 h-2 bg-green-500 rounded-full"></div>
+                    )}
+                  </Button>
+                ))
+              )}
             </div>
           </div>
 
