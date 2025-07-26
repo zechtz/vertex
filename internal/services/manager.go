@@ -14,14 +14,15 @@ import (
 )
 
 type Manager struct {
-	config         models.Config
-	services       map[string]*models.Service
-	configurations map[string]*models.Configuration
-	activeConfigID string
-	db             *database.Database
-	mutex          sync.RWMutex
-	clients        map[*websocket.Conn]bool
-	clientsMutex   sync.RWMutex
+	config            models.Config
+	services          map[string]*models.Service
+	configurations    map[string]*models.Configuration
+	activeConfigID    string
+	db                *database.Database
+	mutex             sync.RWMutex
+	clients           map[*websocket.Conn]bool
+	clientsMutex      sync.RWMutex
+	dependencyManager *DependencyManager
 }
 
 type WebSocketMessage struct {
@@ -38,6 +39,9 @@ func NewManager(config models.Config, db *database.Database) (*Manager, error) {
 		db:             db,
 		clients:        make(map[*websocket.Conn]bool),
 	}
+
+	// Initialize dependency manager
+	sm.dependencyManager = NewDependencyManager(sm)
 
 	// Load or create services
 	if err := sm.loadServices(config); err != nil {
@@ -57,6 +61,16 @@ func NewManager(config models.Config, db *database.Database) (*Manager, error) {
 	// Load environment variables from fish file into database
 	if err := sm.loadEnvVarsFromFishFile(); err != nil {
 		log.Printf("Warning: Could not load environment variables from fish file: %v", err)
+	}
+
+	// Initialize default service dependencies
+	if err := sm.dependencyManager.InitializeDefaultDependencies(); err != nil {
+		log.Printf("Warning: Could not initialize service dependencies: %v", err)
+	}
+
+	// Validate dependencies
+	if err := sm.dependencyManager.ValidateDependencies(); err != nil {
+		log.Printf("Warning: Dependency validation failed: %v", err)
 	}
 
 	// Start health check routine
