@@ -7,10 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/zechtz/nest-up/internal/database"
 	"github.com/zechtz/nest-up/internal/models"
 	"github.com/zechtz/nest-up/internal/services"
 )
@@ -40,6 +42,9 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/services/{name}/logs", h.getLogsHandler).Methods("GET")
 	r.HandleFunc("/api/services/{name}/logs", h.clearLogsHandler).Methods("DELETE")
 	r.HandleFunc("/api/services/{name}/metrics", h.getServiceMetricsHandler).Methods("GET")
+	r.HandleFunc("/api/logs/search", h.searchLogsHandler).Methods("POST")
+	r.HandleFunc("/api/logs/statistics", h.getLogStatisticsHandler).Methods("GET")
+	r.HandleFunc("/api/logs/export", h.exportLogsHandler).Methods("POST")
 	r.HandleFunc("/api/services/start-all", h.startAllHandler).Methods("POST")
 	r.HandleFunc("/api/services/stop-all", h.stopAllHandler).Methods("POST")
 	r.HandleFunc("/api/system/metrics", h.getSystemMetricsHandler).Methods("GET")
@@ -679,6 +684,198 @@ func (h *Handler) getSystemMetricsHandler(w http.ResponseWriter, r *http.Request
 	}
 	
 	json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handler) searchLogsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var criteria struct {
+		ServiceNames []string `json:"serviceNames"`
+		Levels       []string `json:"levels"`
+		SearchText   string   `json:"searchText"`
+		StartTime    string   `json:"startTime"`
+		EndTime      string   `json:"endTime"`
+		Limit        int      `json:"limit"`
+		Offset       int      `json:"offset"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&criteria); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parse time strings
+	var startTime, endTime time.Time
+	var err error
+
+	if criteria.StartTime != "" {
+		startTime, err = time.Parse(time.RFC3339, criteria.StartTime)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid start time format: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if criteria.EndTime != "" {
+		endTime, err = time.Parse(time.RFC3339, criteria.EndTime)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid end time format: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Set default limit if not provided
+	if criteria.Limit <= 0 {
+		criteria.Limit = 100
+	}
+
+	// Create database search criteria
+	searchCriteria := database.LogSearchCriteria{
+		ServiceNames: criteria.ServiceNames,
+		Levels:       criteria.Levels,
+		SearchText:   criteria.SearchText,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		Limit:        criteria.Limit,
+		Offset:       criteria.Offset,
+	}
+
+	// Perform search
+	results, totalCount, err := h.serviceManager.GetDatabase().SearchLogs(searchCriteria)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to search logs: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"results":    results,
+		"totalCount": totalCount,
+		"limit":      criteria.Limit,
+		"offset":     criteria.Offset,
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *Handler) getLogStatisticsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	stats, err := h.serviceManager.GetDatabase().GetLogStatistics()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get log statistics: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}
+
+func (h *Handler) exportLogsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var exportRequest struct {
+		ServiceNames []string `json:"serviceNames"`
+		Levels       []string `json:"levels"`
+		SearchText   string   `json:"searchText"`
+		StartTime    string   `json:"startTime"`
+		EndTime      string   `json:"endTime"`
+		Format       string   `json:"format"` // "json", "csv", "txt"
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&exportRequest); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Parse time strings
+	var startTime, endTime time.Time
+	var err error
+
+	if exportRequest.StartTime != "" {
+		startTime, err = time.Parse(time.RFC3339, exportRequest.StartTime)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid start time format: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if exportRequest.EndTime != "" {
+		endTime, err = time.Parse(time.RFC3339, exportRequest.EndTime)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid end time format: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Create search criteria for export (no limit)
+	searchCriteria := database.LogSearchCriteria{
+		ServiceNames: exportRequest.ServiceNames,
+		Levels:       exportRequest.Levels,
+		SearchText:   exportRequest.SearchText,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		Limit:        0, // No limit for export
+		Offset:       0,
+	}
+
+	// Get logs for export
+	results, _, err := h.serviceManager.GetDatabase().SearchLogs(searchCriteria)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to search logs for export: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate filename
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("nest_logs_%s", timestamp)
+
+	// Handle different export formats
+	switch exportRequest.Format {
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.json\"", filename))
+		json.NewEncoder(w).Encode(results)
+
+	case "csv":
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.csv\"", filename))
+		
+		w.Write([]byte("Timestamp,Service,Level,Message\n"))
+		for _, result := range results {
+			// Escape CSV values
+			message := strings.ReplaceAll(result.Message, "\"", "\"\"")
+			if strings.Contains(message, ",") || strings.Contains(message, "\n") {
+				message = "\"" + message + "\""
+			}
+			
+			line := fmt.Sprintf("%s,%s,%s,%s\n",
+				result.Timestamp.Format(time.RFC3339),
+				result.ServiceName,
+				result.Level,
+				message,
+			)
+			w.Write([]byte(line))
+		}
+
+	case "txt":
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.txt\"", filename))
+		
+		for _, result := range results {
+			line := fmt.Sprintf("[%s] [%s] [%s] %s\n",
+				result.Timestamp.Format("2006-01-02 15:04:05"),
+				result.ServiceName,
+				result.Level,
+				result.Message,
+			)
+			w.Write([]byte(line))
+		}
+
+	default:
+		http.Error(w, "Invalid export format. Supported formats: json, csv, txt", http.StatusBadRequest)
+		return
+	}
 }
 
 func (h *Handler) websocketHandler(w http.ResponseWriter, r *http.Request) {

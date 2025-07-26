@@ -375,11 +375,17 @@ func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
 		logEntry := parseLogLine(line)
 
 		service.Mutex.Lock()
+		// Keep in-memory logs for immediate access (last 1000 entries)
 		service.Logs = append(service.Logs, logEntry)
-		if len(service.Logs) > 1000 { // Keep last 1000 logs
+		if len(service.Logs) > 1000 {
 			service.Logs = service.Logs[len(service.Logs)-1000:]
 		}
 		service.Mutex.Unlock()
+
+		// Store log entry in database for persistent storage
+		if err := sm.db.StoreLogEntry(service.Name, logEntry); err != nil {
+			log.Printf("Failed to store log entry for service %s: %v", service.Name, err)
+		}
 
 		// Broadcast the new log entry
 		sm.broadcastLogEntry(service.Name, logEntry)

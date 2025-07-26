@@ -23,6 +23,11 @@ func NewDatabase() (*Database, error) {
 		return nil, fmt.Errorf("failed to initialize database tables: %w", err)
 	}
 
+	// Initialize log storage tables
+	if err := database.InitializeLogTables(); err != nil {
+		return nil, fmt.Errorf("failed to initialize log tables: %w", err)
+	}
+
 	return database, nil
 }
 

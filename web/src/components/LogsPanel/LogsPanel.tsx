@@ -7,7 +7,8 @@ import {
   X, 
   Shield, 
   ShieldAlert, 
-  Info 
+  Info,
+  Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ interface LogsPanelProps {
   onCopyLogs: (selectedLevels: string[]) => void;
   onClearLogs: () => void;
   onClose: () => void;
+  onOpenAdvancedSearch?: () => void;
 }
 
 export function LogsPanel({
@@ -44,6 +46,7 @@ export function LogsPanel({
   onCopyLogs,
   onClearLogs,
   onClose,
+  onOpenAdvancedSearch,
 }: LogsPanelProps) {
   const [logLevels, setLogLevels] = useState<string[]>(["INFO", "WARN", "ERROR"]);
   
@@ -112,6 +115,17 @@ export function LogsPanel({
               </div>
             </div>
           <div className="flex gap-2">
+            {onOpenAdvancedSearch && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onOpenAdvancedSearch}
+                className="hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Advanced Search
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Server, Database, Settings, Cog, BarChart3 } from "lucide-react";
+import { Server, Database, Settings, Cog, BarChart3, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Service, Configuration } from "@/types";
@@ -12,6 +12,7 @@ import { GlobalEnvModal } from "@/components/GlobalEnvModal/GlobalEnvModal";
 import { GlobalConfigModal } from "@/components/GlobalConfigModal/GlobalConfigModal";
 import { ConfigurationManager } from "@/components/ConfigurationManager/ConfigurationManager";
 import { SystemMetricsModal } from "@/components/SystemMetricsModal/SystemMetricsModal";
+import { LogAggregationModal } from "@/components/LogAggregationModal/LogAggregationModal";
 import {
   ToastProvider,
   ToastContainer,
@@ -59,6 +60,7 @@ function AppContent() {
   // Modal state
   const [showConfigManager, setShowConfigManager] = useState(false);
   const [showSystemMetrics, setShowSystemMetrics] = useState(false);
+  const [showLogAggregation, setShowLogAggregation] = useState(false);
   const [showServiceConfig, setShowServiceConfig] = useState(false);
   const [showServiceFiles, setShowServiceFiles] = useState(false);
   const [showServiceEnv, setShowServiceEnv] = useState(false);
@@ -735,6 +737,14 @@ function AppContent() {
             <div className="flex gap-3">
               <Button
                 variant="outline"
+                onClick={() => setShowLogAggregation(true)}
+                className="hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Logs
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setShowSystemMetrics(true)}
                 className="hover:bg-green-50 hover:text-green-600 hover:border-green-200"
               >
@@ -810,6 +820,7 @@ function AppContent() {
               onCopyLogs={copyLogsToClipboard}
               onClearLogs={clearLogs}
               onClose={() => setSelectedService(null)}
+              onOpenAdvancedSearch={() => setShowLogAggregation(true)}
             />
           </div>
         </div>
@@ -901,6 +912,12 @@ function AppContent() {
         <SystemMetricsModal
           isOpen={showSystemMetrics}
           onClose={() => setShowSystemMetrics(false)}
+        />
+
+        <LogAggregationModal
+          isOpen={showLogAggregation}
+          onClose={() => setShowLogAggregation(false)}
+          services={services}
         />
 
         <ConfigurationManager
