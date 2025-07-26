@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,13 +19,15 @@ import (
 )
 
 type Handler struct {
-	serviceManager *services.Manager
-	upgrader       websocket.Upgrader
+	serviceManager  *services.Manager
+	topologyService *services.TopologyService
+	upgrader        websocket.Upgrader
 }
 
 func NewHandler(sm *services.Manager) *Handler {
 	return &Handler{
-		serviceManager: sm,
+		serviceManager:  sm,
+		topologyService: services.NewTopologyService(sm),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -69,6 +72,11 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/services/{name}/files/{filename}", h.updateServiceFileHandler).Methods("PUT")
 	r.HandleFunc("/api/config/global", h.getGlobalConfigHandler).Methods("GET")
 	r.HandleFunc("/api/config/global", h.updateGlobalConfigHandler).Methods("PUT")
+	r.HandleFunc("/api/topology", h.getTopologyHandler).Methods("GET")
+	r.HandleFunc("/api/dependencies", h.getDependenciesHandler).Methods("GET")
+	r.HandleFunc("/api/dependencies/graph", h.getDependencyGraphHandler).Methods("GET")
+	r.HandleFunc("/api/dependencies/validate", h.validateDependenciesHandler).Methods("GET")
+	r.HandleFunc("/api/dependencies/startup-order", h.getStartupOrderHandler).Methods("POST")
 	r.HandleFunc("/ws", h.websocketHandler)
 }
 
@@ -894,5 +902,177 @@ func (h *Handler) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
+	}
+}
+
+// getTopologyHandler returns the service topology visualization data
+func (h *Handler) getTopologyHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	topology, err := h.topologyService.GenerateTopology()
+	if err != nil {
+		log.Printf("Failed to generate topology: %v", err)
+		http.Error(w, "Failed to generate topology", http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(topology); err != nil {
+		log.Printf("Failed to encode topology: %v", err)
+		http.Error(w, "Failed to encode topology", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getDependenciesHandler returns service dependencies information
+func (h *Handler) getDependenciesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	services := h.serviceManager.GetServices()
+	dependencies := make(map[string]interface{})
+
+	for _, service := range services {
+		if len(service.Dependencies) > 0 {
+			dependencies[service.Name] = map[string]interface{}{
+				"dependencies": service.Dependencies,
+				"dependentOn":  service.DependentOn,
+				"startupDelay": service.StartupDelay.String(),
+			}
+		}
+	}
+
+	if err := json.NewEncoder(w).Encode(dependencies); err != nil {
+		log.Printf("Failed to encode dependencies: %v", err)
+		http.Error(w, "Failed to encode dependencies", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getDependencyGraphHandler returns the complete dependency graph
+func (h *Handler) getDependencyGraphHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Access dependency manager through service manager
+	// Note: We need to add a getter method to access the dependency manager
+	services := h.serviceManager.GetServices()
+	graph := make(map[string]interface{})
+
+	for _, service := range services {
+		if len(service.Dependencies) > 0 {
+			graph[service.Name] = service.Dependencies
+		}
+	}
+
+	result := map[string]interface{}{
+		"dependencies": graph,
+		"generated":    time.Now(),
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode dependency graph: %v", err)
+		http.Error(w, "Failed to encode dependency graph", http.StatusInternalServerError)
+		return
+	}
+}
+
+// validateDependenciesHandler validates the dependency configuration
+func (h *Handler) validateDependenciesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// For now, we'll do basic validation
+	services := h.serviceManager.GetServices()
+	serviceNames := make(map[string]bool)
+	for _, service := range services {
+		serviceNames[service.Name] = true
+	}
+
+	errors := []string{}
+	warnings := []string{}
+
+	// Check for missing dependencies
+	for _, service := range services {
+		for _, dep := range service.Dependencies {
+			if !serviceNames[dep.ServiceName] {
+				errors = append(errors, fmt.Sprintf("Service %s depends on non-existent service %s", service.Name, dep.ServiceName))
+			}
+		}
+	}
+
+	// Basic cycle detection (simplified)
+	// In a real implementation, this would use the dependency manager's validation
+
+	result := map[string]interface{}{
+		"valid":    len(errors) == 0,
+		"errors":   errors,
+		"warnings": warnings,
+		"checked":  time.Now(),
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode validation result: %v", err)
+		http.Error(w, "Failed to encode validation result", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getStartupOrderHandler returns the optimal startup order for given services
+func (h *Handler) getStartupOrderHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var request struct {
+		Services []string `json:"services"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// If no services specified, use all services
+	if len(request.Services) == 0 {
+		services := h.serviceManager.GetServices()
+		for _, service := range services {
+			request.Services = append(request.Services, service.Name)
+		}
+	}
+
+	// Simple ordering based on service Order field for now
+	// In a real implementation, this would use the dependency manager
+	services := h.serviceManager.GetServices()
+	serviceMap := make(map[string]models.Service)
+	for _, service := range services {
+		serviceMap[service.Name] = service
+	}
+
+	var orderedServices []models.Service
+	for _, name := range request.Services {
+		if service, exists := serviceMap[name]; exists {
+			orderedServices = append(orderedServices, service)
+		}
+	}
+
+	sort.Slice(orderedServices, func(i, j int) bool {
+		return orderedServices[i].Order < orderedServices[j].Order
+	})
+
+	var orderedNames []string
+	for _, service := range orderedServices {
+		orderedNames = append(orderedNames, service.Name)
+	}
+
+	result := map[string]interface{}{
+		"startupOrder": orderedNames,
+		"services":     len(orderedNames),
+		"generated":    time.Now(),
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode startup order: %v", err)
+		http.Error(w, "Failed to encode startup order", http.StatusInternalServerError)
+		return
 	}
 }
