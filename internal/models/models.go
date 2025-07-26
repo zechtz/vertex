@@ -34,6 +34,10 @@ type Service struct {
 	NetworkRx     uint64            `json:"networkRx"`     // bytes received
 	NetworkTx     uint64            `json:"networkTx"`     // bytes transmitted
 	Metrics       ServiceMetrics    `json:"metrics"`
+	// Service dependencies
+	Dependencies  []ServiceDependency `json:"dependencies"`
+	DependentOn   []string            `json:"dependentOn"`   // Services that depend on this one
+	StartupDelay  time.Duration       `json:"startupDelay"`  // Delay before starting after dependencies
 }
 
 type LogEntry struct {
@@ -47,6 +51,48 @@ type ServiceMetrics struct {
 	ErrorRate     float64        `json:"errorRate"`
 	RequestCount  uint64         `json:"requestCount"`
 	LastChecked   time.Time      `json:"lastChecked"`
+}
+
+// Topology models for service visualization
+type ServiceTopology struct {
+	Services    []TopologyNode `json:"services"`
+	Connections []Connection   `json:"connections"`
+	Generated   time.Time      `json:"generated"`
+}
+
+type TopologyNode struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Type         string  `json:"type"` // "service", "database", "external"
+	Status       string  `json:"status"`
+	HealthStatus string  `json:"healthStatus"`
+	Port         int     `json:"port"`
+	Position     *NodePosition `json:"position,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata"`
+}
+
+type Connection struct {
+	Source      string `json:"source"`
+	Target      string `json:"target"`
+	Type        string `json:"type"` // "http", "database", "message_queue"
+	Status      string `json:"status"` // "active", "inactive", "error"
+	Description string `json:"description"`
+}
+
+type NodePosition struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// ServiceDependency represents a dependency relationship between services
+type ServiceDependency struct {
+	ServiceName     string        `json:"serviceName"`     // Name of the dependent service
+	Type            string        `json:"type"`            // "hard", "soft", "optional"
+	HealthCheck     bool          `json:"healthCheck"`     // Whether to check health before considering ready
+	Timeout         time.Duration `json:"timeout"`         // Max time to wait for dependency
+	RetryInterval   time.Duration `json:"retryInterval"`   // Interval between dependency checks
+	Required        bool          `json:"required"`        // Whether this dependency is required for startup
+	Description     string        `json:"description"`     // Human-readable description
 }
 
 type ResponseTime struct {
