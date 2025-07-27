@@ -25,6 +25,15 @@ func (sm *Manager) loadServices(config models.Config) error {
 		log.Printf("[INFO] Reset all service statuses to 'stopped' on application startup")
 	}
 
+	// Check if initial service configuration sync has been completed
+	const syncType = "initial_service_config"
+	initialSyncCompleted, err := sm.db.IsSyncCompleted(syncType)
+	if err != nil {
+		log.Printf("[WARN] Failed to check initial sync status: %v", err)
+		// Continue with safe default behavior
+		initialSyncCompleted = true
+	}
+
 	for i := range config.Services {
 		service := &config.Services[i]
 
@@ -59,16 +68,22 @@ func (sm *Manager) loadServices(config models.Config) error {
 			// Service exists, use DB data but update only directory path (which is config-based)
 			dbService.Dir = service.Dir
 			dbService.ExtraEnv = service.ExtraEnv
-			// Keep database values for user-configurable fields
-			if dbService.JavaOpts == "" {
-				dbService.JavaOpts = service.JavaOpts // Use default only if DB is empty
+			
+			// Only sync default values if this is the first time loading from config files
+			// After initial sync, preserve all user-configured database values
+			if !initialSyncCompleted {
+				// Initial sync: only use defaults if DB values are empty
+				if dbService.JavaOpts == "" {
+					dbService.JavaOpts = service.JavaOpts
+				}
+				if dbService.HealthURL == "" {
+					dbService.HealthURL = service.HealthURL
+				}
+				if dbService.Port == 0 {
+					dbService.Port = service.Port
+				}
 			}
-			if dbService.HealthURL == "" {
-				dbService.HealthURL = service.HealthURL // Use default only if DB is empty
-			}
-			if dbService.Port == 0 {
-				dbService.Port = service.Port // Use default only if DB is empty
-			}
+			// After initial sync, completely preserve database values for user-configurable fields
 			dbService.Logs = []models.LogEntry{}
 
 			if description.Valid {
@@ -102,6 +117,15 @@ func (sm *Manager) loadServices(config models.Config) error {
 			}
 
 			sm.services[service.Name] = &dbService
+		}
+	}
+
+	// Mark initial service configuration sync as completed (only if it wasn't already)
+	if !initialSyncCompleted {
+		if err := sm.db.MarkSyncCompleted(syncType); err != nil {
+			log.Printf("[WARN] Failed to mark initial service config sync as completed: %v", err)
+		} else {
+			log.Printf("[INFO] Initial service configuration sync completed - future restarts will preserve user configurations")
 		}
 	}
 
@@ -196,6 +220,17 @@ func (sm *Manager) updateServiceInDB(service *models.Service) error {
 		SET status = ?, health_status = ?, pid = ?, last_started = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE name = ?`,
 		service.Status, service.HealthStatus, service.PID, service.LastStarted, service.Name)
+
+	return err
+}
+
+// UpdateServiceInDB updates a service in the database (public method)
+func (sm *Manager) UpdateServiceInDB(service *models.Service) error {
+	_, err := sm.db.Exec(`
+		UPDATE services 
+		SET status = ?, health_status = ?, pid = ?, last_started = ?, service_order = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE name = ?`,
+		service.Status, service.HealthStatus, service.PID, service.LastStarted, service.Order, service.Name)
 
 	return err
 }
