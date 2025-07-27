@@ -68,18 +68,18 @@ func (sm *Manager) collectResourceMetrics(service *models.Service) error {
 		service.MemoryPercent = memPercent
 	}
 
-	// Collect I/O statistics (disk usage)
+	// Collect I/O statistics (disk usage) - Optional on some platforms
 	ioCounters, err := proc.IOCounters()
 	if err != nil {
-		log.Printf("[DEBUG] Failed to get I/O counters for %s: %v", service.Name, err)
+		// Only log this at TRACE level since it's expected on some platforms (like macOS)
+		// log.Printf("[TRACE] I/O counters not available for %s: %v", service.Name, err)
+		// Set default values for unsupported platforms
+		service.DiskUsage = 0
+		service.NetworkRx = 0
+		service.NetworkTx = 0
 	} else {
 		service.DiskUsage = ioCounters.ReadBytes + ioCounters.WriteBytes
-	}
-
-	// Collect network statistics for child processes
-	// Note: Direct network stats per process are complex, so we'll track at system level
-	// For now, we'll collect network I/O as part of the process I/O
-	if ioCounters != nil {
+		// Collect network statistics using I/O counters as a proxy
 		service.NetworkRx = ioCounters.ReadCount
 		service.NetworkTx = ioCounters.WriteCount
 	}
