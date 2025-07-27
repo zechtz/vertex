@@ -6,10 +6,21 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/zechtz/nest-up/internal/models"
 )
+
+// getPortFromEnv gets a port from environment variable, returns defaultPort if not found or invalid
+func getPortFromEnv(envVarName string, defaultPort int) int {
+	if portStr := os.Getenv(envVarName); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			return port
+		}
+	}
+	return defaultPort
+}
 
 func LoadDefaultConfig() models.Config {
 	return models.Config{
