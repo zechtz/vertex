@@ -384,3 +384,44 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 func (sm *Manager) GetSystemResourceSummary() map[string]interface{} {
 	return sm.getSystemResourceSummary()
 }
+
+// AddService adds a new service to the manager
+func (sm *Manager) AddService(service *models.Service) error {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// Check if service with this name already exists
+	if _, exists := sm.services[service.Name]; exists {
+		return fmt.Errorf("service with name '%s' already exists", service.Name)
+	}
+
+	// Initialize service fields if not set
+	if service.EnvVars == nil {
+		service.EnvVars = make(map[string]models.EnvVar)
+	}
+	if service.Logs == nil {
+		service.Logs = []models.LogEntry{}
+	}
+	if service.Status == "" {
+		service.Status = "stopped"
+	}
+	if service.HealthStatus == "" {
+		service.HealthStatus = "unknown"
+	}
+
+	// Add service to memory
+	sm.services[service.Name] = service
+
+	// Save to database
+	if err := sm.updateServiceInDB(service); err != nil {
+		// Remove from memory if database save fails
+		delete(sm.services, service.Name)
+		return fmt.Errorf("failed to save service to database: %w", err)
+	}
+
+	// Broadcast the update
+	sm.broadcastUpdate(service)
+
+	log.Printf("[INFO] Successfully added service: %s", service.Name)
+	return nil
+}
