@@ -107,7 +107,36 @@ func (db *Database) initTables() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
-	tables := []string{createServicesTable, createEnvVarsTable, createGlobalEnvTable, createConfigsTable, createGlobalConfigTable}
+	// Create sync metadata table to track one-time synchronizations
+	createSyncMetadataTable := `
+	CREATE TABLE IF NOT EXISTS sync_metadata (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		sync_type TEXT UNIQUE NOT NULL,
+		is_completed BOOLEAN DEFAULT FALSE,
+		completed_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	// Create service dependencies table
+	createServiceDependenciesTable := `
+	CREATE TABLE IF NOT EXISTS service_dependencies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service_name TEXT NOT NULL,
+		dependency_service_name TEXT NOT NULL,
+		dependency_type TEXT NOT NULL DEFAULT 'hard',
+		health_check BOOLEAN DEFAULT TRUE,
+		timeout_seconds INTEGER DEFAULT 120,
+		retry_interval_seconds INTEGER DEFAULT 5,
+		is_required BOOLEAN DEFAULT TRUE,
+		description TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (service_name) REFERENCES services(name) ON DELETE CASCADE,
+		UNIQUE(service_name, dependency_service_name)
+	);`
+
+	tables := []string{createServicesTable, createEnvVarsTable, createGlobalEnvTable, createConfigsTable, createGlobalConfigTable, createSyncMetadataTable, createServiceDependenciesTable}
 
 	for _, table := range tables {
 		if _, err := db.Exec(table); err != nil {
@@ -169,4 +198,170 @@ func (db *Database) DeleteGlobalEnvVar(name string) error {
 		return fmt.Errorf("failed to delete global env var %s: %w", name, err)
 	}
 	return nil
+}
+
+// IsSyncCompleted checks if a specific sync type has been completed
+func (db *Database) IsSyncCompleted(syncType string) (bool, error) {
+	var isCompleted bool
+	query := `SELECT is_completed FROM sync_metadata WHERE sync_type = ?`
+	err := db.QueryRow(query, syncType).Scan(&isCompleted)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil // Not found means not completed
+		}
+		return false, fmt.Errorf("failed to check sync status for %s: %w", syncType, err)
+	}
+	return isCompleted, nil
+}
+
+// MarkSyncCompleted marks a specific sync type as completed
+func (db *Database) MarkSyncCompleted(syncType string) error {
+	query := `
+		INSERT INTO sync_metadata (sync_type, is_completed, completed_at, updated_at) 
+		VALUES (?, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(sync_type) DO UPDATE SET 
+			is_completed = TRUE,
+			completed_at = CURRENT_TIMESTAMP,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.Exec(query, syncType)
+	if err != nil {
+		return fmt.Errorf("failed to mark sync completed for %s: %w", syncType, err)
+	}
+	return nil
+}
+
+// SaveServiceDependencies saves service dependencies to the database
+func (db *Database) SaveServiceDependencies(serviceName string, dependencies []interface{}) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Clear existing dependencies for this service
+	_, err = tx.Exec("DELETE FROM service_dependencies WHERE service_name = ?", serviceName)
+	if err != nil {
+		return fmt.Errorf("failed to clear existing dependencies: %w", err)
+	}
+
+	// Insert new dependencies
+	for _, dep := range dependencies {
+		if depMap, ok := dep.(map[string]interface{}); ok {
+			dependencyServiceName, _ := depMap["serviceName"].(string)
+			dependencyType, _ := depMap["type"].(string)
+			healthCheck, _ := depMap["healthCheck"].(bool)
+			timeoutSeconds := 120 // default
+			retryIntervalSeconds := 5 // default
+			isRequired, _ := depMap["required"].(bool)
+			description, _ := depMap["description"].(string)
+
+			if timeoutSecondsFloat, ok := depMap["timeoutSeconds"].(float64); ok {
+				timeoutSeconds = int(timeoutSecondsFloat)
+			}
+			if retrySecondsFloat, ok := depMap["retryIntervalSeconds"].(float64); ok {
+				retryIntervalSeconds = int(retrySecondsFloat)
+			}
+
+			if dependencyType == "" {
+				dependencyType = "hard"
+			}
+
+			_, err = tx.Exec(`
+				INSERT INTO service_dependencies (
+					service_name, dependency_service_name, dependency_type, 
+					health_check, timeout_seconds, retry_interval_seconds, 
+					is_required, description, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+				serviceName, dependencyServiceName, dependencyType,
+				healthCheck, timeoutSeconds, retryIntervalSeconds,
+				isRequired, description)
+			if err != nil {
+				return fmt.Errorf("failed to insert dependency %s -> %s: %w", serviceName, dependencyServiceName, err)
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+// LoadServiceDependencies loads service dependencies from the database
+func (db *Database) LoadServiceDependencies(serviceName string) ([]map[string]interface{}, error) {
+	rows, err := db.Query(`
+		SELECT dependency_service_name, dependency_type, health_check, 
+		       timeout_seconds, retry_interval_seconds, is_required, description
+		FROM service_dependencies 
+		WHERE service_name = ?
+		ORDER BY dependency_service_name`, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query dependencies: %w", err)
+	}
+	defer rows.Close()
+
+	var dependencies []map[string]interface{}
+	for rows.Next() {
+		var dependencyServiceName, dependencyType, description string
+		var healthCheck, isRequired bool
+		var timeoutSeconds, retryIntervalSeconds int
+
+		err := rows.Scan(&dependencyServiceName, &dependencyType, &healthCheck,
+			&timeoutSeconds, &retryIntervalSeconds, &isRequired, &description)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan dependency: %w", err)
+		}
+
+		dependencies = append(dependencies, map[string]interface{}{
+			"serviceName":            dependencyServiceName,
+			"type":                   dependencyType,
+			"healthCheck":            healthCheck,
+			"timeoutSeconds":         timeoutSeconds,
+			"retryIntervalSeconds":   retryIntervalSeconds,
+			"required":               isRequired,
+			"description":            description,
+		})
+	}
+
+	return dependencies, rows.Err()
+}
+
+// GetAllServiceDependencies returns all service dependencies
+func (db *Database) GetAllServiceDependencies() (map[string][]map[string]interface{}, error) {
+	rows, err := db.Query(`
+		SELECT service_name, dependency_service_name, dependency_type, health_check, 
+		       timeout_seconds, retry_interval_seconds, is_required, description
+		FROM service_dependencies 
+		ORDER BY service_name, dependency_service_name`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all dependencies: %w", err)
+	}
+	defer rows.Close()
+
+	allDependencies := make(map[string][]map[string]interface{})
+	for rows.Next() {
+		var serviceName, dependencyServiceName, dependencyType, description string
+		var healthCheck, isRequired bool
+		var timeoutSeconds, retryIntervalSeconds int
+
+		err := rows.Scan(&serviceName, &dependencyServiceName, &dependencyType, &healthCheck,
+			&timeoutSeconds, &retryIntervalSeconds, &isRequired, &description)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan dependency: %w", err)
+		}
+
+		if allDependencies[serviceName] == nil {
+			allDependencies[serviceName] = []map[string]interface{}{}
+		}
+
+		allDependencies[serviceName] = append(allDependencies[serviceName], map[string]interface{}{
+			"serviceName":            dependencyServiceName,
+			"type":                   dependencyType,
+			"healthCheck":            healthCheck,
+			"timeoutSeconds":         timeoutSeconds,
+			"retryIntervalSeconds":   retryIntervalSeconds,
+			"required":               isRequired,
+			"description":            description,
+		})
+	}
+
+	return allDependencies, rows.Err()
 }
