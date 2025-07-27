@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Activity,
-  Layers
+  Layers,
+  Search
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -66,6 +67,12 @@ export function Sidebar({ activeSection, onSectionChange, className = '', onColl
       label: 'Dependencies',
       icon: <GitBranch className="w-5 h-5" />,
       description: 'Service dependencies'
+    },
+    {
+      id: 'auto-discovery',
+      label: 'Auto-Discovery',
+      icon: <Search className="w-5 h-5" />,
+      description: 'Discover new services'
     },
     {
       id: 'configurations',

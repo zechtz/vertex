@@ -13,6 +13,7 @@ import { SystemMetricsModal } from "@/components/SystemMetricsModal/SystemMetric
 import { LogAggregationModal } from "@/components/LogAggregationModal/LogAggregationModal";
 import { ServiceTopologyModal } from "@/components/ServiceTopologyModal/ServiceTopologyModal";
 import { DependencyConfigModal } from "@/components/DependencyConfigModal/DependencyConfigModal";
+import { AutoDiscoveryModal } from "@/components/AutoDiscoveryModal/AutoDiscoveryModal";
 import {
   ToastProvider,
   ToastContainer,
@@ -779,6 +780,17 @@ function AppContent() {
             isOpen={true}
             onClose={() => setActiveSection("services")}
             services={services}
+          />
+        );
+      case "auto-discovery":
+        return (
+          <AutoDiscoveryModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+            onServiceImported={() => {
+              fetchServices();
+              setActiveSection("services");
+            }}
           />
         );
       case "configurations":
