@@ -137,3 +137,21 @@ type Configuration struct {
 	Services  []ConfigService `json:"services"`
 	IsDefault bool            `json:"isDefault,omitempty"`
 }
+
+// LibraryInstallation represents a Maven library installation command
+type LibraryInstallation struct {
+	File       string `json:"file"`       // Path to the JAR file
+	GroupID    string `json:"groupId"`    // Maven group ID
+	ArtifactID string `json:"artifactId"` // Maven artifact ID
+	Version    string `json:"version"`    // Version
+	Packaging  string `json:"packaging"`  // Usually "jar"
+	Command    string `json:"command"`    // Full maven command
+}
+
+// GitLabCIConfig represents the structure we care about from .gitlab-ci.yml
+type GitLabCIConfig struct {
+	ServiceName    string                 `json:"serviceName"`
+	Libraries      []LibraryInstallation  `json:"libraries"`
+	HasLibraries   bool                   `json:"hasLibraries"`
+	ErrorMessage   string                 `json:"errorMessage,omitempty"`
+}
