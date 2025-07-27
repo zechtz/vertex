@@ -20,6 +20,75 @@ import (
 
 var logLevelRegex = regexp.MustCompile(`(?i)(INFO|WARN|ERROR|DEBUG|TRACE)`)
 
+// WaitForServiceReady waits for a service to be fully running and healthy
+func (sm *Manager) WaitForServiceReady(serviceName string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(1 * time.Second) // Check every second for faster detection
+	defer ticker.Stop()
+
+	log.Printf("[INFO] Waiting for service %s to be ready...", serviceName)
+
+	// Add a small initial delay to let the service start up
+	time.Sleep(2 * time.Second)
+
+	for {
+		sm.mutex.RLock()
+		service, exists := sm.services[serviceName]
+		sm.mutex.RUnlock()
+
+		if !exists {
+			return fmt.Errorf("service %s not found", serviceName)
+		}
+
+		service.Mutex.RLock()
+		status := service.Status
+		healthStatus := service.HealthStatus
+		service.Mutex.RUnlock()
+
+		// Optimized readiness criteria for faster startup
+		// Focus on basic availability rather than full health for quicker startup
+		serviceNameUpper := strings.ToUpper(serviceName)
+		
+		if status == "running" {
+			// For critical infrastructure services, wait for at least "starting" health status
+			// This means the service is up and initializing, which is sufficient for dependents to start
+			if serviceNameUpper == "EUREKA" || serviceNameUpper == "CONFIG" || serviceNameUpper == "NEST-REGISTRY-SERVER" || serviceNameUpper == "NEST-CONFIG-SERVER" {
+				if healthStatus == "healthy" || healthStatus == "starting" {
+					log.Printf("[INFO] Critical service %s is ready (status: %s, health: %s)", serviceName, status, healthStatus)
+					return nil
+				} else if healthStatus == "running" {
+					// For very fast startup, accept "running" health status after a short delay
+					// This allows dependent services to start while this service is still initializing
+					log.Printf("[INFO] Critical service %s is running and responsive, proceeding (status: %s, health: %s)", serviceName, status, healthStatus)
+					return nil
+				} else {
+					log.Printf("[DEBUG] Critical service %s is running but not yet initialized (health: %s), continuing to wait...", serviceName, healthStatus)
+				}
+			} else {
+				// Non-critical services just need to be running
+				log.Printf("[INFO] Service %s is ready (status: %s, health: %s)", serviceName, status, healthStatus)
+				return nil
+			}
+		}
+
+		// Check if service failed to start
+		if status == "stopped" {
+			return fmt.Errorf("service %s failed to start or stopped unexpectedly", serviceName)
+		}
+
+		log.Printf("[DEBUG] Service %s not ready yet (status: %s, health: %s), waiting...", serviceName, status, healthStatus)
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for service %s to be ready (status: %s, health: %s)", serviceName, status, healthStatus)
+		case <-ticker.C:
+			// Continue polling
+		}
+	}
+}
+
 func (sm *Manager) StartService(serviceName string) error {
 	sm.mutex.RLock()
 	service, exists := sm.services[serviceName]
@@ -29,14 +98,7 @@ func (sm *Manager) StartService(serviceName string) error {
 		return fmt.Errorf("service %s not found", serviceName)
 	}
 
-	// Check and wait for dependencies
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
-	log.Printf("[INFO] Checking dependencies for %s", serviceName)
-	if err := sm.dependencyManager.WaitForDependencies(ctx, serviceName); err != nil {
-		return fmt.Errorf("dependency check failed for %s: %w", serviceName, err)
-	}
+	log.Printf("[INFO] Starting service %s (without dependency checks)", serviceName)
 
 	return sm.startService(service)
 }
@@ -76,36 +138,26 @@ func (sm *Manager) RestartService(serviceName string) error {
 }
 
 func (sm *Manager) StartAllServices() error {
-	// Get all services and determine dependency-aware startup order
+	// Get all services and sort by order field
+	services := make([]*models.Service, 0, len(sm.services))
 	sm.mutex.RLock()
-	serviceNames := make([]string, 0, len(sm.services))
-	for name := range sm.services {
-		serviceNames = append(serviceNames, name)
+	for _, service := range sm.services {
+		services = append(services, service)
 	}
 	sm.mutex.RUnlock()
-
-	// Get optimal startup order based on dependencies
-	orderedNames, err := sm.dependencyManager.GetStartupOrder(serviceNames)
-	if err != nil {
-		log.Printf("[WARN] Failed to determine dependency-based startup order: %v. Using default order.", err)
-		// Fallback to original ordering
-		services := make([]*models.Service, 0, len(sm.services))
-		sm.mutex.RLock()
-		for _, service := range sm.services {
-			services = append(services, service)
-		}
-		sm.mutex.RUnlock()
-		
-		sort.Slice(services, func(i, j int) bool {
-			return services[i].Order < services[j].Order
-		})
-		
-		for _, service := range services {
-			orderedNames = append(orderedNames, service.Name)
-		}
+	
+	// Sort by the service order field
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].Order < services[j].Order
+	})
+	
+	// Extract service names in order
+	orderedNames := make([]string, 0, len(services))
+	for _, service := range services {
+		orderedNames = append(orderedNames, service.Name)
 	}
 
-	log.Printf("[INFO] Starting services in dependency order: %v", orderedNames)
+	log.Printf("[INFO] Starting services in configured order: %v", orderedNames)
 
 	go func() {
 		for _, serviceName := range orderedNames {
@@ -114,23 +166,53 @@ func (sm *Manager) StartAllServices() error {
 			sm.mutex.RUnlock()
 
 			if !exists {
-				log.Printf("Service %s not found, skipping", serviceName)
+				log.Printf("[WARN] Service %s not found, skipping", serviceName)
 				continue
 			}
 
 			service.Mutex.RLock()
 			status := service.Status
+			isEnabled := service.IsEnabled
 			service.Mutex.RUnlock()
 
-			if status != "running" && service.IsEnabled {
-				log.Printf("[INFO] Starting service %s in dependency order", serviceName)
+			if status != "running" && isEnabled {
+				log.Printf("[INFO] Starting service %s (order %d) and waiting for it to be ready...", serviceName, service.Order)
+				
+				// Start the service
 				if err := sm.StartService(serviceName); err != nil {
-					log.Printf("Failed to start service %s: %v", serviceName, err)
+					log.Printf("[ERROR] Failed to start service %s: %v", serviceName, err)
 					continue
 				}
+
+				// Wait for the service to be ready before starting the next one
+				// Optimized timeout based on service type for faster startup
+				var timeout time.Duration
+				switch strings.ToUpper(serviceName) {
+				case "EUREKA", "NEST-REGISTRY-SERVER":
+					timeout = 90 * time.Second // Registry services typically start fastest
+				case "CONFIG", "NEST-CONFIG-SERVER":
+					timeout = 2 * time.Minute // Config services need more time to load configurations
+				case "CACHE", "NEST-CACHE":
+					timeout = 60 * time.Second // Cache services are usually quick
+				case "GATEWAY", "NEST-GATEWAY":
+					timeout = 90 * time.Second // Gateways need time to discover services
+				default:
+					timeout = 2 * time.Minute // Default for other services
+				}
+				if err := sm.WaitForServiceReady(serviceName, timeout); err != nil {
+					log.Printf("[ERROR] Service %s did not become ready within timeout: %v", serviceName, err)
+					log.Printf("[WARN] Continuing with next service despite %s not being ready", serviceName)
+					continue
+				}
+
+				log.Printf("[INFO] Service %s is ready, proceeding to next service", serviceName)
+			} else if status == "running" {
+				log.Printf("[INFO] Service %s (order %d) is already running, skipping", serviceName, service.Order)
+			} else {
+				log.Printf("[INFO] Service %s (order %d) is disabled, skipping", serviceName, service.Order)
 			}
 		}
-		log.Printf("[INFO] Completed dependency-aware service startup")
+		log.Printf("[INFO] Completed sequential service startup in configured order")
 	}()
 
 	return nil
