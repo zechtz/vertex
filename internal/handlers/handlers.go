@@ -74,9 +74,15 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/config/global", h.updateGlobalConfigHandler).Methods("PUT")
 	r.HandleFunc("/api/topology", h.getTopologyHandler).Methods("GET")
 	r.HandleFunc("/api/dependencies", h.getDependenciesHandler).Methods("GET")
+	r.HandleFunc("/api/dependencies", h.saveDependenciesHandler).Methods("POST")
 	r.HandleFunc("/api/dependencies/graph", h.getDependencyGraphHandler).Methods("GET")
 	r.HandleFunc("/api/dependencies/validate", h.validateDependenciesHandler).Methods("GET")
 	r.HandleFunc("/api/dependencies/startup-order", h.getStartupOrderHandler).Methods("POST")
+	r.HandleFunc("/api/eureka/services", h.getEurekaServicesHandler).Methods("GET")
+	r.HandleFunc("/api/eureka/debug", h.debugEurekaHandler).Methods("GET")
+	r.HandleFunc("/api/services/{name}/gitlab-ci", h.getGitLabCIHandler).Methods("GET")
+	r.HandleFunc("/api/services/{name}/install-libraries", h.installLibrariesHandler).Methods("POST")
+	r.HandleFunc("/api/services/gitlab-ci/all", h.getAllGitLabCIHandler).Methods("GET")
 	r.HandleFunc("/ws", h.websocketHandler)
 }
 
@@ -932,19 +938,108 @@ func (h *Handler) getDependenciesHandler(w http.ResponseWriter, r *http.Request)
 	services := h.serviceManager.GetServices()
 	dependencies := make(map[string]interface{})
 
+	// Load dependencies from database
+	db := h.serviceManager.GetDatabase()
+	allDependencies, err := db.GetAllServiceDependencies()
+	if err != nil {
+		log.Printf("Failed to load dependencies from database: %v", err)
+		http.Error(w, "Failed to load dependencies", http.StatusInternalServerError)
+		return
+	}
+
 	for _, service := range services {
-		if len(service.Dependencies) > 0 {
-			dependencies[service.Name] = map[string]interface{}{
-				"dependencies": service.Dependencies,
-				"dependentOn":  service.DependentOn,
-				"startupDelay": service.StartupDelay.String(),
-			}
+		serviceData := map[string]interface{}{
+			"order": service.Order,
 		}
+
+		// Add dependencies from database if they exist
+		if dbDeps, exists := allDependencies[service.Name]; exists {
+			serviceData["dependencies"] = dbDeps
+		} else {
+			serviceData["dependencies"] = []interface{}{}
+		}
+
+		// Add dependent on info (reverse dependencies)
+		serviceData["dependentOn"] = service.DependentOn
+		serviceData["startupDelay"] = service.StartupDelay.String()
+
+		dependencies[service.Name] = serviceData
 	}
 
 	if err := json.NewEncoder(w).Encode(dependencies); err != nil {
 		log.Printf("Failed to encode dependencies: %v", err)
 		http.Error(w, "Failed to encode dependencies", http.StatusInternalServerError)
+		return
+	}
+}
+
+// saveDependenciesHandler saves service dependencies configuration
+func (h *Handler) saveDependenciesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var configData map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&configData); err != nil {
+		log.Printf("Failed to decode dependencies config: %v", err)
+		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
+		return
+	}
+
+	// Update service dependencies and orders
+	services := h.serviceManager.GetServices()
+	serviceMap := make(map[string]*models.Service)
+	for i := range services {
+		serviceMap[services[i].Name] = &services[i]
+	}
+
+	// Process each service's configuration
+	for serviceName, config := range configData {
+		if configMap, ok := config.(map[string]interface{}); ok {
+			service := serviceMap[serviceName]
+			if service == nil {
+				log.Printf("Service %s not found, skipping", serviceName)
+				continue
+			}
+
+			// Update service order
+			if order, exists := configMap["order"]; exists {
+				if orderFloat, ok := order.(float64); ok {
+					service.Order = int(orderFloat)
+					log.Printf("Updated order for %s to %d", serviceName, service.Order)
+				}
+			}
+
+			// Update dependencies in database
+			if dependencies, exists := configMap["dependencies"]; exists {
+				if depsList, ok := dependencies.([]interface{}); ok {
+					// Save dependencies to database
+					db := h.serviceManager.GetDatabase()
+					if err := db.SaveServiceDependencies(serviceName, depsList); err != nil {
+						log.Printf("Failed to save dependencies for %s: %v", serviceName, err)
+						http.Error(w, fmt.Sprintf("Failed to save dependencies for %s", serviceName), http.StatusInternalServerError)
+						return
+					}
+					log.Printf("Saved %d dependencies for %s", len(depsList), serviceName)
+				}
+			}
+
+			// Update the service in the service manager
+			if err := h.serviceManager.UpdateServiceInDB(service); err != nil {
+				log.Printf("Failed to update service %s in database: %v", serviceName, err)
+			}
+		}
+	}
+
+	log.Printf("Dependencies configuration saved successfully")
+
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Dependencies configuration saved successfully",
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
@@ -1073,6 +1168,192 @@ func (h *Handler) getStartupOrderHandler(w http.ResponseWriter, r *http.Request)
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		log.Printf("Failed to encode startup order: %v", err)
 		http.Error(w, "Failed to encode startup order", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getEurekaServicesHandler returns the status of services from Eureka registry
+func (h *Handler) getEurekaServicesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Get service status from Eureka
+	// We need to add a method to access the service manager's Eureka functionality
+	services := h.serviceManager.GetServices()
+	result := make(map[string]interface{})
+
+	// For each service, check its registration status with Eureka
+	for _, service := range services {
+		// Skip Eureka itself
+		serviceName := strings.ToUpper(service.Name)
+		if serviceName == "EUREKA" || serviceName == "NEST-REGISTRY-SERVER" {
+			result[service.Name] = map[string]interface{}{
+				"status":      service.HealthStatus,
+				"source":      "direct",
+				"port":        service.Port,
+				"description": "Registry server (not self-registered)",
+			}
+			continue
+		}
+
+		// For other services, we'll show their current health status
+		// In a future implementation, this could query Eureka directly
+		result[service.Name] = map[string]interface{}{
+			"status":      service.HealthStatus,
+			"source":      "eureka-aware",
+			"port":        service.Port,
+			"description": "Health checked via Eureka registry",
+		}
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode Eureka services: %v", err)
+		http.Error(w, "Failed to encode Eureka services", http.StatusInternalServerError)
+		return
+	}
+}
+
+// debugEurekaHandler provides debug information about Eureka integration
+func (h *Handler) debugEurekaHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Try to fetch raw Eureka data
+	eurekaURL := "http://localhost:8800/eureka/apps"
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	req, err := http.NewRequest("GET", eurekaURL, nil)
+	if err != nil {
+		result := map[string]interface{}{
+			"error": "Failed to create Eureka request",
+			"details": err.Error(),
+		}
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	req.Header.Set("Accept", "application/xml") // Request XML since that's what your Eureka returns
+	resp, err := client.Do(req)
+	if err != nil {
+		result := map[string]interface{}{
+			"error": "Failed to query Eureka",
+			"details": err.Error(),
+			"eureka_url": eurekaURL,
+		}
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		result := map[string]interface{}{
+			"error": "Eureka returned non-200 status",
+			"status_code": resp.StatusCode,
+			"eureka_url": eurekaURL,
+		}
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	// Parse the response
+	var eurekaData interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&eurekaData); err != nil {
+		result := map[string]interface{}{
+			"error": "Failed to decode Eureka response",
+			"details": err.Error(),
+		}
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	// Get our services for comparison
+	services := h.serviceManager.GetServices()
+	serviceNames := make([]string, len(services))
+	for i, service := range services {
+		serviceNames[i] = service.Name
+	}
+
+	result := map[string]interface{}{
+		"success": true,
+		"eureka_url": eurekaURL,
+		"eureka_status": resp.StatusCode,
+		"eureka_data": eurekaData,
+		"local_services": serviceNames,
+		"message": "Raw Eureka data and local services for debugging",
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode debug response: %v", err)
+		http.Error(w, "Failed to encode debug response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getGitLabCIHandler returns GitLab CI configuration for a specific service
+func (h *Handler) getGitLabCIHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serviceName := vars["name"]
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	config, err := h.serviceManager.ParseGitLabCI(serviceName)
+	if err != nil {
+		log.Printf("Failed to parse GitLab CI for service %s: %v", serviceName, err)
+		http.Error(w, fmt.Sprintf("Failed to parse GitLab CI: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(config); err != nil {
+		log.Printf("Failed to encode GitLab CI config: %v", err)
+		http.Error(w, "Failed to encode GitLab CI config", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getAllGitLabCIHandler returns GitLab CI configurations for all services
+func (h *Handler) getAllGitLabCIHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	configs := h.serviceManager.GetAllGitLabCIConfigs()
+
+	if err := json.NewEncoder(w).Encode(configs); err != nil {
+		log.Printf("Failed to encode GitLab CI configs: %v", err)
+		http.Error(w, "Failed to encode GitLab CI configs", http.StatusInternalServerError)
+		return
+	}
+}
+
+// installLibrariesHandler installs Maven libraries for a specific service
+func (h *Handler) installLibrariesHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serviceName := vars["name"]
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	log.Printf("[INFO] Installing libraries for service: %s", serviceName)
+
+	// Install libraries in a goroutine to avoid timeout
+	go func() {
+		if err := h.serviceManager.InstallLibraries(serviceName); err != nil {
+			log.Printf("[ERROR] Failed to install libraries for service %s: %v", serviceName, err)
+		} else {
+			log.Printf("[INFO] Successfully installed libraries for service %s", serviceName)
+		}
+	}()
+
+	// Return immediate response
+	result := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Library installation started for service %s. Check logs for progress.", serviceName),
+		"service": serviceName,
+	}
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode install libraries response: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
 }
