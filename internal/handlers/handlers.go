@@ -19,15 +19,17 @@ import (
 )
 
 type Handler struct {
-	serviceManager  *services.Manager
-	topologyService *services.TopologyService
-	upgrader        websocket.Upgrader
+	serviceManager       *services.Manager
+	topologyService      *services.TopologyService
+	autoDiscoveryService *services.AutoDiscoveryService
+	upgrader             websocket.Upgrader
 }
 
 func NewHandler(sm *services.Manager) *Handler {
 	return &Handler{
-		serviceManager:  sm,
-		topologyService: services.NewTopologyService(sm),
+		serviceManager:       sm,
+		topologyService:      services.NewTopologyService(sm),
+		autoDiscoveryService: services.NewAutoDiscoveryService(sm),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -83,6 +85,9 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/services/{name}/gitlab-ci", h.getGitLabCIHandler).Methods("GET")
 	r.HandleFunc("/api/services/{name}/install-libraries", h.installLibrariesHandler).Methods("POST")
 	r.HandleFunc("/api/services/gitlab-ci/all", h.getAllGitLabCIHandler).Methods("GET")
+	r.HandleFunc("/api/auto-discovery/scan", h.scanAutoDiscoveryHandler).Methods("POST")
+	r.HandleFunc("/api/auto-discovery/services", h.getDiscoveredServicesHandler).Methods("GET")
+	r.HandleFunc("/api/auto-discovery/import", h.importDiscoveredServiceHandler).Methods("POST")
 	r.HandleFunc("/ws", h.websocketHandler)
 }
 
@@ -1353,6 +1358,93 @@ func (h *Handler) installLibrariesHandler(w http.ResponseWriter, r *http.Request
 
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		log.Printf("Failed to encode install libraries response: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// scanAutoDiscoveryHandler triggers a scan of the project directory for services
+func (h *Handler) scanAutoDiscoveryHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	log.Printf("[INFO] Starting auto-discovery scan")
+
+	discoveredServices, err := h.autoDiscoveryService.ScanProjectDirectory()
+	if err != nil {
+		log.Printf("[ERROR] Auto-discovery scan failed: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to scan project directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	result := map[string]interface{}{
+		"success":           true,
+		"message":           fmt.Sprintf("Found %d potential services", len(discoveredServices)),
+		"discoveredServices": discoveredServices,
+		"totalFound":        len(discoveredServices),
+	}
+
+	log.Printf("[INFO] Auto-discovery scan completed. Found %d services", len(discoveredServices))
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode auto-discovery response: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getDiscoveredServicesHandler returns the last discovered services (if any)
+func (h *Handler) getDiscoveredServicesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// For now, we'll trigger a fresh scan each time
+	// In a more advanced implementation, we could cache results
+	discoveredServices, err := h.autoDiscoveryService.ScanProjectDirectory()
+	if err != nil {
+		log.Printf("[ERROR] Failed to get discovered services: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to get discovered services: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(discoveredServices); err != nil {
+		log.Printf("Failed to encode discovered services: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// importDiscoveredServiceHandler imports a discovered service into the system
+func (h *Handler) importDiscoveredServiceHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	var discoveredService services.DiscoveredService
+	if err := json.NewDecoder(r.Body).Decode(&discoveredService); err != nil {
+		log.Printf("[ERROR] Failed to decode discovered service: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[INFO] Importing discovered service: %s from %s", discoveredService.Name, discoveredService.Path)
+
+	service, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
+	if err != nil {
+		log.Printf("[ERROR] Failed to import discovered service: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to import service: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	result := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Successfully imported service '%s'", service.Name),
+		"service": service,
+	}
+
+	log.Printf("[INFO] Successfully imported service: %s", service.Name)
+
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("Failed to encode import service response: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

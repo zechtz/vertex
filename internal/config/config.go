@@ -34,8 +34,8 @@ func LoadDefaultConfig() models.Config {
 			{Name: "UAA", Dir: "nest-uaa", Status: "stopped", HealthStatus: "unknown", Port: 8803, HealthURL: "http://localhost:8803/actuator/health", Order: 5},
 			{Name: "APP", Dir: "nest-app", Status: "stopped", HealthStatus: "unknown", Port: 8805, HealthURL: "http://localhost:8805/actuator/health", Order: 6},
 			{Name: "CONTRACT", Dir: "nest-contract-management", Status: "stopped", HealthStatus: "unknown", Port: 8818, HealthURL: "http://localhost:8818/actuator/health", Order: 7},
-			{Name: "SUBMISSION", Dir: "nest-submission", Status: "stopped", HealthStatus: "unknown", Port: 8810, HealthURL: "http://localhost:8810/actuator/health", Order: 8},
-			{Name: "DSMS", Dir: "nest-dsms", JavaOpts: "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED --add-opens=java.base/java.security=ALL-UNNAMED", Status: "stopped", HealthStatus: "unknown", Port: 8812, HealthURL: "http://localhost:8812/actuator/health", Order: 9},
+			{Name: "SUBMISSION", Dir: "nest-submission", Status: "stopped", HealthStatus: "unknown", Port: 8817, HealthURL: "http://localhost:8810/actuator/health", Order: 8},
+			{Name: "DSMS", Dir: "nest-dsms", JavaOpts: "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED --add-opens=java.base/java.security=ALL-UNNAMED", Status: "stopped", HealthStatus: "unknown", Port: 8804, HealthURL: "http://localhost:8812/actuator/health", Order: 9},
 			{Name: "MONITOR", Dir: "nest-monitor", Status: "stopped", HealthStatus: "unknown", Port: 8815, HealthURL: "http://localhost:8815/actuator/health", Order: 10},
 		},
 	}
