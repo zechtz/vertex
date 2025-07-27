@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
-import { Server, Database, Settings, Cog, BarChart3, FileText, Network, GitBranch } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Service, Configuration } from "@/types";
-import { ServiceList } from "@/components/ServiceList/ServiceList";
-import { LogsPanel } from "@/components/LogsPanel/LogsPanel";
+import { Sidebar } from "@/components/Sidebar/Sidebar";
+import { ServicesGrid } from "@/components/ServicesGrid/ServicesGrid";
+import { LogsDrawer } from "@/components/LogsDrawer/LogsDrawer";
 import { ServiceConfigModal } from "@/components/ServiceConfigModal/ServiceConfigModal";
 import { ServiceFilesModal } from "@/components/ServiceConfigModal/ServiceFilesModal";
 import { ServiceEnvModal } from "@/components/ServiceEnvModal/ServiceEnvModal";
@@ -14,7 +12,7 @@ import { ConfigurationManager } from "@/components/ConfigurationManager/Configur
 import { SystemMetricsModal } from "@/components/SystemMetricsModal/SystemMetricsModal";
 import { LogAggregationModal } from "@/components/LogAggregationModal/LogAggregationModal";
 import { ServiceTopologyModal } from "@/components/ServiceTopologyModal/ServiceTopologyModal";
-import { DependencyManagerModal } from "@/components/DependencyManagerModal/DependencyManagerModal";
+import { DependencyConfigModal } from "@/components/DependencyConfigModal/DependencyConfigModal";
 import {
   ToastProvider,
   ToastContainer,
@@ -32,6 +30,8 @@ function AppContent() {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState("services");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isStartingAll, setIsStartingAll] = useState(false);
@@ -51,6 +51,7 @@ function AppContent() {
         stopping?: boolean;
         restarting?: boolean;
         checkingHealth?: boolean;
+        installingLibraries?: boolean;
       }
     >
   >({});
@@ -60,16 +61,9 @@ function AppContent() {
   const { showConfirm } = useConfirm();
 
   // Modal state
-  const [showConfigManager, setShowConfigManager] = useState(false);
-  const [showSystemMetrics, setShowSystemMetrics] = useState(false);
-  const [showLogAggregation, setShowLogAggregation] = useState(false);
-  const [showTopology, setShowTopology] = useState(false);
-  const [showDependencies, setShowDependencies] = useState(false);
   const [showServiceConfig, setShowServiceConfig] = useState(false);
   const [showServiceFiles, setShowServiceFiles] = useState(false);
   const [showServiceEnv, setShowServiceEnv] = useState(false);
-  const [showGlobalEnv, setShowGlobalEnv] = useState(false);
-  const [showGlobalConfig, setShowGlobalConfig] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [viewingFilesService, setViewingFilesService] =
     useState<Service | null>(null);
@@ -102,14 +96,19 @@ function AppContent() {
         setServiceLoadingStates((prev) => ({
           ...prev,
           [updatedService.name]: {
-            starting: updatedService.status === "running" ? false : prev[updatedService.name]?.starting || false,
-            stopping: updatedService.status === "stopped" ? false : prev[updatedService.name]?.stopping || false,
-            restarting: false, // Always clear restarting state on any update
-            checkingHealth: false, // Always clear health check state on any update
+            starting:
+              updatedService.status === "running"
+                ? false
+                : prev[updatedService.name]?.starting || false,
+            stopping:
+              updatedService.status === "stopped"
+                ? false
+                : prev[updatedService.name]?.stopping || false,
+            restarting: false,
+            checkingHealth: false,
           },
         }));
 
-        // Update selected service if it's the one that was updated
         if (selectedService && selectedService.name === updatedService.name) {
           setSelectedService(updatedService);
         }
@@ -184,10 +183,9 @@ function AppContent() {
     }
   };
 
-  // Service operations
+  // Service operations (same as before)
   const startService = async (serviceName: string) => {
     try {
-      // Set loading state for this specific service
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], starting: true },
@@ -204,9 +202,6 @@ function AppContent() {
       addToast(
         toast.success("Service starting", `${serviceName} is now starting up`),
       );
-      
-      // Don't clear loading state here - let WebSocket updates handle it
-      // The loading state will be cleared when we receive a status update via WebSocket
     } catch (error) {
       console.error("Failed to start service:", error);
       addToast(
@@ -217,7 +212,6 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], starting: false },
@@ -227,7 +221,6 @@ function AppContent() {
 
   const stopService = async (serviceName: string) => {
     try {
-      // Set loading state for this specific service
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], stopping: true },
@@ -244,8 +237,6 @@ function AppContent() {
       addToast(
         toast.success("Service stopping", `${serviceName} is shutting down`),
       );
-      
-      // Don't clear loading state here - let WebSocket updates handle it
     } catch (error) {
       console.error("Failed to stop service:", error);
       addToast(
@@ -256,7 +247,6 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], stopping: false },
@@ -266,7 +256,6 @@ function AppContent() {
 
   const restartService = async (serviceName: string) => {
     try {
-      // Set loading state for this specific service
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], restarting: true },
@@ -286,8 +275,6 @@ function AppContent() {
           `${serviceName} is being restarted`,
         ),
       );
-      
-      // Don't clear loading state here - let WebSocket updates handle it
     } catch (error) {
       console.error("Failed to restart service:", error);
       addToast(
@@ -298,7 +285,6 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], restarting: false },
@@ -308,7 +294,6 @@ function AppContent() {
 
   const checkServiceHealth = async (serviceName: string) => {
     try {
-      // Set loading state for this specific service
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], checkingHealth: true },
@@ -328,8 +313,7 @@ function AppContent() {
           `Checking ${serviceName} health status`,
         ),
       );
-      
-      // Clear health check loading state after a short delay since health checks are quick
+
       setTimeout(() => {
         setServiceLoadingStates((prev) => ({
           ...prev,
@@ -346,10 +330,60 @@ function AppContent() {
             : "An unexpected error occurred",
         ),
       );
-      // Only clear loading state if there was an error
       setServiceLoadingStates((prev) => ({
         ...prev,
         [serviceName]: { ...prev[serviceName], checkingHealth: false },
+      }));
+    }
+  };
+
+  const installLibraries = async (service: Service) => {
+    try {
+      setServiceLoadingStates((prev) => ({
+        ...prev,
+        [service.name]: { ...prev[service.name], installingLibraries: true },
+      }));
+
+      const response = await fetch(
+        `/api/services/${service.name}/install-libraries`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to install libraries: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      await response.json();
+      addToast(
+        toast.success(
+          "Library installation started",
+          `Installing Maven libraries for ${service.name}. Check logs for progress.`,
+        ),
+      );
+
+      setTimeout(() => {
+        setServiceLoadingStates((prev) => ({
+          ...prev,
+          [service.name]: { ...prev[service.name], installingLibraries: false },
+        }));
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to install libraries:", error);
+      addToast(
+        toast.error(
+          "Failed to install libraries",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
+        ),
+      );
+      setServiceLoadingStates((prev) => ({
+        ...prev,
+        [service.name]: { ...prev[service.name], installingLibraries: false },
       }));
     }
   };
@@ -427,14 +461,14 @@ function AppContent() {
       addToast(
         toast.info(
           "Fixing Lombok",
-          "Checking and fixing Lombok compatibility for all services..."
-        )
+          "Checking and fixing Lombok compatibility for all services...",
+        ),
       );
 
       const response = await fetch("/api/services/fix-lombok", {
         method: "POST",
       });
-      
+
       if (!response.ok) {
         throw new Error(
           `Failed to fix Lombok: ${response.status} ${response.statusText}`,
@@ -442,31 +476,31 @@ function AppContent() {
       }
 
       const result = await response.json();
-      console.log("Lombok fix result:", result);
-
-      // Show results in toast
-      const successCount = Object.values(result.results).filter((r: any) => r === "Success").length;
-      const errorCount = Object.values(result.results).filter((r: any) => r !== "Success").length;
+      const successCount = Object.values(result.results).filter(
+        (r: any) => r === "Success",
+      ).length;
+      const errorCount = Object.values(result.results).filter(
+        (r: any) => r !== "Success",
+      ).length;
 
       addToast(
-        errorCount > 0 
+        errorCount > 0
           ? toast.warning(
-              "Lombok Fix Complete", 
-              `Successfully processed ${successCount} services. ${errorCount} services had errors.`
+              "Lombok Fix Complete",
+              `Successfully processed ${successCount} services. ${errorCount} services had errors.`,
             )
           : toast.success(
               "Lombok Fix Complete",
-              `Successfully processed ${successCount} services.`
-            )
+              `Successfully processed ${successCount} services.`,
+            ),
       );
-
     } catch (error) {
       console.error("Error fixing Lombok:", error);
       addToast(
         toast.error(
           "Error",
-          error instanceof Error ? error.message : "Failed to fix Lombok"
-        )
+          error instanceof Error ? error.message : "Failed to fix Lombok",
+        ),
       );
     } finally {
       setIsFixingLombok(false);
@@ -479,14 +513,14 @@ function AppContent() {
       addToast(
         toast.info(
           "Syncing Environment",
-          "Synchronizing environment variables from configuration files..."
-        )
+          "Synchronizing environment variables from configuration files...",
+        ),
       );
 
       const response = await fetch("/api/environment/sync", {
         method: "POST",
       });
-      
+
       if (!response.ok) {
         throw new Error(
           `Failed to sync environment: ${response.status} ${response.statusText}`,
@@ -494,30 +528,100 @@ function AppContent() {
       }
 
       const result = await response.json();
-      console.log("Environment sync result:", result);
-
       addToast(
-        result.success 
+        result.success
           ? toast.success(
               "Environment Sync Complete",
-              `Successfully loaded ${result.variablesSet} environment variables.${result.errors?.length > 0 ? ` ${result.errors.length} warnings occurred.` : ""}`
+              `Successfully loaded ${result.variablesSet} environment variables.${result.errors?.length > 0 ? ` ${result.errors.length} warnings occurred.` : ""}`,
             )
           : toast.warning(
               "Environment Sync Complete",
-              `Partially loaded ${result.variablesSet} environment variables. ${result.errors?.length || 0} warnings occurred.`
-            )
+              `Partially loaded ${result.variablesSet} environment variables. ${result.errors?.length || 0} warnings occurred.`,
+            ),
       );
-
     } catch (error) {
       console.error("Error syncing environment:", error);
       addToast(
         toast.error(
           "Error",
-          error instanceof Error ? error.message : "Failed to sync environment"
-        )
+          error instanceof Error ? error.message : "Failed to sync environment",
+        ),
       );
     } finally {
       setIsSyncingEnvironment(false);
+    }
+  };
+
+  // Service management handlers
+  const openCreateService = () => {
+    setEditingService({
+      name: "",
+      dir: "",
+      extraEnv: "",
+      javaOpts: "",
+      status: "stopped",
+      healthStatus: "unknown",
+      healthUrl: "",
+      port: 8080,
+      pid: 0,
+      order: services.length + 1,
+      lastStarted: "",
+      description: "",
+      isEnabled: true,
+      envVars: {},
+      logs: [],
+      uptime: "",
+    });
+    setShowServiceConfig(true);
+  };
+
+  const openEditService = (service: Service) => {
+    setEditingService(service);
+    setShowServiceConfig(true);
+  };
+
+  const openViewFiles = (service: Service) => {
+    setViewingFilesService(service);
+    setShowServiceFiles(true);
+  };
+
+  const openEditEnv = (service: Service) => {
+    setEnvEditingService(service);
+    setShowServiceEnv(true);
+  };
+
+  const deleteService = async (serviceName: string) => {
+    const confirmed = await showConfirm(
+      confirmDialogs.deleteService(serviceName),
+    );
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/services/${serviceName}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to delete service: ${response.status} ${response.statusText}`,
+        );
+      }
+      addToast(
+        toast.success(
+          "Service deleted",
+          `${serviceName} has been deleted successfully`,
+        ),
+      );
+      fetchServices();
+    } catch (error) {
+      console.error("Failed to delete service:", error);
+      addToast(
+        toast.error(
+          "Failed to delete service",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
+        ),
+      );
     }
   };
 
@@ -529,11 +633,9 @@ function AppContent() {
 
     try {
       setIsCopyingLogs(true);
-      // Filter logs by selected levels and format them as readable text
       const filteredLogs = selectedService.logs.filter((log) =>
         selectedLevels.includes(log.level),
       );
-
       const logsText = filteredLogs
         .map(
           (log) =>
@@ -619,190 +721,12 @@ function AppContent() {
     setSearchTerm("");
   };
 
-  // Service configuration operations
-  const openCreateService = () => {
-    setEditingService({
-      name: "",
-      dir: "",
-      extraEnv: "",
-      javaOpts: "",
-      status: "stopped",
-      healthStatus: "unknown",
-      healthUrl: "",
-      port: 8080,
-      pid: 0,
-      order: services.length + 1,
-      lastStarted: "",
-      description: "",
-      isEnabled: true,
-      envVars: {},
-      logs: [],
-      uptime: "",
-    });
-    setShowServiceConfig(true);
-  };
-
-  const openEditService = (service: Service) => {
-    setEditingService(service);
-    setShowServiceConfig(true);
-  };
-
-  const openViewFiles = (service: Service) => {
-    setViewingFilesService(service);
-    setShowServiceFiles(true);
-  };
-
-  const openEditEnv = (service: Service) => {
-    setEnvEditingService(service);
-    setShowServiceEnv(true);
-  };
-
-  const deleteService = async (serviceName: string) => {
-    const confirmed = await showConfirm(
-      confirmDialogs.deleteService(serviceName),
-    );
-    if (!confirmed) return;
-
-    try {
-      const response = await fetch(`/api/services/${serviceName}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        throw new Error(
-          `Failed to delete service: ${response.status} ${response.statusText}`,
-        );
-      }
-      addToast(
-        toast.success(
-          "Service deleted",
-          `${serviceName} has been deleted successfully`,
-        ),
-      );
-      fetchServices();
-    } catch (error) {
-      console.error("Failed to delete service:", error);
-      addToast(
-        toast.error(
-          "Failed to delete service",
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred",
-        ),
-      );
-    }
-  };
-
-  const getStatusBadge = (status: string, healthStatus: string) => {
-    if (status === "running") {
-      switch (healthStatus) {
-        case "healthy":
-          return <Badge variant="success">Healthy</Badge>;
-        case "unhealthy":
-          return <Badge variant="destructive">Unhealthy</Badge>;
-        case "starting":
-          return <Badge variant="outline">Starting</Badge>;
-        default:
-          return <Badge variant="outline">Running</Badge>;
-      }
-    }
-    return <Badge variant="secondary">Stopped</Badge>;
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Server className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">Loading services...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-                <Server className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  NeST Service Manager
-                </h1>
-                <p className="text-lg text-muted-foreground">
-                  Manage and monitor your microservices ecosystem
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowLogAggregation(true)}
-                className="hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Logs
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowSystemMetrics(true)}
-                className="hover:bg-green-50 hover:text-green-600 hover:border-green-200"
-              >
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Metrics
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowTopology(true)}
-                className="hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
-              >
-                <Network className="h-4 w-4 mr-2" />
-                Topology
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowDependencies(true)}
-                className="hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
-              >
-                <GitBranch className="h-4 w-4 mr-2" />
-                Dependencies
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowGlobalConfig(true)}
-                className="hover:bg-gray-50 hover:text-gray-600 hover:border-gray-200"
-              >
-                <Cog className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowGlobalEnv(true)}
-                className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
-              >
-                <Database className="h-4 w-4 mr-2" />
-                Environment
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowConfigManager(true)}
-                className="hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Configurations
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Services List */}
-          <ServiceList
+  // Render different sections based on activeSection
+  const renderMainContent = () => {
+    switch (activeSection) {
+      case "services":
+        return (
+          <ServicesGrid
             services={services}
             isLoading={isLoading}
             isStartingAll={isStartingAll}
@@ -824,144 +748,170 @@ function AppContent() {
             onDeleteService={deleteService}
             onViewFiles={openViewFiles}
             onEditEnv={openEditEnv}
-            getStatusBadge={getStatusBadge}
+            onInstallLibraries={installLibraries}
           />
+        );
+      case "metrics":
+        return (
+          <SystemMetricsModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+          />
+        );
+      case "logs":
+        return (
+          <LogAggregationModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+            services={services}
+          />
+        );
+      case "topology":
+        return (
+          <ServiceTopologyModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+          />
+        );
+      case "dependencies":
+        return (
+          <DependencyConfigModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+            services={services}
+          />
+        );
+      case "configurations":
+        return (
+          <ConfigurationManager
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+            configurations={configurations}
+            services={services}
+            onConfigurationSaved={() => {
+              fetchConfigurations();
+              fetchServices();
+            }}
+          />
+        );
+      case "environment":
+        return (
+          <GlobalEnvModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+          />
+        );
+      case "settings":
+        return (
+          <GlobalConfigModal
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+            onConfigUpdated={fetchServices}
+          />
+        );
+      default:
+        return <div>Section not found</div>;
+    }
+  };
 
-          {/* Logs Panel */}
-          <div className="lg:sticky lg:top-8 lg:h-fit">
-            <LogsPanel
-              selectedService={selectedService}
-              searchTerm={searchTerm}
-              copied={copied}
-              isCopyingLogs={isCopyingLogs}
-              isClearingLogs={isClearingLogs}
-              onSearchChange={setSearchTerm}
-              onClearSearch={clearSearch}
-              onCopyLogs={copyLogsToClipboard}
-              onClearLogs={clearLogs}
-              onClose={() => setSelectedService(null)}
-              onOpenAdvancedSearch={() => setShowLogAggregation(true)}
-            />
-          </div>
-        </div>
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <Sidebar
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        onCollapsedChange={setIsSidebarCollapsed}
+      />
 
-        {/* Modal Components */}
-        <ServiceConfigModal
-          service={editingService}
-          isOpen={showServiceConfig}
-          isSaving={isSavingService}
-          onClose={() => {
+      {/* Main Content */}
+      <div
+        className={`transition-all duration-300 ${isSidebarCollapsed ? "ml-16" : "ml-64"}`}
+      >
+        <div className="p-8 pb-20">{renderMainContent()}</div>
+      </div>
+
+      {/* Logs Drawer */}
+      <LogsDrawer
+        selectedService={selectedService}
+        searchTerm={searchTerm}
+        copied={copied}
+        isCopyingLogs={isCopyingLogs}
+        isClearingLogs={isClearingLogs}
+        onSearchChange={setSearchTerm}
+        onClearSearch={clearSearch}
+        onCopyLogs={copyLogsToClipboard}
+        onClearLogs={clearLogs}
+        onClose={() => setSelectedService(null)}
+        onOpenAdvancedSearch={() => setActiveSection("logs")}
+      />
+
+      {/* Modal Components */}
+      <ServiceConfigModal
+        service={editingService}
+        isOpen={showServiceConfig}
+        isSaving={isSavingService}
+        onClose={() => {
+          setShowServiceConfig(false);
+          setEditingService(null);
+        }}
+        onSave={async (service) => {
+          try {
+            setIsSavingService(true);
+            const response = await fetch(`/api/services/${service.name}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(service),
+            });
+
+            if (!response.ok) {
+              throw new Error(
+                `Failed to save service: ${response.status} ${response.statusText}`,
+              );
+            }
+
+            addToast(
+              toast.success(
+                "Service saved",
+                `${service.name} configuration has been updated`,
+              ),
+            );
+            fetchServices();
             setShowServiceConfig(false);
             setEditingService(null);
-          }}
-          onSave={async (service) => {
-            try {
-              setIsSavingService(true);
-              const response = await fetch(`/api/services/${service.name}`, {
-                method: "PUT",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(service),
-              });
+          } catch (error) {
+            console.error("Failed to save service:", error);
+            addToast(
+              toast.error(
+                "Failed to save service",
+                error instanceof Error
+                  ? error.message
+                  : "An unexpected error occurred",
+              ),
+            );
+          } finally {
+            setIsSavingService(false);
+          }
+        }}
+      />
 
-              if (!response.ok) {
-                throw new Error(
-                  `Failed to save service: ${response.status} ${response.statusText}`,
-                );
-              }
+      <ServiceFilesModal
+        serviceName={viewingFilesService?.name || ""}
+        serviceDir={viewingFilesService?.dir || ""}
+        isOpen={showServiceFiles}
+        onClose={() => {
+          setShowServiceFiles(false);
+          setViewingFilesService(null);
+        }}
+      />
 
-              addToast(
-                toast.success(
-                  "Service saved",
-                  `${service.name} configuration has been updated`,
-                ),
-              );
-              fetchServices();
-              setShowServiceConfig(false);
-              setEditingService(null);
-            } catch (error) {
-              console.error("Failed to save service:", error);
-              addToast(
-                toast.error(
-                  "Failed to save service",
-                  error instanceof Error
-                    ? error.message
-                    : "An unexpected error occurred",
-                ),
-              );
-            } finally {
-              setIsSavingService(false);
-            }
-          }}
-        />
-
-        <ServiceFilesModal
-          serviceName={viewingFilesService?.name || ""}
-          serviceDir={viewingFilesService?.dir || ""}
-          isOpen={showServiceFiles}
-          onClose={() => {
-            setShowServiceFiles(false);
-            setViewingFilesService(null);
-          }}
-        />
-
-        <ServiceEnvModal
-          serviceName={envEditingService?.name || ""}
-          isOpen={showServiceEnv}
-          onClose={() => {
-            setShowServiceEnv(false);
-            setEnvEditingService(null);
-          }}
-        />
-
-        <GlobalConfigModal
-          isOpen={showGlobalConfig}
-          onClose={() => setShowGlobalConfig(false)}
-          onConfigUpdated={() => {
-            // Refresh services in case paths changed
-            fetchServices();
-          }}
-        />
-
-        <GlobalEnvModal
-          isOpen={showGlobalEnv}
-          onClose={() => setShowGlobalEnv(false)}
-        />
-
-        <SystemMetricsModal
-          isOpen={showSystemMetrics}
-          onClose={() => setShowSystemMetrics(false)}
-        />
-
-        <LogAggregationModal
-          isOpen={showLogAggregation}
-          onClose={() => setShowLogAggregation(false)}
-          services={services}
-        />
-
-        <ServiceTopologyModal
-          isOpen={showTopology}
-          onClose={() => setShowTopology(false)}
-        />
-
-        <DependencyManagerModal
-          isOpen={showDependencies}
-          onClose={() => setShowDependencies(false)}
-          services={services}
-        />
-
-        <ConfigurationManager
-          isOpen={showConfigManager}
-          onClose={() => setShowConfigManager(false)}
-          configurations={configurations}
-          services={services}
-          onConfigurationSaved={() => {
-            fetchConfigurations();
-            fetchServices();
-          }}
-        />
-      </div>
+      <ServiceEnvModal
+        serviceName={envEditingService?.name || ""}
+        isOpen={showServiceEnv}
+        onClose={() => {
+          setShowServiceEnv(false);
+          setEnvEditingService(null);
+        }}
+      />
     </div>
   );
 }
