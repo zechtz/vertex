@@ -76,13 +76,36 @@ func (sm *Manager) checkServiceHealth(service *models.Service) {
 		return
 	}
 
+	// Give new services time to initialize their health endpoints
+	// Config services especially need time for actuator endpoints to be ready
+	if !service.LastStarted.IsZero() {
+		timeSinceStart := time.Since(service.LastStarted)
+		if timeSinceStart < 30*time.Second {
+			// Keep services in "starting" state for first 30 seconds
+			if service.HealthStatus != "starting" {
+				service.HealthStatus = "starting"
+				sm.updateServiceInDB(service)
+			}
+			return
+		}
+	}
+
 	// Calculate uptime
 	if !service.LastStarted.IsZero() {
 		uptime := time.Since(service.LastStarted)
 		service.Uptime = formatDuration(uptime)
 	}
 
-	// Perform HTTP health check with authentication
+	// Try Eureka-based health check first (for microservices that register with Eureka)
+	if sm.checkEurekaHealth(service) {
+		log.Printf("[DEBUG] Health status for %s updated from Eureka: %s", service.Name, service.HealthStatus)
+		sm.updateServiceInDB(service)
+		sm.broadcastUpdate(service)
+		return
+	}
+
+	// Fall back to direct HTTP health check
+	log.Printf("[DEBUG] Using direct health check for %s (not found in Eureka or Eureka unavailable)", service.Name)
 	client := sm.createHealthCheckClient()
 	req, err := sm.createHealthCheckRequest(service.HealthURL)
 	if err != nil {
@@ -94,6 +117,18 @@ func (sm *Manager) checkServiceHealth(service *models.Service) {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		// For CONFIG services, try one more time after a short delay
+		if strings.ToUpper(service.Name) == "CONFIG" && !service.LastStarted.IsZero() {
+			timeSinceStart := time.Since(service.LastStarted)
+			if timeSinceStart < 2*time.Minute {
+				log.Printf("[DEBUG] Health check failed for %s (still initializing): %v", service.Name, err)
+				service.HealthStatus = "starting"
+				sm.updateServiceInDB(service)
+				sm.broadcastUpdate(service)
+				return
+			}
+		}
+		
 		log.Printf("[DEBUG] Health check failed for %s: %v", service.Name, err)
 		
 		// If health endpoint fails, try a simple connectivity test to the service port
@@ -210,7 +245,7 @@ func (sm *Manager) isProcessRunning(pid int) bool {
 
 // createHealthCheckClient creates an HTTP client for health checks
 func (sm *Manager) createHealthCheckClient() *http.Client {
-	return &http.Client{Timeout: 5 * time.Second}
+	return &http.Client{Timeout: 10 * time.Second} // Increased timeout for Spring Boot services
 }
 
 // createHealthCheckRequest creates an HTTP request for health checks with authentication
