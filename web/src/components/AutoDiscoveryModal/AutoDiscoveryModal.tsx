@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DiscoveredService {
   name: string;
@@ -39,6 +40,7 @@ export function AutoDiscoveryModal({
   onClose,
   onServiceImported
 }: AutoDiscoveryModalProps) {
+  const { token } = useAuth();
   const [discoveredServices, setDiscoveredServices] = useState<DiscoveredService[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isImporting, setIsImporting] = useState<Record<string, boolean>>({});
@@ -54,9 +56,17 @@ export function AutoDiscoveryModal({
   const scanForServices = async () => {
     setIsScanning(true);
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/auto-discovery/scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers
       });
 
       if (!response.ok) {
@@ -125,17 +135,17 @@ export function AutoDiscoveryModal({
   const getServiceTypeBadgeColor = (type: string) => {
     switch (type.toLowerCase()) {
       case 'registry':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200';
       case 'config-server':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200';
       case 'api-gateway':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200';
       case 'authentication':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200';
       case 'cache':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
     }
   };
 
@@ -149,18 +159,18 @@ export function AutoDiscoveryModal({
         
         {/* Modal */}
         <div className="relative w-full max-w-6xl max-h-[95vh] overflow-y-auto">
-          <div className="relative bg-white rounded-lg shadow-xl">
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
                   <Search className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                     Auto-Discovery
                   </h2>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     Automatically detect Spring Boot services in your project directory
                   </p>
                 </div>
@@ -183,11 +193,11 @@ export function AutoDiscoveryModal({
             <div className="p-6">
               {!hasScanned && !isScanning && (
                 <div className="text-center py-12">
-                  <FolderOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  <FolderOpen className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                     Ready to discover services
                   </h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
                     Click "Scan Directory" to automatically detect Spring Boot services in your project directory.
                   </p>
                   <Button
@@ -203,10 +213,10 @@ export function AutoDiscoveryModal({
               {isScanning && (
                 <div className="text-center py-12">
                   <RefreshCw className="w-16 h-16 text-blue-600 mx-auto mb-4 animate-spin" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                     Scanning for services...
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-400">
                     Looking for Maven and Gradle projects with Spring Boot dependencies.
                   </p>
                 </div>
@@ -290,20 +300,20 @@ export function AutoDiscoveryModal({
                   {filteredServices.length === 0 && discoveredServices.length > 0 && (
                     <div className="text-center py-8">
                       <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600">No services match your search criteria.</p>
+                      <p className="text-gray-600 dark:text-gray-400">No services match your search criteria.</p>
                     </div>
                   )}
 
                   {filteredServices.length === 0 && discoveredServices.length === 0 && (
                     <div className="text-center py-8">
                       <FileCode className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600">No Spring Boot services found in the project directory.</p>
+                      <p className="text-gray-600 dark:text-gray-400">No Spring Boot services found in the project directory.</p>
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredServices.map((service) => (
-                      <Card key={service.name} className={`border ${service.exists ? 'border-gray-300 bg-gray-50' : 'border-green-300 bg-green-50'}`}>
+                      <Card key={service.name} className={`border ${service.exists ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50' : 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'}`}>
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-2">
@@ -331,7 +341,7 @@ export function AutoDiscoveryModal({
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Path:</span>
-                              <span className="text-gray-600 font-mono text-xs">{service.path}</span>
+                              <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">{service.path}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Port:</span>
@@ -340,7 +350,7 @@ export function AutoDiscoveryModal({
                             {service.description && (
                               <div>
                                 <span className="font-medium">Description:</span>
-                                <p className="text-gray-600 text-xs mt-1">{service.description}</p>
+                                <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">{service.description}</p>
                               </div>
                             )}
                           </div>
