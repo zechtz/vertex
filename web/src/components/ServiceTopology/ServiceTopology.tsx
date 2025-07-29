@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TopologyNode {
   id: string;
@@ -46,6 +47,7 @@ interface ServiceTopologyProps {
 }
 
 export function ServiceTopology({ className = '' }: ServiceTopologyProps) {
+  const { token } = useAuth();
   const [topology, setTopology] = useState<ServiceTopology | null>(null);
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +59,16 @@ export function ServiceTopology({ className = '' }: ServiceTopologyProps) {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch('/api/topology');
+      const headers: Record<string, string> = {};
+      
+      // Use the token from AuthContext
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('/api/topology', {
+        headers,
+      });
       if (!response.ok) {
         throw new Error(`Failed to fetch topology: ${response.status} ${response.statusText}`);
       }
@@ -91,18 +102,18 @@ export function ServiceTopology({ className = '' }: ServiceTopologyProps) {
 
   const getNodeColor = (node: TopologyNode) => {
     if (node.type === 'external' || node.type === 'database') {
-      return 'bg-gray-100 border-gray-300 text-gray-700';
+      return 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300';
     }
     
     switch (node.status) {
       case 'running':
         return node.healthStatus === 'healthy' 
-          ? 'bg-green-100 border-green-300 text-green-700'
-          : 'bg-yellow-100 border-yellow-300 text-yellow-700';
+          ? 'bg-green-100 dark:bg-green-900/30 border-green-300 dark:border-green-600 text-green-700 dark:text-green-300'
+          : 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-300';
       case 'stopped':
-        return 'bg-red-100 border-red-300 text-red-700';
+        return 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-600 text-red-700 dark:text-red-300';
       default:
-        return 'bg-gray-100 border-gray-300 text-gray-700';
+        return 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300';
     }
   };
 
@@ -302,18 +313,18 @@ export function ServiceTopology({ className = '' }: ServiceTopologyProps) {
               <CardTitle className="text-base">Service Architecture</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="relative bg-gray-50 rounded-lg overflow-hidden">
+              <div className="relative bg-gray-50 dark:bg-gray-800 rounded-lg overflow-hidden">
                 <svg
                   ref={svgRef}
                   width="100%"
                   height="500"
                   viewBox="0 0 800 600"
-                  className="border border-gray-200"
+                  className="border border-gray-200 dark:border-gray-700"
                 >
                   {/* Grid background */}
                   <defs>
                     <pattern
-                      id="grid"
+                      id="grid-light"
                       width="20"
                       height="20"
                       patternUnits="userSpaceOnUse"
@@ -325,8 +336,22 @@ export function ServiceTopology({ className = '' }: ServiceTopologyProps) {
                         strokeWidth="1"
                       />
                     </pattern>
+                    <pattern
+                      id="grid-dark"
+                      width="20"
+                      height="20"
+                      patternUnits="userSpaceOnUse"
+                    >
+                      <path
+                        d="M 20 0 L 0 0 0 20"
+                        fill="none"
+                        stroke="#4b5563"
+                        strokeWidth="1"
+                      />
+                    </pattern>
                   </defs>
-                  <rect width="100%" height="100%" fill="url(#grid)" />
+                  <rect width="100%" height="100%" fill="url(#grid-light)" className="dark:hidden" />
+                  <rect width="100%" height="100%" fill="url(#grid-dark)" className="hidden dark:block" />
                   
                   {/* Connections */}
                   {renderConnections()}

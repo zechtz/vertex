@@ -101,22 +101,22 @@ export function LogsDrawer({
         ${isFullscreen ? 'inset-0' : ''}
       `}>
         <div className={`
-          bg-white border-t border-gray-200 shadow-2xl ${drawerHeight} flex flex-col
+          bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-2xl ${drawerHeight} flex flex-col
           ${isFullscreen ? 'rounded-none' : 'rounded-t-xl'}
         `}>
           {/* Header */}
-          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-white">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {/* Drag Handle */}
                 <button
                   onClick={() => setIsExpanded(!isExpanded)}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   {isExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                    <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                   ) : (
-                    <ChevronUp className="w-5 h-5 text-gray-400" />
+                    <ChevronUp className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                   )}
                 </button>
 
@@ -125,10 +125,10 @@ export function LogsDrawer({
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     {selectedService.name} Logs
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {filteredLogs.length} of {selectedService.logs.length} entries
                   </p>
                 </div>
@@ -140,7 +140,7 @@ export function LogsDrawer({
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="hover:bg-gray-100"
+                  className="hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   {isFullscreen ? (
                     <Minimize2 className="h-4 w-4" />
@@ -197,7 +197,7 @@ export function LogsDrawer({
                   variant="ghost" 
                   size="sm" 
                   onClick={onClose}
-                  className="hover:bg-gray-100"
+                  className="hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   <X className="h-5 w-5" />
                 </Button>
@@ -209,7 +209,7 @@ export function LogsDrawer({
               <div className="mt-4 space-y-4">
                 {/* Search */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
                   <Input
                     placeholder="Search logs..."
                     value={searchTerm}
@@ -230,7 +230,7 @@ export function LogsDrawer({
 
                 {/* Log Level Filters */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700">Levels:</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Levels:</span>
                   <Button
                     variant={logLevels.includes("INFO") ? "default" : "outline"}
                     size="sm"
@@ -262,7 +262,7 @@ export function LogsDrawer({
 
                 {/* Search Results Info */}
                 {searchTerm && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
                     {filteredLogs.length} of {selectedService.logs.length} logs match "{searchTerm}"
                   </div>
                 )}
@@ -276,14 +276,14 @@ export function LogsDrawer({
               <div className="h-full overflow-y-auto p-6">
                 <div className="font-mono text-sm space-y-1">
                   {selectedService.logs.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <Terminal className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <Terminal className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                       <p className="text-lg font-medium">No logs available</p>
                       <p>Logs will appear here when the service generates output</p>
                     </div>
                   ) : filteredLogs.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <Search className="h-12 w-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                       <p className="text-lg font-medium">No logs match your criteria</p>
                       <p>Try adjusting your search term or log level filters</p>
                     </div>
@@ -295,17 +295,17 @@ export function LogsDrawer({
                               `(${searchTerm.replace(/[.*+?^${}()|[\]]/g, "\\$&")})`,
                               "gi"
                             ),
-                            '<mark class="bg-yellow-200 text-black px-1 rounded">$1</mark>'
+                            '<mark class="bg-yellow-200 dark:bg-yellow-900/50 text-black dark:text-yellow-100 px-1 rounded">$1</mark>'
                           )
                         : log.message;
 
                       return (
                         <div 
                           key={index} 
-                          className={`text-xs leading-relaxed p-2 rounded hover:bg-gray-50 ${getLogLevelClass(log.level)}`}
+                          className={`text-xs leading-relaxed p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 ${getLogLevelClass(log.level)}`}
                         >
                           <div className="flex items-start gap-3">
-                            <span className="text-gray-400 w-20 flex-shrink-0">
+                            <span className="text-gray-400 dark:text-gray-500 w-20 flex-shrink-0">
                               {new Date(log.timestamp).toLocaleTimeString()}
                             </span>
                             <span className={`font-medium w-12 flex-shrink-0 ${getLogLevelClass(log.level)}`}>

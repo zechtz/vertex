@@ -58,7 +58,7 @@ export function SelectTrigger({ children, className = "" }: SelectTriggerProps) 
     <button
       type="button"
       onClick={() => setOpen(!open)}
-      className={`flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-10 w-full items-center justify-between rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 ring-offset-white dark:ring-offset-gray-800 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
       <ChevronDown className="h-4 w-4 opacity-50" />
@@ -77,7 +77,7 @@ export function SelectContent({ children, className = "" }: SelectContentProps) 
         className="fixed inset-0 z-10" 
         onClick={() => setOpen(false)} 
       />
-      <div className={`absolute top-full left-0 z-20 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg ${className}`}>
+      <div className={`absolute top-full left-0 z-20 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg ${className}`}>
         {children}
       </div>
     </>
@@ -94,7 +94,7 @@ export function SelectItem({ children, value, className = "" }: SelectItemProps)
         onValueChange?.(value);
         setOpen(false);
       }}
-      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ${className}`}
+      className={`w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-600 focus:bg-gray-100 dark:focus:bg-gray-600 focus:outline-none ${className}`}
     >
       {children}
     </button>

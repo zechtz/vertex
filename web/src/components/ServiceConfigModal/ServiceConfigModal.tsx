@@ -5,7 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Service, EnvVar } from "@/types";
+import { useProfile } from "@/contexts/ProfileContext";
 import { ButtonSpinner } from "@/components/ui/spinner";
 import { ErrorBoundarySection } from "@/components/ui/error-boundary";
 
@@ -14,7 +16,8 @@ interface ServiceConfigModalProps {
   isOpen: boolean;
   isSaving?: boolean;
   onClose: () => void;
-  onSave: (service: Service) => void;
+  onSave: (service: Service, profileId?: string) => void;
+  isCreateMode?: boolean; // Explicitly pass create mode
 }
 
 export function ServiceConfigModal({
@@ -23,21 +26,26 @@ export function ServiceConfigModal({
   isSaving = false,
   onClose,
   onSave,
+  isCreateMode = false,
 }: ServiceConfigModalProps) {
   const [editingService, setEditingService] = useState<Service | null>(service);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const { serviceProfiles, activeProfile } = useProfile();
 
   React.useEffect(() => {
     setEditingService(service);
-  }, [service]);
+    // Set default profile to active profile when creating new service
+    if (isCreateMode && activeProfile) {
+      setSelectedProfileId(activeProfile.id);
+    }
+    console.log("ServiceConfigModal - isCreateMode:", isCreateMode, "serviceProfiles:", serviceProfiles.length, "profiles:", serviceProfiles);
+  }, [service, activeProfile, serviceProfiles, isCreateMode]);
 
   if (!isOpen || !editingService) return null;
 
-  const isCreateMode = !editingService.name || editingService.name === "";
-
   const handleSave = () => {
     if (editingService) {
-      onSave(editingService);
-      onClose();
+      onSave(editingService, selectedProfileId || undefined);
     }
   };
 
@@ -114,6 +122,7 @@ export function ServiceConfigModal({
                   })
                 }
                 disabled={!isCreateMode}
+                placeholder="Enter service name"
               />
             </div>
             <div>
@@ -137,6 +146,8 @@ export function ServiceConfigModal({
               <Input
                 id="port"
                 type="number"
+                min="1"
+                max="65535"
                 value={editingService.port}
                 onChange={(e) =>
                   setEditingService({
@@ -144,6 +155,7 @@ export function ServiceConfigModal({
                     port: parseInt(e.target.value) || 8080,
                   })
                 }
+                placeholder="Port number (1-65535)"
               />
             </div>
             <div>
@@ -159,6 +171,61 @@ export function ServiceConfigModal({
                   })
                 }
               />
+            </div>
+          </div>
+
+          {/* Profile Selection for new services */}
+          {isCreateMode && (
+            <div>
+              <Label htmlFor="profile">Add to Profile (Optional)</Label>
+              <Select
+                value={selectedProfileId}
+                onValueChange={setSelectedProfileId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a profile to add service to (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No profile</SelectItem>
+                  {serviceProfiles.map(profile => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.name} {profile.isActive ? '(Active)' : ''} {profile.isDefault ? '(Default)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-gray-500 mt-1">
+                Choose a profile to automatically add this service to it after creation
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="buildSystem">Build System</Label>
+              <Select
+                value={editingService.buildSystem || "auto"}
+                onValueChange={(value) =>
+                  setEditingService({
+                    ...editingService,
+                    buildSystem: value,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select build system" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto-detect</SelectItem>
+                  <SelectItem value="maven">Maven</SelectItem>
+                  <SelectItem value="gradle">Gradle</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-sm text-gray-500">
+                Auto-detect will check for pom.xml (Maven) or build.gradle (Gradle)
+              </Label>
             </div>
           </div>
 

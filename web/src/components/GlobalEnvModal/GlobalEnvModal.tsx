@@ -176,8 +176,8 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <ErrorBoundarySection title="Global Environment Variables Error" description="Failed to load the global environment variables form.">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold">Global Environment Variables</h2>
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Global Environment Variables</h2>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
@@ -226,7 +226,7 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
               <Label htmlFor="category">Category</Label>
               <select
                 id="category"
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
               >

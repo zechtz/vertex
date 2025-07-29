@@ -231,7 +231,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
                   setCurrentPage(1);
                 }}
                 placeholder="Search log messages..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
@@ -298,7 +298,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
                     setStartDate(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -315,7 +315,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
                     setEndDate(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -323,7 +323,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
 
           {/* Export Options */}
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
               {totalCount > 0 && (
                 <span>Found {totalCount.toLocaleString()} log entries</span>
               )}
@@ -376,7 +376,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
         </CardHeader>
         <CardContent>
           {searchResults.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               {isSearching ? 'Searching logs...' : 'No log entries found matching your criteria.'}
             </div>
           ) : (
@@ -386,9 +386,9 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
                 {searchResults.map((result) => (
                   <div
                     key={result.id}
-                    className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
-                    <div className="flex-shrink-0 text-xs text-gray-500 w-32">
+                    <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 w-32">
                       {new Date(result.timestamp).toLocaleString()}
                     </div>
                     <Badge variant="outline" className="flex-shrink-0">
@@ -397,7 +397,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
                     <Badge className={`flex-shrink-0 text-xs ${getLevelColor(result.level)}`}>
                       {result.level}
                     </Badge>
-                    <div className="flex-1 text-sm font-mono text-gray-800 break-all">
+                    <div className="flex-1 text-sm font-mono text-gray-800 dark:text-gray-200 break-all">
                       {highlightSearchTerm(result.message, searchText)}
                     </div>
                   </div>
@@ -407,7 +407,7 @@ export function LogSearch({ services = [], className = '' }: LogSearchProps) {
               {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
                     Page {currentPage} of {totalPages} 
                     ({((currentPage - 1) * resultsPerPage) + 1}-{Math.min(currentPage * resultsPerPage, totalCount)} 
                     of {totalCount.toLocaleString()} entries)

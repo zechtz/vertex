@@ -80,19 +80,19 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
 
 const variantStyles = {
   default: {
-    backdrop: "bg-blue-50",
-    icon: "text-blue-600",
-    confirmButton: "bg-blue-600 hover:bg-blue-700",
+    backdrop: "bg-blue-50 dark:bg-blue-900/20",
+    icon: "text-blue-600 dark:text-blue-400",
+    confirmButton: "bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600",
   },
   destructive: {
-    backdrop: "bg-red-50",
-    icon: "text-red-600",
-    confirmButton: "bg-red-600 hover:bg-red-700",
+    backdrop: "bg-red-50 dark:bg-red-900/20",
+    icon: "text-red-600 dark:text-red-400",
+    confirmButton: "bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600",
   },
   warning: {
-    backdrop: "bg-yellow-50",
-    icon: "text-yellow-600",
-    confirmButton: "bg-yellow-600 hover:bg-yellow-700",
+    backdrop: "bg-yellow-50 dark:bg-yellow-900/20",
+    icon: "text-yellow-600 dark:text-yellow-400",
+    confirmButton: "bg-yellow-600 hover:bg-yellow-700 dark:bg-yellow-500 dark:hover:bg-yellow-600",
   },
 }
 
@@ -123,7 +123,7 @@ export function ConfirmDialog({
       />
       
       {/* Dialog */}
-      <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+      <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
         <div className="p-6">
           {/* Icon and Title */}
           <div className="flex items-start gap-4 mb-4">
@@ -133,10 +133,10 @@ export function ConfirmDialog({
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 {title}
               </h3>
-              <p className="text-sm text-gray-600 leading-relaxed">
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                 {description}
               </p>
             </div>

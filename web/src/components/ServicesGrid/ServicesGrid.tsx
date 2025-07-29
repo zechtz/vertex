@@ -97,7 +97,7 @@ export function ServicesGrid({
       <div className="h-96 flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading services...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading services...</p>
         </div>
       </div>
     );
@@ -108,8 +108,8 @@ export function ServicesGrid({
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Services</h1>
-          <p className="text-gray-600">Manage your microservices ecosystem</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Services</h1>
+          <p className="text-gray-600 dark:text-gray-400">Manage your microservices ecosystem</p>
         </div>
         <Button onClick={onCreateService} className="shrink-0">
           <Plus className="w-4 h-4 mr-2" />
@@ -126,8 +126,8 @@ export function ServicesGrid({
                 <Server className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Total Services</p>
-                <p className="text-2xl font-bold text-gray-900">{totalServices}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Total Services</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalServices}</p>
               </div>
             </div>
           </CardContent>
@@ -140,8 +140,8 @@ export function ServicesGrid({
                 <Play className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Running</p>
-                <p className="text-2xl font-bold text-gray-900">{runningServices}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Running</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{runningServices}</p>
               </div>
             </div>
           </CardContent>
@@ -154,8 +154,8 @@ export function ServicesGrid({
                 <Zap className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Healthy</p>
-                <p className="text-2xl font-bold text-gray-900">{healthyServices}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Healthy</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{healthyServices}</p>
               </div>
             </div>
           </CardContent>
@@ -168,8 +168,8 @@ export function ServicesGrid({
                 <Square className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Stopped</p>
-                <p className="text-2xl font-bold text-gray-900">{totalServices - runningServices}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Stopped</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalServices - runningServices}</p>
               </div>
             </div>
           </CardContent>
@@ -177,13 +177,13 @@ export function ServicesGrid({
       </div>
 
       {/* Enhanced Search & Controls Section */}
-      <Card className="bg-white shadow-sm border border-gray-200">
+      <Card className="bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
             {/* Search Bar */}
             <div className="flex-1 max-w-2xl">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500" />
                 <Input
                   placeholder="Search services by name or description..."
                   value={searchTerm}
@@ -193,9 +193,9 @@ export function ServicesGrid({
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
                   >
-                    <X className="h-4 w-4 text-gray-400" />
+                    <X className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                   </button>
                 )}
               </div>
@@ -203,7 +203,7 @@ export function ServicesGrid({
             
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <span className="text-sm font-medium text-gray-700">Filter:</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter:</span>
               <div className="flex gap-2">
                 <Button
                   variant={statusFilter === 'all' ? 'default' : 'outline'}
@@ -237,7 +237,7 @@ export function ServicesGrid({
 
       {/* Results Count */}
       <div className="flex justify-end">
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           Showing {filteredServices.length} of {totalServices} services
         </div>
       </div>
@@ -314,7 +314,7 @@ export function ServicesGrid({
       {/* Services Display */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Services ({filteredServices.length})
           </h2>
           {searchTerm && (
@@ -327,13 +327,13 @@ export function ServicesGrid({
         {filteredServices.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
-              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Server className="w-8 h-8 text-gray-400" />
+              <div className="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                <Server className="w-8 h-8 text-gray-400 dark:text-gray-500" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 {searchTerm ? 'No services found' : 'No services configured'}
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
                 {searchTerm 
                   ? `No services match "${searchTerm}". Try adjusting your search.`
                   : 'Get started by adding your first service.'

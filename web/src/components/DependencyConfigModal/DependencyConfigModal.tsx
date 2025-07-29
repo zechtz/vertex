@@ -253,18 +253,18 @@ export function DependencyConfigModal({
         
         {/* Modal */}
         <div className="relative w-full max-w-7xl max-h-[95vh] overflow-y-auto">
-          <div className="relative bg-white rounded-lg shadow-xl">
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                   <GitBranch className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                     Service Dependencies Configuration
                   </h2>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
                     Configure service startup dependencies and order
                   </p>
                 </div>
@@ -308,7 +308,7 @@ export function DependencyConfigModal({
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
-                              <h3 className="font-semibold text-gray-900">{service.name}</h3>
+                              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{service.name}</h3>
                               <Badge variant="outline" className="text-xs">
                                 Order: {config[service.name]?.order || service.order}
                               </Badge>
@@ -336,11 +336,11 @@ export function DependencyConfigModal({
                           {/* Dependencies */}
                           <div className="space-y-2">
                             {config[service.name]?.dependencies.map((dep, index) => (
-                              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                                 <select
                                   value={dep.serviceName}
                                   onChange={(e) => updateDependency(service.name, index, { serviceName: e.target.value })}
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                   {services
                                     .filter(s => s.name !== service.name)
@@ -354,7 +354,7 @@ export function DependencyConfigModal({
                                 <select
                                   value={dep.type}
                                   onChange={(e) => updateDependency(service.name, index, { type: e.target.value as 'hard' | 'soft' })}
-                                  className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                   <option value="hard">Hard</option>
                                   <option value="soft">Soft</option>
@@ -394,18 +394,18 @@ export function DependencyConfigModal({
                   <CardContent>
                     <div className="space-y-2">
                       {startupOrder.map((serviceName, index) => (
-                        <div key={serviceName} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div key={serviceName} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
                           <Badge variant="default" className="w-8 h-8 rounded-full flex items-center justify-center">
                             {index + 1}
                           </Badge>
-                          <span className="font-medium">{serviceName}</span>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{serviceName}</span>
                         </div>
                       ))}
                     </div>
 
-                    <div className="mt-6 p-3 bg-blue-50 rounded-lg">
-                      <h4 className="font-medium text-blue-900 mb-2">Default NeST Order:</h4>
-                      <ol className="text-sm text-blue-700 space-y-1">
+                    <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <h4 className="font-medium text-blue-900 dark:text-blue-200 mb-2">Default NeST Order:</h4>
+                      <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
                         <li>1. Eureka (Registry)</li>
                         <li>2. Config Server</li>
                         <li>3. Cache</li>
@@ -415,9 +415,9 @@ export function DependencyConfigModal({
                       </ol>
                     </div>
 
-                    <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                      <h4 className="font-medium text-green-900 mb-2">✅ Eureka Integration:</h4>
-                      <p className="text-sm text-green-700">
+                    <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <h4 className="font-medium text-green-900 dark:text-green-200 mb-2">✅ Eureka Integration:</h4>
+                      <p className="text-sm text-green-700 dark:text-green-300">
                         Health status is now checked via Eureka registry for better reliability.
                         Services register with Eureka and report their health automatically.
                       </p>

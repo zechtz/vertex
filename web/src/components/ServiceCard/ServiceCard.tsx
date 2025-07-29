@@ -158,7 +158,7 @@ export function ServiceCard({
   };
 
   return (
-    <Card className={`h-full hover:shadow-lg transition-all duration-200 group border-l-2 ${getCardBorderColor()} bg-white hover:bg-gray-50/30 relative overflow-hidden z-10 hover:z-20`}>
+    <Card className={`h-full hover:shadow-lg transition-all duration-200 group border-l-2 ${getCardBorderColor()} bg-white dark:bg-gray-800 hover:bg-gray-50/30 dark:hover:bg-gray-700/30 relative overflow-hidden z-10 hover:z-20`}>
       <CardContent className="p-0 relative">
         {/* Header Section */}
         <div className="p-5 pb-4">
@@ -179,11 +179,11 @@ export function ServiceCard({
               {/* Service Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-semibold text-gray-900 truncate">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {service.name}
                   </h3>
                   {service.port && (
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-gray-50 text-gray-600 border-gray-200 flex-shrink-0">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 flex-shrink-0">
                       :{service.port}
                     </Badge>
                   )}
@@ -204,7 +204,7 @@ export function ServiceCard({
                 </div>
                 
                 {service.description && (
-                  <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
                     {service.description}
                   </p>
                 )}
@@ -217,20 +217,20 @@ export function ServiceCard({
                 onClick={() => setShowDropdown(!showDropdown)}
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-100"
+                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <MoreVertical className="w-4 h-4" />
                 <span className="sr-only">More actions</span>
               </Button>
               
               {showDropdown && (
-                <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 min-w-[160px]">
+                <div className="absolute top-full mt-1 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1 min-w-[160px]">
                   <button
                     onClick={() => {
                       onViewFiles();
                       setShowDropdown(false);
                     }}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
                     <Folder className="w-3 h-3" />
                     View Files
@@ -241,7 +241,7 @@ export function ServiceCard({
                       onEditEnv();
                       setShowDropdown(false);
                     }}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
                     <Database className="w-3 h-3" />
                     Environment Variables
@@ -253,7 +253,7 @@ export function ServiceCard({
                       setShowDropdown(false);
                     }}
                     disabled={loadingStates.installingLibraries}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {loadingStates.installingLibraries ? (
                       <Loader className="w-3 h-3 animate-spin" />
@@ -263,14 +263,14 @@ export function ServiceCard({
                     Install Libraries
                   </button>
                   
-                  <hr className="my-1 border-gray-100" />
+                  <hr className="my-1 border-gray-100 dark:border-gray-700" />
                   
                   <button
                     onClick={() => {
                       onEdit();
                       setShowDropdown(false);
                     }}
-                    className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                   >
                     <Settings className="w-3 h-3" />
                     Edit Service
@@ -294,7 +294,7 @@ export function ServiceCard({
 
         {/* Metrics Section - Progressive Disclosure */}
         {service.status === 'running' ? (
-          <div className="px-5 py-3 bg-gray-50/30 border-y border-gray-100">
+          <div className="px-5 py-3 bg-gray-50/30 dark:bg-gray-800/30 border-y border-gray-100 dark:border-gray-700">
             <div className="grid grid-cols-2 gap-3">
               {/* CPU & Memory */}
               <div className="space-y-2">
@@ -303,8 +303,8 @@ export function ServiceCard({
                     <Cpu className="w-3 h-3 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500">CPU</div>
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">CPU</div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {service.cpuPercent?.toFixed(1)}%
                     </div>
                   </div>
@@ -315,8 +315,8 @@ export function ServiceCard({
                     <MemoryStick className="w-3 h-3 text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500">Memory</div>
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Memory</div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatBytes(service.memoryUsage || 0)}
                     </div>
                   </div>
@@ -330,8 +330,8 @@ export function ServiceCard({
                     <Clock className="w-3 h-3 text-purple-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500">Uptime</div>
-                    <div className="text-xs font-semibold text-gray-900 truncate">{formatUptime(service.uptime)}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Uptime</div>
+                    <div className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{formatUptime(service.uptime)}</div>
                   </div>
                 </div>
                 
@@ -340,16 +340,16 @@ export function ServiceCard({
                     <FileText className="w-3 h-3 text-orange-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500">Logs</div>
-                    <div className="text-sm font-semibold text-gray-900">{service.logs?.length || 0}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Logs</div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{service.logs?.length || 0}</div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="px-5 py-3 border-b border-gray-100">
-            <div className="text-center text-sm text-gray-500">
+          <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700">
+            <div className="text-center text-sm text-gray-500 dark:text-gray-400">
               <Clock className="w-4 h-4 mx-auto mb-1 text-gray-400" />
               Service stopped • No metrics available
             </div>

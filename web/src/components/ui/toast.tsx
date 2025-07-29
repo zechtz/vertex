@@ -90,11 +90,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 const toastVariants = {
-  default: "bg-white border-gray-200 text-gray-900",
-  success: "bg-green-50 border-green-200 text-green-900",
-  error: "bg-red-50 border-red-200 text-red-900",
-  warning: "bg-yellow-50 border-yellow-200 text-yellow-900",
-  info: "bg-blue-50 border-blue-200 text-blue-900",
+  default: "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100",
+  success: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-900 dark:text-green-100",
+  error: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700 text-red-900 dark:text-red-100",
+  warning: "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700 text-yellow-900 dark:text-yellow-100",
+  info: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-900 dark:text-blue-100",
 }
 
 const iconVariants = {
@@ -106,11 +106,11 @@ const iconVariants = {
 }
 
 const iconColors = {
-  default: "text-gray-500",
-  success: "text-green-500",
-  error: "text-red-500",
-  warning: "text-yellow-500",
-  info: "text-blue-500",
+  default: "text-gray-500 dark:text-gray-400",
+  success: "text-green-500 dark:text-green-400",
+  error: "text-red-500 dark:text-red-400",
+  warning: "text-yellow-500 dark:text-yellow-400",
+  info: "text-blue-500 dark:text-blue-400",
 }
 
 export function ToastContainer() {
@@ -142,7 +142,7 @@ export function ToastContainer() {
             </div>
             <button
               onClick={() => removeToast(toast.id)}
-              className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+              className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>

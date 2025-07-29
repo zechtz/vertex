@@ -1,13 +1,15 @@
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SystemMetrics from '@/components/SystemMetrics/SystemMetrics';
+import { Service } from '@/types';
 
 interface SystemMetricsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  services: Service[];
 }
 
-export function SystemMetricsModal({ isOpen, onClose }: SystemMetricsModalProps) {
+export function SystemMetricsModal({ isOpen, onClose, services }: SystemMetricsModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -21,17 +23,17 @@ export function SystemMetricsModal({ isOpen, onClose }: SystemMetricsModalProps)
         
         {/* Modal */}
         <div className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-          <div className="relative bg-white rounded-lg shadow-xl">
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                 System Resource Monitoring
               </h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                className="hover:bg-gray-100"
+                className="hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -39,7 +41,7 @@ export function SystemMetricsModal({ isOpen, onClose }: SystemMetricsModalProps)
 
             {/* Content */}
             <div className="p-6">
-              <SystemMetrics />
+              <SystemMetrics services={services} />
             </div>
           </div>
         </div>
