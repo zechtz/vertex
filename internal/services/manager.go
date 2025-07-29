@@ -79,6 +79,9 @@ func NewManager(config models.Config, db *database.Database) (*Manager, error) {
 	// Start resource metrics collection
 	go sm.startMetricsCollection()
 
+	// Start periodic log cleanup (daily)
+	go sm.startLogCleanupRoutine()
+
 	return sm, nil
 }
 
@@ -367,10 +370,11 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 	service.Order = serviceConfig.Order
 	service.Description = serviceConfig.Description
 	service.IsEnabled = serviceConfig.IsEnabled
+	service.BuildSystem = serviceConfig.BuildSystem
 	service.EnvVars = serviceConfig.EnvVars
 	
 	// Save to database
-	if err := sm.updateServiceInDB(service); err != nil {
+	if err := sm.UpdateServiceConfigInDB(service); err != nil {
 		return fmt.Errorf("failed to update service in database: %w", err)
 	}
 	
@@ -383,6 +387,11 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 // GetSystemResourceSummary returns overall system resource usage summary
 func (sm *Manager) GetSystemResourceSummary() map[string]interface{} {
 	return sm.getSystemResourceSummary()
+}
+
+// CleanupPort cleans up processes using the specified port
+func (sm *Manager) CleanupPort(port int) *PortCleanupResult {
+	return KillProcessesOnPort(port)
 }
 
 // AddService adds a new service to the manager
@@ -412,8 +421,8 @@ func (sm *Manager) AddService(service *models.Service) error {
 	// Add service to memory
 	sm.services[service.Name] = service
 
-	// Save to database
-	if err := sm.updateServiceInDB(service); err != nil {
+	// Save to database (insert or update)
+	if err := sm.upsertServiceInDB(service); err != nil {
 		// Remove from memory if database save fails
 		delete(sm.services, service.Name)
 		return fmt.Errorf("failed to save service to database: %w", err)
@@ -424,4 +433,129 @@ func (sm *Manager) AddService(service *models.Service) error {
 
 	log.Printf("[INFO] Successfully added service: %s", service.Name)
 	return nil
+}
+
+// DeleteService removes a service from the manager
+// GetServiceProjectsDir returns the appropriate projects directory for a service
+// If the service belongs to an active profile with a custom projectsDir, use that
+// Otherwise, use the global projectsDir
+// StartServiceWithProjectsDir starts a service using a specific projects directory
+func (sm *Manager) StartServiceWithProjectsDir(serviceName, projectsDir string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceName]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service %s not found", serviceName)
+	}
+
+	log.Printf("[INFO] Starting service %s from projects directory: %s", serviceName, projectsDir)
+
+	return sm.startServiceWithProjectsDir(service, projectsDir)
+}
+
+// RestartServiceWithProjectsDir restarts a service using a specific projects directory
+func (sm *Manager) RestartServiceWithProjectsDir(serviceName, projectsDir string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceName]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service %s not found", serviceName)
+	}
+
+	log.Printf("[INFO] Restarting service %s from projects directory: %s (port %d)", serviceName, projectsDir, service.Port)
+
+	// Stop the service first
+	if service.Status == "running" {
+		if err := sm.stopService(service); err != nil {
+			log.Printf("[WARN] Failed to stop service gracefully: %v", err)
+			// Continue anyway - we'll clean up the port
+		}
+		// Wait a moment for cleanup
+		time.Sleep(2 * time.Second)
+	}
+
+	// Clean up any processes still using the service's port
+	if service.Port > 0 {
+		log.Printf("[INFO] Cleaning up port %d before restarting service %s", service.Port, serviceName)
+		if err := CleanupPortBeforeStart(service.Port); err != nil {
+			log.Printf("[WARN] Port cleanup failed: %v", err)
+			// Continue anyway - the port might be available by now
+		}
+	}
+
+	// Start the service with custom projects directory
+	return sm.startServiceWithProjectsDir(service, projectsDir)
+}
+
+func (sm *Manager) DeleteService(serviceName string) error {
+	// First, check if service exists and get its status
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceName]
+	isRunning := exists && service.Status == "running"
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service '%s' not found", serviceName)
+	}
+
+	// Stop the service if it's running (without holding the main lock)
+	if isRunning {
+		log.Printf("[INFO] Stopping service %s before deletion", serviceName)
+		if err := sm.StopService(serviceName); err != nil {
+			log.Printf("[WARN] Failed to stop service %s before deletion: %v", serviceName, err)
+			// Continue with deletion even if stop fails
+		}
+	}
+
+	// Now acquire the write lock for deletion
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// Double-check the service still exists (in case it was deleted by another goroutine)
+	service, exists = sm.services[serviceName]
+	if !exists {
+		return fmt.Errorf("service '%s' not found", serviceName)
+	}
+
+	// Remove from memory
+	delete(sm.services, serviceName)
+
+	// Remove from database
+	if err := sm.db.DeleteService(serviceName); err != nil {
+		// Re-add to memory if database deletion fails
+		sm.services[serviceName] = service
+		return fmt.Errorf("failed to delete service from database: %w", err)
+	}
+
+	log.Printf("[INFO] Successfully deleted service: %s", serviceName)
+	return nil
+}
+
+// startLogCleanupRoutine starts a background routine that periodically cleans up old logs
+func (sm *Manager) startLogCleanupRoutine() {
+	// Run cleanup every 24 hours
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Run initial cleanup after 1 hour of startup
+	initialDelay := time.NewTimer(1 * time.Hour)
+
+	log.Printf("[INFO] Started periodic log cleanup routine (24-hour interval)")
+
+	for {
+		select {
+		case <-initialDelay.C:
+			// Run initial cleanup
+			if err := sm.AutoCleanupLogs(); err != nil {
+				log.Printf("[ERROR] Initial log cleanup failed: %v", err)
+			}
+		case <-ticker.C:
+			// Run periodic cleanup
+			if err := sm.AutoCleanupLogs(); err != nil {
+				log.Printf("[ERROR] Periodic log cleanup failed: %v", err)
+			}
+		}
+	}
 }
