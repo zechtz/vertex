@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -29,10 +30,40 @@ func (ts *TopologyService) GenerateTopology() (*models.ServiceTopology, error) {
 	for i := range servicesSlice {
 		services = append(services, &servicesSlice[i])
 	}
+	return ts.generateTopologyForServices(services)
+}
+
+// GenerateTopologyForProfile generates topology for services in a specific profile
+func (ts *TopologyService) GenerateTopologyForProfile(profileServicesJson string) (*models.ServiceTopology, error) {
+	// Parse the profile services JSON to get the list of service names
+	var profileServiceNames []string
+	if err := json.Unmarshal([]byte(profileServicesJson), &profileServiceNames); err != nil {
+		return nil, fmt.Errorf("failed to parse profile services: %v", err)
+	}
+
+	// Create a map for quick lookup of profile services
+	profileServicesMap := make(map[string]bool)
+	for _, serviceName := range profileServiceNames {
+		profileServicesMap[serviceName] = true
+	}
+
+	// Get all services and filter only those in the profile
+	allServices := ts.serviceManager.GetServices()
+	var profileServices []*models.Service
+	for i := range allServices {
+		if profileServicesMap[allServices[i].Name] {
+			profileServices = append(profileServices, &allServices[i])
+		}
+	}
+
+	return ts.generateTopologyForServices(profileServices)
+}
+
+// generateTopologyForServices is the core topology generation logic
+func (ts *TopologyService) generateTopologyForServices(services []*models.Service) (*models.ServiceTopology, error) {
 	
 	// Create topology nodes for services
 	nodes := make([]models.TopologyNode, 0)
-	connections := make([]models.Connection, 0)
 	
 	// Add service nodes
 	for _, service := range services {
@@ -59,13 +90,8 @@ func (ts *TopologyService) GenerateTopology() (*models.ServiceTopology, error) {
 	infraNodes := ts.getInfrastructureNodes()
 	nodes = append(nodes, infraNodes...)
 	
-	// Analyze service dependencies
-	serviceConnections := ts.analyzeServiceDependencies(services)
-	connections = append(connections, serviceConnections...)
-	
-	// Add infrastructure connections
-	infraConnections := ts.getInfrastructureConnections(services)
-	connections = append(connections, infraConnections...)
+	// Analyze service dependencies from logs
+	connections := ts.analyzeServiceDependencies(services)
 	
 	// Calculate positions using force-directed layout
 	ts.calculateNodePositions(nodes, connections)
@@ -131,64 +157,33 @@ func (ts *TopologyService) getInfrastructureNodes() []models.TopologyNode {
 	return nodes
 }
 
-// analyzeServiceDependencies analyzes service-to-service dependencies
+// analyzeServiceDependencies analyzes service-to-service dependencies from logs
 func (ts *TopologyService) analyzeServiceDependencies(services []*models.Service) []models.Connection {
 	connections := make([]models.Connection, 0)
 	
-	// Known NeST microservice dependencies based on Spring Cloud architecture
-	dependencies := map[string][]string{
-		"EUREKA":  {}, // Registry server - no dependencies
-		"CONFIG":  {"EUREKA"}, // Config server depends on registry
-		"CACHE":   {"EUREKA", "CONFIG"}, // Cache depends on config and registry
-		"GATEWAY": {"EUREKA", "CONFIG"}, // Gateway depends on config and registry
-		"UAA":     {"EUREKA", "CONFIG", "postgresql"}, // UAA depends on config, registry, and database
-		"APP":     {"EUREKA", "CONFIG", "UAA", "postgresql"}, // App depends on UAA and database
-		"CONTRACT": {"EUREKA", "CONFIG", "UAA", "postgresql"}, // Contract depends on UAA and database
-		"DSMS":    {"EUREKA", "CONFIG", "UAA", "postgresql"}, // DSMS depends on UAA and database
-	}
-	
-	// Create connections based on known dependencies
-	for serviceName, deps := range dependencies {
-		// Check if source service exists
-		sourceExists := false
-		for _, service := range services {
-			if service.Name == serviceName {
-				sourceExists = true
-				break
-			}
-		}
-		
-		if !sourceExists {
-			continue
-		}
-		
+	for _, service := range services {
+		deps := ts.analyzeServiceLogs(service)
 		for _, dep := range deps {
 			connectionType := "http"
-			description := fmt.Sprintf("%s communicates with %s", serviceName, dep)
+			description := fmt.Sprintf("%s communicates with %s", service.Name, dep)
 			
 			// Determine connection type
 			if dep == "postgresql" || dep == "redis" {
 				connectionType = "database"
-				description = fmt.Sprintf("%s stores data in %s", serviceName, dep)
+				description = fmt.Sprintf("%s stores data in %s", service.Name, dep)
 			} else if dep == "rabbitmq" {
 				connectionType = "message_queue"
-				description = fmt.Sprintf("%s sends messages via %s", serviceName, dep)
+				description = fmt.Sprintf("%s sends messages via %s", service.Name, dep)
 			}
 			
 			// Determine connection status
 			status := "inactive"
-			if sourceExists {
-				// Check if source service is running
-				for _, service := range services {
-					if service.Name == serviceName && service.Status == "running" {
-						status = "active"
-						break
-					}
-				}
+			if service.Status == "running" {
+				status = "active"
 			}
 			
 			connection := models.Connection{
-				Source:      serviceName,
+				Source:      service.Name,
 				Target:      dep,
 				Type:        connectionType,
 				Status:      status,
@@ -196,55 +191,6 @@ func (ts *TopologyService) analyzeServiceDependencies(services []*models.Service
 			}
 			connections = append(connections, connection)
 		}
-	}
-	
-	return connections
-}
-
-// getInfrastructureConnections returns connections to infrastructure services
-func (ts *TopologyService) getInfrastructureConnections(services []*models.Service) []models.Connection {
-	connections := make([]models.Connection, 0)
-	
-	// Services that connect to RabbitMQ
-	rabbitServices := []string{"UAA", "APP", "CONTRACT", "DSMS"}
-	for _, serviceName := range rabbitServices {
-		status := "inactive"
-		for _, service := range services {
-			if service.Name == serviceName && service.Status == "running" {
-				status = "active"
-				break
-			}
-		}
-		
-		connection := models.Connection{
-			Source:      serviceName,
-			Target:      "rabbitmq",
-			Type:        "message_queue",
-			Status:      status,
-			Description: fmt.Sprintf("%s publishes/consumes messages via RabbitMQ", serviceName),
-		}
-		connections = append(connections, connection)
-	}
-	
-	// Services that connect to Redis
-	redisServices := []string{"UAA", "APP", "GATEWAY"}
-	for _, serviceName := range redisServices {
-		status := "inactive"
-		for _, service := range services {
-			if service.Name == serviceName && service.Status == "running" {
-				status = "active"
-				break
-			}
-		}
-		
-		connection := models.Connection{
-			Source:      serviceName,
-			Target:      "redis",
-			Type:        "database",
-			Status:      status,
-			Description: fmt.Sprintf("%s caches data in Redis", serviceName),
-		}
-		connections = append(connections, connection)
 	}
 	
 	return connections
