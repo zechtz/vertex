@@ -38,6 +38,8 @@ export SERVICE_PORT_DSMS='8812'
 export DISCOVERY_SERVER='nest-registry-server'
 export DEFAULT_ZONE='http://nest-registry-server:8800/eureka/'
 
+export STAGING_URL='https://staging.nest.go.tz'
+
 # Database Settings
 export DB_HOST='localhost'
 export DB_PORT='5432'
