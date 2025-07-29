@@ -58,3 +58,6 @@ logs/
 
 # Release files
 release/
+web/src/REFACTORING_GUIDE.md
+web/src/App-refactored.tsx
+web/src/App-refactored-simple.tsx
