@@ -18,6 +18,16 @@ export interface ServiceMetrics {
   lastChecked: string;
 }
 
+export interface ServiceDependency {
+  serviceName: string;
+  type: string; // "hard", "soft", "optional"
+  healthCheck: boolean;
+  timeout: number; // Duration in nanoseconds  
+  retryInterval: number; // Duration in nanoseconds
+  required: boolean;
+  description: string;
+}
+
 export interface Service {
   name: string;
   dir: string;
@@ -33,16 +43,21 @@ export interface Service {
   uptime: string;
   description: string;
   isEnabled: boolean;
+  buildSystem: string; // "maven", "gradle", or "auto"
   envVars: { [key: string]: EnvVar };
   logs: LogEntry[];
   // Resource monitoring fields
-  cpuPercent?: number;
-  memoryUsage?: number;   // in bytes
-  memoryPercent?: number;
-  diskUsage?: number;     // in bytes
-  networkRx?: number;     // bytes received
-  networkTx?: number;     // bytes transmitted
-  metrics?: ServiceMetrics;
+  cpuPercent: number;
+  memoryUsage: number;   // in bytes
+  memoryPercent: number;
+  diskUsage: number;     // in bytes
+  networkRx: number;     // bytes received
+  networkTx: number;     // bytes transmitted
+  metrics: ServiceMetrics;
+  // Service dependencies
+  dependencies: ServiceDependency[] | null;
+  dependentOn: string[] | null;
+  startupDelay: number;
 }
 
 export interface LogEntry {
@@ -71,4 +86,112 @@ export interface Configuration {
     order: number;
   }>;
   isDefault?: boolean;
+}
+
+// Profile Management Types
+export interface UserPreferences {
+  theme: string;
+  language: string;
+  notificationSettings: Record<string, boolean>;
+  dashboardLayout: string;
+  autoRefresh: boolean;
+  refreshInterval: number; // seconds
+}
+
+// Profile-scoped configuration types
+
+export interface ProfileEnvVar {
+  id: number;
+  profileId: string;
+  varName: string;
+  varValue: string;
+  description: string;
+  isRequired: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfileServiceConfig {
+  id: number;
+  profileId: string;
+  serviceName: string;
+  configKey: string;
+  configValue: string;
+  configType: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfileDependency {
+  id: number;
+  profileId: string;
+  serviceName: string;
+  dependencyServiceName: string;
+  dependencyType: string;
+  healthCheck: boolean;
+  timeoutSeconds: number;
+  retryIntervalSeconds: number;
+  isRequired: boolean;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProfileContext {
+  profile: ServiceProfile;
+  envVars: Record<string, string>;
+  serviceConfigs: Record<string, Record<string, string>>;
+  dependencies: Record<string, ProfileDependency[]>;
+  isActive: boolean;
+}
+
+export interface UserProfile {
+  userId: string;
+  displayName: string;
+  avatar: string;
+  preferences: UserPreferences;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceProfile {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  services: string[];
+  envVars: Record<string, string>;
+  projectsDir: string;
+  javaHomeOverride: string;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProfileRequest {
+  name: string;
+  description: string;
+  services: string[];
+  envVars: Record<string, string>;
+  projectsDir: string;
+  javaHomeOverride: string;
+  isDefault: boolean;
+}
+
+export interface UpdateProfileRequest {
+  name: string;
+  description: string;
+  services: string[];
+  envVars: Record<string, string>;
+  projectsDir: string;
+  javaHomeOverride: string;
+  isDefault: boolean;
+}
+
+export interface UserProfileUpdateRequest {
+  displayName: string;
+  avatar: string;
+  preferences: UserPreferences;
 }
