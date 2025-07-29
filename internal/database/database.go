@@ -58,6 +58,10 @@ func (db *Database) initTables() error {
 		`ALTER TABLE services ADD COLUMN is_enabled BOOLEAN DEFAULT TRUE;`,
 		`ALTER TABLE services ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;`,
 		`ALTER TABLE services ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;`,
+		`ALTER TABLE services ADD COLUMN build_system TEXT DEFAULT 'auto';`,
+		`ALTER TABLE service_profiles ADD COLUMN projects_dir TEXT DEFAULT '';`,
+		`ALTER TABLE service_profiles ADD COLUMN java_home_override TEXT DEFAULT '';`,
+		`ALTER TABLE service_profiles ADD COLUMN is_active BOOLEAN DEFAULT FALSE;`,
 	}
 
 	// Create environment variables table
@@ -136,7 +140,101 @@ func (db *Database) initTables() error {
 		UNIQUE(service_name, dependency_service_name)
 	);`
 
-	tables := []string{createServicesTable, createEnvVarsTable, createGlobalEnvTable, createConfigsTable, createGlobalConfigTable, createSyncMetadataTable, createServiceDependenciesTable}
+	// Create users table
+	createUsersTable := `
+	CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL,
+		email TEXT UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		role TEXT DEFAULT 'user',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_login DATETIME,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	// Create user profiles table
+	createUserProfilesTable := `
+	CREATE TABLE IF NOT EXISTS user_profiles (
+		user_id TEXT PRIMARY KEY,
+		display_name TEXT,
+		avatar TEXT,
+		preferences_json TEXT DEFAULT '{}',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);`
+
+	// Create service profiles table
+	createServiceProfilesTable := `
+	CREATE TABLE IF NOT EXISTS service_profiles (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		description TEXT,
+		services_json TEXT NOT NULL DEFAULT '[]',
+		env_vars_json TEXT DEFAULT '{}',
+		projects_dir TEXT DEFAULT '',
+		java_home_override TEXT DEFAULT '',
+		is_default BOOLEAN DEFAULT FALSE,
+		is_active BOOLEAN DEFAULT FALSE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		UNIQUE(user_id, name)
+	);`
+
+	// Create profile-scoped global environment variables table
+	createProfileEnvVarsTable := `
+	CREATE TABLE IF NOT EXISTS profile_env_vars (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		profile_id TEXT NOT NULL,
+		var_name TEXT NOT NULL,
+		var_value TEXT NOT NULL,
+		description TEXT,
+		is_required BOOLEAN DEFAULT FALSE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (profile_id) REFERENCES service_profiles(id) ON DELETE CASCADE,
+		UNIQUE(profile_id, var_name)
+	);`
+
+	// Create profile-scoped service configuration overrides table
+	createProfileServiceConfigsTable := `
+	CREATE TABLE IF NOT EXISTS profile_service_configs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		profile_id TEXT NOT NULL,
+		service_name TEXT NOT NULL,
+		config_key TEXT NOT NULL,
+		config_value TEXT NOT NULL,
+		config_type TEXT DEFAULT 'string',
+		description TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (profile_id) REFERENCES service_profiles(id) ON DELETE CASCADE,
+		UNIQUE(profile_id, service_name, config_key)
+	);`
+
+	// Create profile-scoped dependencies table
+	createProfileDependenciesTable := `
+	CREATE TABLE IF NOT EXISTS profile_dependencies (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		profile_id TEXT NOT NULL,
+		service_name TEXT NOT NULL,
+		dependency_service_name TEXT NOT NULL,
+		dependency_type TEXT NOT NULL DEFAULT 'hard',
+		health_check BOOLEAN DEFAULT TRUE,
+		timeout_seconds INTEGER DEFAULT 120,
+		retry_interval_seconds INTEGER DEFAULT 5,
+		is_required BOOLEAN DEFAULT TRUE,
+		description TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (profile_id) REFERENCES service_profiles(id) ON DELETE CASCADE,
+		UNIQUE(profile_id, service_name, dependency_service_name)
+	);`
+
+	tables := []string{createServicesTable, createEnvVarsTable, createGlobalEnvTable, createConfigsTable, createGlobalConfigTable, createSyncMetadataTable, createServiceDependenciesTable, createUsersTable, createUserProfilesTable, createServiceProfilesTable, createProfileEnvVarsTable, createProfileServiceConfigsTable, createProfileDependenciesTable}
 
 	for _, table := range tables {
 		if _, err := db.Exec(table); err != nil {
@@ -364,4 +462,157 @@ func (db *Database) GetAllServiceDependencies() (map[string][]map[string]interfa
 	}
 
 	return allDependencies, rows.Err()
+}
+
+// Profile-scoped environment variable methods
+
+// GetProfileEnvVars retrieves all environment variables for a specific profile
+func (db *Database) GetProfileEnvVars(profileID string) (map[string]string, error) {
+	query := `SELECT var_name, var_value FROM profile_env_vars WHERE profile_id = ? ORDER BY var_name`
+	rows, err := db.Query(query, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query profile env vars: %w", err)
+	}
+	defer rows.Close()
+
+	envVars := make(map[string]string)
+	for rows.Next() {
+		var name, value string
+		if err := rows.Scan(&name, &value); err != nil {
+			return nil, fmt.Errorf("failed to scan profile env var: %w", err)
+		}
+		envVars[name] = value
+	}
+
+	return envVars, rows.Err()
+}
+
+// SetProfileEnvVar sets an environment variable for a specific profile
+func (db *Database) SetProfileEnvVar(profileID, name, value, description string, isRequired bool) error {
+	query := `INSERT OR REPLACE INTO profile_env_vars (profile_id, var_name, var_value, description, is_required, updated_at) 
+			  VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+	_, err := db.Exec(query, profileID, name, value, description, isRequired)
+	if err != nil {
+		return fmt.Errorf("failed to set profile env var %s: %w", name, err)
+	}
+	return nil
+}
+
+// DeleteProfileEnvVar deletes an environment variable for a specific profile
+func (db *Database) DeleteProfileEnvVar(profileID, name string) error {
+	query := `DELETE FROM profile_env_vars WHERE profile_id = ? AND var_name = ?`
+	_, err := db.Exec(query, profileID, name)
+	if err != nil {
+		return fmt.Errorf("failed to delete profile env var %s: %w", name, err)
+	}
+	return nil
+}
+
+// Profile-scoped service configuration methods
+
+// GetProfileServiceConfig retrieves service configuration overrides for a specific profile
+func (db *Database) GetProfileServiceConfig(profileID, serviceName string) (map[string]string, error) {
+	query := `SELECT config_key, config_value FROM profile_service_configs 
+			  WHERE profile_id = ? AND service_name = ? ORDER BY config_key`
+	rows, err := db.Query(query, profileID, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query profile service config: %w", err)
+	}
+	defer rows.Close()
+
+	config := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, fmt.Errorf("failed to scan profile service config: %w", err)
+		}
+		config[key] = value
+	}
+
+	return config, rows.Err()
+}
+
+// SetProfileServiceConfig sets a service configuration override for a specific profile
+func (db *Database) SetProfileServiceConfig(profileID, serviceName, key, value, configType, description string) error {
+	query := `INSERT OR REPLACE INTO profile_service_configs 
+			  (profile_id, service_name, config_key, config_value, config_type, description, updated_at) 
+			  VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+	_, err := db.Exec(query, profileID, serviceName, key, value, configType, description)
+	if err != nil {
+		return fmt.Errorf("failed to set profile service config %s.%s: %w", serviceName, key, err)
+	}
+	return nil
+}
+
+// DeleteProfileServiceConfig deletes a service configuration override for a specific profile
+func (db *Database) DeleteProfileServiceConfig(profileID, serviceName, key string) error {
+	query := `DELETE FROM profile_service_configs WHERE profile_id = ? AND service_name = ? AND config_key = ?`
+	_, err := db.Exec(query, profileID, serviceName, key)
+	if err != nil {
+		return fmt.Errorf("failed to delete profile service config %s.%s: %w", serviceName, key, err)
+	}
+	return nil
+}
+
+// Active profile management
+
+// GetActiveProfile retrieves the active profile for a user
+func (db *Database) GetActiveProfile(userID string) (string, error) {
+	query := `SELECT id FROM service_profiles WHERE user_id = ? AND is_active = TRUE LIMIT 1`
+	var profileID string
+	err := db.QueryRow(query, userID).Scan(&profileID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil // No active profile
+		}
+		return "", fmt.Errorf("failed to get active profile: %w", err)
+	}
+	return profileID, nil
+}
+
+// SetActiveProfile sets the active profile for a user
+func (db *Database) SetActiveProfile(userID, profileID string) error {
+	// First, clear any existing active profile
+	clearQuery := `UPDATE service_profiles SET is_active = FALSE WHERE user_id = ?`
+	if _, err := db.Exec(clearQuery, userID); err != nil {
+		return fmt.Errorf("failed to clear active profiles: %w", err)
+	}
+
+	// Set the new active profile
+	setQuery := `UPDATE service_profiles SET is_active = TRUE WHERE id = ? AND user_id = ?`
+	result, err := db.Exec(setQuery, profileID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to set active profile: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("profile not found or access denied")
+	}
+
+	return nil
+}
+
+// DeleteService removes a service from the database
+func (db *Database) DeleteService(serviceName string) error {
+	// Delete the service - this will cascade delete all related records
+	// due to foreign key constraints (env vars, dependencies, etc.)
+	query := `DELETE FROM services WHERE name = ?`
+	result, err := db.Exec(query, serviceName)
+	if err != nil {
+		return fmt.Errorf("failed to delete service: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("service '%s' not found", serviceName)
+	}
+
+	return nil
 }
