@@ -60,11 +60,15 @@ func NewAutoDiscoveryService(manager *Manager) *AutoDiscoveryService {
 }
 
 func (ads *AutoDiscoveryService) ScanProjectDirectory() ([]DiscoveredService, error) {
-	log.Printf("[INFO] Starting auto-discovery scan in directory: %s", ads.projectDir)
+	return ads.ScanDirectory(ads.projectDir)
+}
+
+func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredService, error) {
+	log.Printf("[INFO] Starting auto-discovery scan in directory: %s", scanDir)
 
 	var discoveredServices []DiscoveredService
 
-	err := filepath.Walk(ads.projectDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(scanDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Continue walking even if there are permission errors
 		}
