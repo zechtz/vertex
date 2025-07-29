@@ -1,3 +1,4 @@
+// Package main
 package main
 
 import (
@@ -73,7 +74,7 @@ func main() {
 	// Setup routes
 	r := mux.NewRouter()
 	handler.RegisterRoutes(r)
-	
+
 	// Serve embedded frontend assets
 	uiFS, err := fs.Sub(web.EmbeddedUI, "dist")
 	if err != nil {
@@ -122,7 +123,7 @@ func logMessage(message string) {
 
 func checkAndSetupEnvironment(db *database.Database) {
 	logMessage("Checking environment setup...")
-	
+
 	// Get working directory
 	workingDir, err := os.Getwd()
 	if err != nil {
@@ -132,21 +133,21 @@ func checkAndSetupEnvironment(db *database.Database) {
 
 	// Create environment setup instance with database
 	envSetup := services.NewEnvironmentSetup(workingDir, db)
-	
+
 	// Initialize default environment variables in database
 	logMessage("Initializing default environment variables in database...")
 	if err := envSetup.InitializeDefaultEnvironmentVariables(); err != nil {
 		log.Printf("Warning: Failed to initialize database environment variables: %v", err)
 	}
-	
+
 	// Check environment status
 	status := envSetup.CheckEnvironmentStatus()
 	missingCount := status["missing"].(int)
 	totalCount := status["total"].(int)
-	
+
 	if missingCount > 0 {
 		logMessage(fmt.Sprintf("Environment setup needed: %d/%d variables missing", missingCount, totalCount))
-		
+
 		// Setup environment variables (now loads from database)
 		logMessage("Setting up environment variables...")
 		result := envSetup.SetupEnvironment()
@@ -155,7 +156,7 @@ func checkAndSetupEnvironment(db *database.Database) {
 		} else {
 			log.Printf("Warning: Environment setup failed: %s", result.Message)
 		}
-		
+
 		if len(result.Errors) > 0 {
 			log.Printf("Environment setup warnings: %v", result.Errors)
 		}
