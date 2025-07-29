@@ -30,17 +30,17 @@ type Service struct {
 	Logs         []LogEntry        `json:"logs"`
 	Mutex        sync.RWMutex      `json:"-"`
 	// Resource monitoring fields
-	CPUPercent    float64           `json:"cpuPercent"`
-	MemoryUsage   uint64            `json:"memoryUsage"`   // in bytes
-	MemoryPercent float32           `json:"memoryPercent"`
-	DiskUsage     uint64            `json:"diskUsage"`     // in bytes
-	NetworkRx     uint64            `json:"networkRx"`     // bytes received
-	NetworkTx     uint64            `json:"networkTx"`     // bytes transmitted
-	Metrics       ServiceMetrics    `json:"metrics"`
+	CPUPercent    float64        `json:"cpuPercent"`
+	MemoryUsage   uint64         `json:"memoryUsage"` // in bytes
+	MemoryPercent float32        `json:"memoryPercent"`
+	DiskUsage     uint64         `json:"diskUsage"` // in bytes
+	NetworkRx     uint64         `json:"networkRx"` // bytes received
+	NetworkTx     uint64         `json:"networkTx"` // bytes transmitted
+	Metrics       ServiceMetrics `json:"metrics"`
 	// Service dependencies
-	Dependencies  []ServiceDependency `json:"dependencies"`
-	DependentOn   []string            `json:"dependentOn"`   // Services that depend on this one
-	StartupDelay  time.Duration       `json:"startupDelay"`  // Delay before starting after dependencies
+	Dependencies []ServiceDependency `json:"dependencies"`
+	DependentOn  []string            `json:"dependentOn"`  // Services that depend on this one
+	StartupDelay time.Duration       `json:"startupDelay"` // Delay before starting after dependencies
 }
 
 type LogEntry struct {
@@ -56,7 +56,7 @@ type ServiceMetrics struct {
 	LastChecked   time.Time      `json:"lastChecked"`
 }
 
-// Topology models for service visualization
+// ServiceTopology models for service visualization
 type ServiceTopology struct {
 	Services    []TopologyNode `json:"services"`
 	Connections []Connection   `json:"connections"`
@@ -64,20 +64,20 @@ type ServiceTopology struct {
 }
 
 type TopologyNode struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Type         string  `json:"type"` // "service", "database", "external"
-	Status       string  `json:"status"`
-	HealthStatus string  `json:"healthStatus"`
-	Port         int     `json:"port"`
-	Position     *NodePosition `json:"position,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata"`
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	Type         string         `json:"type"` // "service", "database", "external"
+	Status       string         `json:"status"`
+	HealthStatus string         `json:"healthStatus"`
+	Port         int            `json:"port"`
+	Position     *NodePosition  `json:"position,omitempty"`
+	Metadata     map[string]any `json:"metadata"`
 }
 
 type Connection struct {
 	Source      string `json:"source"`
 	Target      string `json:"target"`
-	Type        string `json:"type"` // "http", "database", "message_queue"
+	Type        string `json:"type"`   // "http", "database", "message_queue"
 	Status      string `json:"status"` // "active", "inactive", "error"
 	Description string `json:"description"`
 }
@@ -89,13 +89,13 @@ type NodePosition struct {
 
 // ServiceDependency represents a dependency relationship between services
 type ServiceDependency struct {
-	ServiceName     string        `json:"serviceName"`     // Name of the dependent service
-	Type            string        `json:"type"`            // "hard", "soft", "optional"
-	HealthCheck     bool          `json:"healthCheck"`     // Whether to check health before considering ready
-	Timeout         time.Duration `json:"timeout"`         // Max time to wait for dependency
-	RetryInterval   time.Duration `json:"retryInterval"`   // Interval between dependency checks
-	Required        bool          `json:"required"`        // Whether this dependency is required for startup
-	Description     string        `json:"description"`     // Human-readable description
+	ServiceName   string        `json:"serviceName"`   // Name of the dependent service
+	Type          string        `json:"type"`          // "hard", "soft", "optional"
+	HealthCheck   bool          `json:"healthCheck"`   // Whether to check health before considering ready
+	Timeout       time.Duration `json:"timeout"`       // Max time to wait for dependency
+	RetryInterval time.Duration `json:"retryInterval"` // Interval between dependency checks
+	Required      bool          `json:"required"`      // Whether this dependency is required for startup
+	Description   string        `json:"description"`   // Human-readable description
 }
 
 type ResponseTime struct {
@@ -154,10 +154,10 @@ type LibraryInstallation struct {
 
 // GitLabCIConfig represents the structure we care about from .gitlab-ci.yml
 type GitLabCIConfig struct {
-	ServiceName    string                 `json:"serviceName"`
-	Libraries      []LibraryInstallation  `json:"libraries"`
-	HasLibraries   bool                   `json:"hasLibraries"`
-	ErrorMessage   string                 `json:"errorMessage,omitempty"`
+	ServiceName  string                `json:"serviceName"`
+	Libraries    []LibraryInstallation `json:"libraries"`
+	HasLibraries bool                  `json:"hasLibraries"`
+	ErrorMessage string                `json:"errorMessage,omitempty"`
 }
 
 // User represents a user account
@@ -199,7 +199,7 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
-// Ensure JWTClaims implements jwt.Claims interface
+// GetExpirationTime implements jwt.Claims interface
 func (c *JWTClaims) GetExpirationTime() (*jwt.NumericDate, error) {
 	return c.RegisteredClaims.ExpiresAt, nil
 }
@@ -236,12 +236,12 @@ type UserProfile struct {
 
 // UserPreferences represents user application preferences
 type UserPreferences struct {
-	Theme                string            `json:"theme"`
-	Language             string            `json:"language"`
-	NotificationSettings map[string]bool   `json:"notificationSettings"`
-	DashboardLayout      string            `json:"dashboardLayout"`
-	AutoRefresh          bool              `json:"autoRefresh"`
-	RefreshInterval      int               `json:"refreshInterval"` // seconds
+	Theme                string          `json:"theme"`
+	Language             string          `json:"language"`
+	NotificationSettings map[string]bool `json:"notificationSettings"`
+	DashboardLayout      string          `json:"dashboardLayout"`
+	AutoRefresh          bool            `json:"autoRefresh"`
+	RefreshInterval      int             `json:"refreshInterval"` // seconds
 }
 
 // ServiceProfile represents a collection of services and their configurations
@@ -311,38 +311,38 @@ type ProfileEnvVar struct {
 
 // ProfileServiceConfig represents a profile-scoped service configuration override
 type ProfileServiceConfig struct {
-	ID           int       `json:"id" db:"id"`
-	ProfileID    string    `json:"profileId" db:"profile_id"`
-	ServiceName  string    `json:"serviceName" db:"service_name"`
-	ConfigKey    string    `json:"configKey" db:"config_key"`
-	ConfigValue  string    `json:"configValue" db:"config_value"`
-	ConfigType   string    `json:"configType" db:"config_type"`
-	Description  string    `json:"description" db:"description"`
-	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
-	UpdatedAt    time.Time `json:"updatedAt" db:"updated_at"`
+	ID          int       `json:"id" db:"id"`
+	ProfileID   string    `json:"profileId" db:"profile_id"`
+	ServiceName string    `json:"serviceName" db:"service_name"`
+	ConfigKey   string    `json:"configKey" db:"config_key"`
+	ConfigValue string    `json:"configValue" db:"config_value"`
+	ConfigType  string    `json:"configType" db:"config_type"`
+	Description string    `json:"description" db:"description"`
+	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt   time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // ProfileDependency represents a profile-scoped service dependency
 type ProfileDependency struct {
-	ID                    int           `json:"id" db:"id"`
-	ProfileID             string        `json:"profileId" db:"profile_id"`
-	ServiceName           string        `json:"serviceName" db:"service_name"`
-	DependencyServiceName string        `json:"dependencyServiceName" db:"dependency_service_name"`
-	DependencyType        string        `json:"dependencyType" db:"dependency_type"`
-	HealthCheck           bool          `json:"healthCheck" db:"health_check"`
-	TimeoutSeconds        int           `json:"timeoutSeconds" db:"timeout_seconds"`
-	RetryIntervalSeconds  int           `json:"retryIntervalSeconds" db:"retry_interval_seconds"`
-	IsRequired            bool          `json:"isRequired" db:"is_required"`
-	Description           string        `json:"description" db:"description"`
-	CreatedAt             time.Time     `json:"createdAt" db:"created_at"`
-	UpdatedAt             time.Time     `json:"updatedAt" db:"updated_at"`
+	ID                    int       `json:"id" db:"id"`
+	ProfileID             string    `json:"profileId" db:"profile_id"`
+	ServiceName           string    `json:"serviceName" db:"service_name"`
+	DependencyServiceName string    `json:"dependencyServiceName" db:"dependency_service_name"`
+	DependencyType        string    `json:"dependencyType" db:"dependency_type"`
+	HealthCheck           bool      `json:"healthCheck" db:"health_check"`
+	TimeoutSeconds        int       `json:"timeoutSeconds" db:"timeout_seconds"`
+	RetryIntervalSeconds  int       `json:"retryIntervalSeconds" db:"retry_interval_seconds"`
+	IsRequired            bool      `json:"isRequired" db:"is_required"`
+	Description           string    `json:"description" db:"description"`
+	CreatedAt             time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt             time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // ProfileContext represents the complete configuration context for a profile
 type ProfileContext struct {
-	Profile           *ServiceProfile                    `json:"profile"`
-	EnvVars           map[string]string                  `json:"envVars"`
-	ServiceConfigs    map[string]map[string]string       `json:"serviceConfigs"`    // serviceName -> configKey -> configValue
-	Dependencies      map[string][]ProfileDependency     `json:"dependencies"`      // serviceName -> dependencies
-	IsActive          bool                               `json:"isActive"`
+	Profile        *ServiceProfile                `json:"profile"`
+	EnvVars        map[string]string              `json:"envVars"`
+	ServiceConfigs map[string]map[string]string   `json:"serviceConfigs"` // serviceName -> configKey -> configValue
+	Dependencies   map[string][]ProfileDependency `json:"dependencies"`   // serviceName -> dependencies
+	IsActive       bool                           `json:"isActive"`
 }
