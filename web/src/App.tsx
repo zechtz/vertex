@@ -14,6 +14,13 @@ import { LogAggregationModal } from "@/components/LogAggregationModal/LogAggrega
 import { ServiceTopologyModal } from "@/components/ServiceTopologyModal/ServiceTopologyModal";
 import { DependencyConfigModal } from "@/components/DependencyConfigModal/DependencyConfigModal";
 import { AutoDiscoveryModal } from "@/components/AutoDiscoveryModal/AutoDiscoveryModal";
+import { AuthContainer } from "@/components/Auth/AuthContainer";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ProfileProvider, useProfile } from "@/contexts/ProfileContext";
+import { Toolbar } from "@/components/Toolbar/Toolbar";
+import { ProfileManagement } from "@/components/ProfileManagement";
+import { ProfileConfigDashboard } from "@/components/ProfileConfigDashboard/ProfileConfigDashboard";
 import {
   ToastProvider,
   ToastContainer,
@@ -26,9 +33,13 @@ import {
   confirmDialogs,
 } from "@/components/ui/confirm-dialog";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { ServiceActionModal } from "@/components/ServiceActionModal/ServiceActionModal";
 
-function AppContent() {
+function AuthenticatedApp() {
+  const { user, logout, token } = useAuth();
+  const { activeProfile, removeServiceFromProfile } = useProfile();
   const [services, setServices] = useState<Service[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState("services");
@@ -63,6 +74,7 @@ function AppContent() {
 
   // Modal state
   const [showServiceConfig, setShowServiceConfig] = useState(false);
+  const [isCreatingService, setIsCreatingService] = useState(false);
   const [showServiceFiles, setShowServiceFiles] = useState(false);
   const [showServiceEnv, setShowServiceEnv] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -71,9 +83,14 @@ function AppContent() {
   const [envEditingService, setEnvEditingService] = useState<Service | null>(
     null,
   );
+  
+  // Service action modal state
+  const [showServiceActionModal, setShowServiceActionModal] = useState(false);
+  const [serviceToAction, setServiceToAction] = useState<Service | null>(null);
 
   // Configuration state
   const [configurations, setConfigurations] = useState<Configuration[]>([]);
+  const [allConfigurations, setAllConfigurations] = useState<Configuration[]>([]);
 
   useEffect(() => {
     fetchServices();
@@ -145,7 +162,10 @@ function AppContent() {
       const sortedServices = data.sort(
         (a: Service, b: Service) => a.order - b.order,
       );
-      setServices(sortedServices);
+      setAllServices(sortedServices);
+      
+      // Filter services based on active profile
+      filterServicesByProfile(sortedServices, activeProfile);
     } catch (error) {
       console.error("Failed to fetch services:", error);
       addToast(
@@ -161,6 +181,48 @@ function AppContent() {
     }
   };
 
+  const filterServicesByProfile = (allServices: Service[], activeProfile: any) => {
+    if (!activeProfile || !activeProfile.services || activeProfile.services.length === 0) {
+      // If no active profile or no services in profile, show all services
+      setServices(allServices);
+    } else {
+      // Filter to show only services that are in the active profile
+      const filteredServices = allServices.filter(service => 
+        activeProfile.services.includes(service.name)
+      );
+      setServices(filteredServices);
+    }
+  };
+
+  const filterConfigurationsByProfile = (allConfigs: Configuration[], activeProfile: any) => {
+    if (!activeProfile || !activeProfile.services || activeProfile.services.length === 0) {
+      // If no active profile, show all configurations
+      setConfigurations(allConfigs);
+    } else {
+      // Filter to show only configurations that contain services from the active profile
+      const filteredConfigs = allConfigs.filter(config => 
+        config.services.some(configService => 
+          activeProfile.services.includes(configService.name)
+        )
+      );
+      setConfigurations(filteredConfigs);
+    }
+  };
+
+  // Effect to re-filter services when active profile changes
+  useEffect(() => {
+    if (allServices.length > 0) {
+      filterServicesByProfile(allServices, activeProfile);
+    }
+  }, [activeProfile, allServices]);
+
+  // Effect to re-filter configurations when active profile changes
+  useEffect(() => {
+    if (allConfigurations.length > 0) {
+      filterConfigurationsByProfile(allConfigurations, activeProfile);
+    }
+  }, [activeProfile, allConfigurations]);
+
   const fetchConfigurations = async () => {
     try {
       const response = await fetch("/api/configurations");
@@ -170,7 +232,10 @@ function AppContent() {
         );
       }
       const data = await response.json();
-      setConfigurations(data);
+      setAllConfigurations(data);
+      
+      // Filter configurations based on active profile
+      filterConfigurationsByProfile(data, activeProfile);
     } catch (error) {
       console.error("Failed to fetch configurations:", error);
       addToast(
@@ -392,18 +457,28 @@ function AppContent() {
   const startAllServices = async () => {
     try {
       setIsStartingAll(true);
-      const response = await fetch("/api/services/start-all", {
+      const headers: Record<string, string> = {};
+      
+      // Only include Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch("/api/services/start-all-profile", {
         method: "POST",
+        headers,
       });
       if (!response.ok) {
         throw new Error(
           `Failed to start all services: ${response.status} ${response.statusText}`,
         );
       }
+      
+      const result = await response.json();
       addToast(
         toast.success(
-          "Starting all services",
-          "All enabled services are being started",
+          "Starting services",
+          result.status || "Services are being started",
         ),
       );
     } catch (error) {
@@ -422,23 +497,37 @@ function AppContent() {
   };
 
   const stopAllServices = async () => {
-    const confirmed = await showConfirm(confirmDialogs.stopAllServices());
+    const profileContext = activeProfile ? ` in profile "${activeProfile.name}"` : "";
+    const confirmed = await showConfirm({
+      ...confirmDialogs.stopAllServices(),
+      description: `Are you sure you want to stop all services${profileContext}? This will stop all currently running services${profileContext}.`,
+    });
     if (!confirmed) return;
 
     try {
       setIsStoppingAll(true);
-      const response = await fetch("/api/services/stop-all", {
+      const headers: Record<string, string> = {};
+      
+      // Only include Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch("/api/services/stop-all-profile", {
         method: "POST",
+        headers,
       });
       if (!response.ok) {
         throw new Error(
           `Failed to stop all services: ${response.status} ${response.statusText}`,
         );
       }
+      
+      const result = await response.json();
       addToast(
         toast.success(
-          "Stopping all services",
-          "All services are being stopped",
+          "Stopping services",
+          result.status || "Services are being stopped",
         ),
       );
     } catch (error) {
@@ -566,18 +655,36 @@ function AppContent() {
       port: 8080,
       pid: 0,
       order: services.length + 1,
-      lastStarted: "",
+      lastStarted: new Date().toISOString(), // Use proper ISO string format
       description: "",
       isEnabled: true,
+      buildSystem: "auto",
       envVars: {},
       logs: [],
       uptime: "",
+      cpuPercent: 0,
+      memoryUsage: 0,
+      memoryPercent: 0,
+      diskUsage: 0,
+      networkRx: 0,
+      networkTx: 0,
+      metrics: {
+        responseTimes: [],
+        errorRate: 0,
+        requestCount: 0,
+        lastChecked: new Date().toISOString(),
+      },
+      dependencies: null,
+      dependentOn: null,
+      startupDelay: 0,
     });
+    setIsCreatingService(true);
     setShowServiceConfig(true);
   };
 
   const openEditService = (service: Service) => {
     setEditingService(service);
+    setIsCreatingService(false);
     setShowServiceConfig(true);
   };
 
@@ -592,11 +699,39 @@ function AppContent() {
   };
 
   const deleteService = async (serviceName: string) => {
-    const confirmed = await showConfirm(
-      confirmDialogs.deleteService(serviceName),
-    );
-    if (!confirmed) return;
+    const service = services.find(s => s.name === serviceName);
+    if (!service) return;
+    
+    setServiceToAction(service);
+    setShowServiceActionModal(true);
+  };
 
+  const handleRemoveFromProfile = async (serviceName: string) => {
+    if (!activeProfile) return;
+    
+    try {
+      await removeServiceFromProfile(activeProfile.id, serviceName);
+      addToast(
+        toast.success(
+          "Service removed from profile",
+          `${serviceName} has been removed from ${activeProfile.name}`,
+        ),
+      );
+      fetchServices();
+    } catch (error) {
+      console.error("Failed to remove service from profile:", error);
+      addToast(
+        toast.error(
+          "Failed to remove service from profile",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
+        ),
+      );
+    }
+  };
+
+  const handleDeleteGlobally = async (serviceName: string) => {
     try {
       const response = await fetch(`/api/services/${serviceName}`, {
         method: "DELETE",
@@ -609,7 +744,7 @@ function AppContent() {
       addToast(
         toast.success(
           "Service deleted",
-          `${serviceName} has been deleted successfully`,
+          `${serviceName} has been deleted permanently`,
         ),
       );
       fetchServices();
@@ -752,11 +887,27 @@ function AppContent() {
             onInstallLibraries={installLibraries}
           />
         );
+      case "profiles":
+        return (
+          <ProfileManagement
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+            onProfileUpdated={fetchServices}
+          />
+        );
+      case "dashboard":
+        return (
+          <ProfileConfigDashboard
+            isOpen={true}
+            onClose={() => setActiveSection("services")}
+          />
+        );
       case "metrics":
         return (
           <SystemMetricsModal
             isOpen={true}
             onClose={() => setActiveSection("services")}
+            services={services}
           />
         );
       case "logs":
@@ -827,17 +978,31 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Toolbar */}
+      <Toolbar
+        user={user ? {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          lastLogin: user.lastLogin
+        } : null}
+        onLogout={logout}
+        onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isSidebarCollapsed={isSidebarCollapsed}
+      />
+
       {/* Sidebar */}
       <Sidebar
         activeSection={activeSection}
         onSectionChange={setActiveSection}
-        onCollapsedChange={setIsSidebarCollapsed}
+        isCollapsed={isSidebarCollapsed}
       />
 
       {/* Main Content */}
       <div
-        className={`transition-all duration-300 ${isSidebarCollapsed ? "ml-16" : "ml-64"}`}
+        className={`transition-all duration-300 pt-16 ${isSidebarCollapsed ? "ml-16" : "ml-64"}`}
       >
         <div className="p-8 pb-20">{renderMainContent()}</div>
       </div>
@@ -865,31 +1030,56 @@ function AppContent() {
         onClose={() => {
           setShowServiceConfig(false);
           setEditingService(null);
+          setIsCreatingService(false);
         }}
-        onSave={async (service) => {
+        isCreateMode={isCreatingService}
+        onSave={async (service, profileId) => {
           try {
             setIsSavingService(true);
-            const response = await fetch(`/api/services/${service.name}`, {
-              method: "PUT",
+            const isCreate = isCreatingService;
+            
+            const url = isCreate ? "/api/services" : `/api/services/${service.name}`;
+            const method = isCreate ? "POST" : "PUT";
+            
+            console.log("Saving service:", { method, url, service });
+            const response = await fetch(url, {
+              method: method,
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(service),
             });
 
             if (!response.ok) {
               throw new Error(
-                `Failed to save service: ${response.status} ${response.statusText}`,
+                `Failed to ${isCreate ? 'create' : 'save'} service: ${response.status} ${response.statusText}`,
               );
+            }
+
+            // If creating a new service and a profile was selected, add it to the profile
+            if (isCreate && profileId) {
+              try {
+                const addToProfileResponse = await fetch(`/api/profiles/${profileId}/services`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ serviceName: service.name })
+                });
+                if (!addToProfileResponse.ok) {
+                  console.warn('Failed to add service to profile, but service was created successfully');
+                }
+              } catch (error) {
+                console.warn('Failed to add service to profile:', error);
+              }
             }
 
             addToast(
               toast.success(
-                "Service saved",
-                `${service.name} configuration has been updated`,
+                isCreate ? "Service created" : "Service saved",
+                `${service.name} has been ${isCreate ? 'created' : 'updated'} successfully${profileId && isCreate ? ' and added to profile' : ''}`,
               ),
             );
             fetchServices();
             setShowServiceConfig(false);
             setEditingService(null);
+            setIsCreatingService(false);
           } catch (error) {
             console.error("Failed to save service:", error);
             addToast(
@@ -924,19 +1114,64 @@ function AppContent() {
           setEnvEditingService(null);
         }}
       />
+
+      <ServiceActionModal
+        isOpen={showServiceActionModal}
+        onClose={() => {
+          setShowServiceActionModal(false);
+          setServiceToAction(null);
+        }}
+        service={serviceToAction}
+        activeProfile={activeProfile}
+        onRemoveFromProfile={handleRemoveFromProfile}
+        onDeleteGlobally={handleDeleteGlobally}
+      />
     </div>
   );
+}
+
+function AppContent() {
+  const { isAuthenticated, isLoading, login } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
+        <div className="text-center">
+          <div className="h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading NeST Manager...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <AuthContainer
+        onAuthSuccess={(user, token) => {
+          login(user, token);
+        }}
+      />
+    );
+  }
+
+  return <AuthenticatedApp />;
 }
 
 function App() {
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <ConfirmDialogProvider>
-          <AppContent />
-          <ToastContainer />
-        </ConfirmDialogProvider>
-      </ToastProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ProfileProvider>
+            <ToastProvider>
+              <ConfirmDialogProvider>
+                <AppContent />
+                <ToastContainer />
+              </ConfirmDialogProvider>
+            </ToastProvider>
+          </ProfileProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
