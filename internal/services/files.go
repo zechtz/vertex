@@ -19,6 +19,10 @@ type ServiceFile struct {
 }
 
 func (sm *Manager) GetServiceFiles(serviceName string) ([]ServiceFile, error) {
+	return sm.GetServiceFilesWithProjectsDir(serviceName, sm.config.ProjectsDir)
+}
+
+func (sm *Manager) GetServiceFilesWithProjectsDir(serviceName, projectsDir string) ([]ServiceFile, error) {
 	sm.mutex.RLock()
 	service, exists := sm.services[serviceName]
 	sm.mutex.RUnlock()
@@ -27,8 +31,8 @@ func (sm *Manager) GetServiceFiles(serviceName string) ([]ServiceFile, error) {
 		return nil, fmt.Errorf("service %s not found", serviceName)
 	}
 
-	// Construct the full path to service directory
-	serviceDir := filepath.Join(sm.config.ProjectsDir, service.Dir)
+	// Construct the full path to service directory using the provided projects directory
+	serviceDir := filepath.Join(projectsDir, service.Dir)
 
 	var files []ServiceFile
 
