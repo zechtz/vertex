@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Plus, Trash2, RefreshCw } from "lucide-react";
+import { X, Plus, Trash2, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast, toast } from "@/components/ui/toast";
 import { ButtonSpinner } from "@/components/ui/spinner";
 import { ErrorBoundarySection } from "@/components/ui/error-boundary";
+import { BulkImportModal } from "@/components/EnvironmentVariables/BulkImportModal";
 
 interface GlobalEnvVar {
   name: string;
@@ -25,6 +26,7 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   
   const { addToast } = useToast();
 
@@ -137,6 +139,47 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
     setEnvVars(updated);
   };
 
+  const handleBulkImport = (variables: Record<string, string>) => {
+    const newVars: GlobalEnvVar[] = Object.entries(variables).map(([name, value]) => {
+      let description = "";
+      let category = "other";
+      
+      // Categorize based on variable names (same logic as fetchEnvVars)
+      if (name.includes("DB_") || name.includes("DATABASE")) {
+        category = "database";
+        description = "Database configuration";
+      } else if (name.includes("CONFIG_") || name.includes("SPRING_")) {
+        category = "config";
+        description = "Application configuration";
+      } else if (name.includes("CLIENT_") || name.includes("AUTH")) {
+        category = "auth";
+        description = "Authentication configuration";
+      } else if (name.includes("REDIS") || name.includes("RABBIT")) {
+        category = "cache";
+        description = "Cache/Message queue configuration";
+      } else if (name.includes("PORT") || name.includes("URL") || name.includes("URI")) {
+        category = "network";
+        description = "Network configuration";
+      }
+      
+      return { name, value, description, category };
+    });
+    
+    // Check for duplicates and merge
+    const existingNames = new Set(envVars.map(v => v.name));
+    const uniqueNewVars = newVars.filter(v => !existingNames.has(v.name));
+    const duplicateCount = newVars.length - uniqueNewVars.length;
+    
+    setEnvVars([...envVars, ...uniqueNewVars]);
+    
+    addToast(toast.success(
+      "Variables imported",
+      `Imported ${uniqueNewVars.length} new variables${duplicateCount > 0 ? `. ${duplicateCount} duplicates skipped.` : ""}`
+    ));
+    
+    setIsBulkImportOpen(false);
+  };
+
   const reloadFromFishFile = async () => {
     try {
       setIsLoading(true);
@@ -203,6 +246,15 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
               >
                 <RefreshCw className="h-4 w-4 mr-1" />
                 Reload
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsBulkImportOpen(true)}
+                disabled={isLoading}
+              >
+                <Upload className="h-4 w-4 mr-1" />
+                Bulk Import
               </Button>
               <Button variant="outline" size="sm" onClick={addEnvVar}>
                 <Plus className="h-4 w-4 mr-1" />
@@ -315,6 +367,13 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
         </div>
         </ErrorBoundarySection>
       </div>
+      
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onImport={handleBulkImport}
+      />
     </div>
   );
 }
