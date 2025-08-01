@@ -61,3 +61,13 @@ release/
 web/src/REFACTORING_GUIDE.md
 web/src/App-refactored.tsx
 web/src/App-refactored-simple.tsx
+internal/models/models.go.backup
+web/src/components/ModalProvider/README.md
+web/src/App-refactored.tsx.backup
+web/src/App-refactored-simple.tsx.backup
+web/BUGFIX-SERVICE-PATH-IDENTIFIERS.md
+web/SOLUTION-UUID-SERVICE-IDENTIFIERS.md
+web/src/components/EnvironmentVariables/README.md
+web/test-fish-parser.js
+vertex
+common_env_settings.sh
