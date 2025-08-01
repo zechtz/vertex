@@ -32,7 +32,11 @@ export function ProfileServiceManager({ isOpen, onClose, profile, onProfileUpdat
   useEffect(() => {
     if (profile && isOpen) {
       loadAvailableServices();
-      setProfileServices([...profile.services]);
+      // Extract service IDs from the new object structure
+      const serviceIds = profile.services.map(service => 
+        typeof service === 'string' ? service : service.id
+      );
+      setProfileServices([...serviceIds]);
     }
   }, [profile?.id, isOpen]);
 
@@ -52,11 +56,11 @@ export function ProfileServiceManager({ isOpen, onClose, profile, onProfileUpdat
     }
   };
 
-  const handleToggleService = (serviceName: string) => {
+  const handleToggleService = (serviceId: string) => {
     setProfileServices(prev => 
-      prev.includes(serviceName)
-        ? prev.filter(s => s !== serviceName)
-        : [...prev, serviceName]
+      prev.includes(serviceId)
+        ? prev.filter(s => s !== serviceId)
+        : [...prev, serviceId]
     );
   };
 
@@ -90,20 +94,34 @@ export function ProfileServiceManager({ isOpen, onClose, profile, onProfileUpdat
 
   const handleClose = () => {
     if (profile) {
-      setProfileServices([...profile.services]);
+      // Extract service IDs from the new object structure
+      const serviceIds = profile.services.map(service => 
+        typeof service === 'string' ? service : service.id
+      );
+      setProfileServices([...serviceIds]);
     }
     onClose();
   };
 
   if (!isOpen || !profile) return null;
 
-  const addedServices = profileServices.filter(serviceName => 
-    !profile.services.includes(serviceName)
+  const originalServiceIds = profile.services.map(service => 
+    typeof service === 'string' ? service : service.id
   );
-  const removedServices = profile.services.filter(serviceName => 
-    !profileServices.includes(serviceName)
+  
+  const addedServices = profileServices.filter(serviceId => 
+    !originalServiceIds.includes(serviceId)
+  );
+  const removedServices = originalServiceIds.filter(serviceId => 
+    !profileServices.includes(serviceId)
   );
   const hasChanges = addedServices.length > 0 || removedServices.length > 0;
+
+  // Helper function to get service name by ID
+  const getServiceNameById = (serviceId: string) => {
+    const service = availableServices.find(s => s.id === serviceId);
+    return service ? service.name : serviceId;
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -172,12 +190,12 @@ export function ProfileServiceManager({ isOpen, onClose, profile, onProfileUpdat
                   <div className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
                     {addedServices.length > 0 && (
                       <p>
-                        <span className="font-medium">Adding:</span> {addedServices.join(', ')}
+                        <span className="font-medium">Adding:</span> {addedServices.map(getServiceNameById).join(', ')}
                       </p>
                     )}
                     {removedServices.length > 0 && (
                       <p>
-                        <span className="font-medium">Removing:</span> {removedServices.join(', ')}
+                        <span className="font-medium">Removing:</span> {removedServices.map(getServiceNameById).join(', ')}
                       </p>
                     )}
                   </div>
@@ -204,8 +222,8 @@ export function ProfileServiceManager({ isOpen, onClose, profile, onProfileUpdat
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {availableServices.map((service) => {
-                  const isSelected = profileServices.includes(service.name);
-                  const wasOriginallySelected = profile.services.includes(service.name);
+                  const isSelected = profileServices.includes(service.id);
+                  const wasOriginallySelected = originalServiceIds.includes(service.id);
                   const isChanged = isSelected !== wasOriginallySelected;
                   
                   return (
@@ -223,7 +241,7 @@ export function ProfileServiceManager({ isOpen, onClose, profile, onProfileUpdat
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => handleToggleService(service.name)}
+                          onChange={() => handleToggleService(service.id)}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
                         {isSelected && (
