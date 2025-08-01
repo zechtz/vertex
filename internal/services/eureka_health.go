@@ -12,17 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 // XML structures for Eureka response
 type EurekaXMLInstanceInfo struct {
-	InstanceID   string `xml:"instanceId"`
-	App          string `xml:"app"`
-	HostName     string `xml:"hostName"`
-	IPAddr       string `xml:"ipAddr"`
-	Status       string `xml:"status"`
-	Port         struct {
+	InstanceID string `xml:"instanceId"`
+	App        string `xml:"app"`
+	HostName   string `xml:"hostName"`
+	IPAddr     string `xml:"ipAddr"`
+	Status     string `xml:"status"`
+	Port       struct {
 		Port    int  `xml:",chardata"`
 		Enabled bool `xml:"enabled,attr"`
 	} `xml:"port"`
@@ -32,23 +32,23 @@ type EurekaXMLInstanceInfo struct {
 }
 
 type EurekaXMLApplication struct {
-	Name      string                   `xml:"name"`
+	Name      string                  `xml:"name"`
 	Instances []EurekaXMLInstanceInfo `xml:"instance"`
 }
 
 type EurekaXMLApplications struct {
-	XMLName      xml.Name                `xml:"applications"`
+	XMLName      xml.Name               `xml:"applications"`
 	Applications []EurekaXMLApplication `xml:"application"`
 }
 
 // JSON structures for Eureka response (kept for compatibility)
 type EurekaInstanceInfo struct {
-	InstanceID   string `json:"instanceId"`
-	App          string `json:"app"`
-	HostName     string `json:"hostName"`
-	IPAddr       string `json:"ipAddr"`
-	Status       string `json:"status"`
-	Port         struct {
+	InstanceID string `json:"instanceId"`
+	App        string `json:"app"`
+	HostName   string `json:"hostName"`
+	IPAddr     string `json:"ipAddr"`
+	Status     string `json:"status"`
+	Port       struct {
 		Port    int  `json:"$"`
 		Enabled bool `json:"@enabled"`
 	} `json:"port"`
@@ -56,15 +56,15 @@ type EurekaInstanceInfo struct {
 		Port    int  `json:"$"`
 		Enabled bool `json:"@enabled"`
 	} `json:"securePort"`
-	HomePageURL    string `json:"homePageUrl"`
-	StatusPageURL  string `json:"statusPageUrl"`
-	HealthCheckURL string `json:"healthCheckUrl"`
+	HomePageURL          string `json:"homePageUrl"`
+	StatusPageURL        string `json:"statusPageUrl"`
+	HealthCheckURL       string `json:"healthCheckUrl"`
 	LastUpdatedTimestamp string `json:"lastUpdatedTimestamp"`
 	LastDirtyTimestamp   string `json:"lastDirtyTimestamp"`
 }
 
 type EurekaApplication struct {
-	Name      string                `json:"name"`
+	Name      string               `json:"name"`
 	Instances []EurekaInstanceInfo `json:"instance"`
 }
 
@@ -80,25 +80,25 @@ type EurekaApplications struct {
 func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 	// Only check Eureka for services that should be registered (not Eureka itself)
 	serviceName := strings.ToUpper(service.Name)
-	if serviceName == "EUREKA" || serviceName == "NEST-REGISTRY-SERVER" {
+	if serviceName == "EUREKA" {
 		log.Printf("[DEBUG] Skipping Eureka health check for %s (is registry service itself)", service.Name)
 		return false // Use direct health check for Eureka itself
 	}
 
 	// Get Eureka registry port from environment or use default
 	eurekaPort := 8800
-	if service.Name == "nest-registry-server" || service.Name == "EUREKA" {
+	if service.Name == "EUREKA" {
 		eurekaPort = service.Port
 	}
 
 	// Add small random delay to stagger concurrent requests
 	delay := time.Duration(rand.Intn(500)) * time.Millisecond
 	time.Sleep(delay)
-	
+
 	// Query Eureka for all applications
 	eurekaURL := fmt.Sprintf("http://localhost:%d/eureka/apps", eurekaPort)
 	log.Printf("[DEBUG] Checking Eureka health for %s at %s (after %v delay)", service.Name, eurekaURL, delay)
-	
+
 	// Use a client with reasonable timeout and keep-alive disabled to avoid connection pool issues
 	client := &http.Client{
 		Timeout: 5 * time.Second,
@@ -140,7 +140,7 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 	var xmlResponse EurekaXMLApplications
 	if err := xml.Unmarshal(bodyBytes, &xmlResponse); err == nil {
 		log.Printf("[DEBUG] Successfully parsed Eureka XML response for %s, found %d applications", service.Name, len(xmlResponse.Applications))
-		
+
 		// Debug: List all applications found in Eureka
 		for i, app := range xmlResponse.Applications {
 			log.Printf("[DEBUG] Eureka app[%d]: %s with %d instances", i, app.Name, len(app.Instances))
@@ -148,7 +148,7 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 				log.Printf("[DEBUG]   instance[%d]: %s:%d status=%s", j, instance.HostName, instance.Port.Port, instance.Status)
 			}
 		}
-		
+
 		// Look for the service in Eureka registry using port-based matching
 		for _, app := range xmlResponse.Applications {
 			for _, instance := range app.Instances {
@@ -156,7 +156,7 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 				// Primary matching: by port (since ports are unique)
 				if instance.Port.Port == service.Port {
 					log.Printf("[DEBUG] Found %s in Eureka XML by port match - app: %s, status: %s", service.Name, app.Name, instance.Status)
-					
+
 					// Update service health based on Eureka status
 					switch strings.ToUpper(instance.Status) {
 					case "UP":
@@ -201,7 +201,7 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 				// Primary matching: by port (since ports are unique)
 				if instance.Port.Port == service.Port {
 					log.Printf("[DEBUG] Found %s in Eureka JSON by port match - app: %s, status: %s", service.Name, app.Name, instance.Status)
-					
+
 					// Update service health based on Eureka status
 					switch strings.ToUpper(instance.Status) {
 					case "UP":
@@ -267,10 +267,10 @@ func (sm *Manager) checkEurekaServiceRegistration(serviceName string) (bool, str
 
 	// Look for the service
 	for _, app := range eurekaResponse.Applications.Applications {
-		if strings.EqualFold(app.Name, serviceName) || 
-		   strings.EqualFold(app.Name, strings.ReplaceAll(serviceName, "-", "")) ||
-		   strings.EqualFold(app.Name, strings.ReplaceAll(serviceName, "nest-", "")) {
-			
+		if strings.EqualFold(app.Name, serviceName) ||
+			strings.EqualFold(app.Name, strings.ReplaceAll(serviceName, "-", "")) ||
+			strings.EqualFold(app.Name, strings.ReplaceAll(serviceName, "vertex-", "")) {
+
 			if len(app.Instances) > 0 {
 				return true, fmt.Sprintf("Registered with status: %s", app.Instances[0].Status)
 			}
@@ -317,69 +317,4 @@ func (sm *Manager) getEurekaServicesStatus() (map[string]string, error) {
 	}
 
 	return servicesStatus, nil
-}
-
-// isServiceMatch checks if a local service name matches a Eureka application name
-// Handles various naming patterns between local service names and Eureka registration names
-func isServiceMatch(serviceName, eurekaAppName string) bool {
-	sName := strings.ToUpper(serviceName)
-	appName := strings.ToUpper(eurekaAppName)
-	
-	log.Printf("[DEBUG] isServiceMatch: comparing '%s' with '%s'", sName, appName)
-	
-	// Handle specific mappings based on your Eureka registry:
-	// CONFIG -> NEST-CONFIG-SERVER
-	// GATEWAY -> NEST-GATEWAY  
-	// UAA -> NEST-UAA
-	// etc.
-	
-	// Direct match
-	if sName == appName {
-		log.Printf("[DEBUG] Direct match: %s = %s", sName, appName)
-		return true
-	}
-	
-	// Common patterns from your Eureka registry
-	mappings := map[string]string{
-		"CONFIG":              "NEST-CONFIG-SERVER",
-		"NEST-CONFIG-SERVER":  "NEST-CONFIG-SERVER",
-		"GATEWAY":             "NEST-GATEWAY",
-		"NEST-GATEWAY":        "NEST-GATEWAY", 
-		"UAA":                 "NEST-UAA",
-		"NEST-UAA":            "NEST-UAA",
-		"APP":                 "NEST-APP",
-		"NEST-APP":            "NEST-APP",
-		"CACHE":               "NEST-CACHE",
-		"NEST-CACHE":          "NEST-CACHE",
-		"CONTRACT":            "NEST-CONTRACT-MGT",
-		"NEST-CONTRACT":       "NEST-CONTRACT-MGT",
-		"DSMS":                "NEST-DSMS",
-		"NEST-DSMS":           "NEST-DSMS",
-		"SUBMISSION":          "NEST-SUBMISSION",
-		"NEST-SUBMISSION":     "NEST-SUBMISSION",
-	}
-	
-	if expectedApp, exists := mappings[sName]; exists {
-		if appName == expectedApp {
-			log.Printf("[DEBUG] Mapping match: %s -> %s = %s", sName, expectedApp, appName)
-			return true
-		}
-	}
-	
-	// Fallback: check if the service name is contained in the app name
-	if strings.Contains(appName, sName) {
-		log.Printf("[DEBUG] Contains match: %s contains %s", appName, sName)
-		return true
-	}
-	
-	// Check if removing NEST- prefix helps
-	if strings.HasPrefix(appName, "NEST-") {
-		cleanAppName := strings.TrimPrefix(appName, "NEST-")
-		if strings.Contains(cleanAppName, sName) || strings.Contains(sName, cleanAppName) {
-			log.Printf("[DEBUG] NEST- prefix match: %s (clean: %s) ~ %s", appName, cleanAppName, sName)
-			return true
-		}
-	}
-	
-	return false
 }

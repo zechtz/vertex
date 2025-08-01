@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 // collectResourceMetrics collects CPU, memory, and network metrics for a service
@@ -84,7 +84,7 @@ func (sm *Manager) collectResourceMetrics(service *models.Service) error {
 		service.NetworkTx = ioCounters.WriteCount
 	}
 
-	log.Printf("[DEBUG] Collected metrics for %s - CPU: %.2f%%, Memory: %d bytes (%.2f%%)", 
+	log.Printf("[DEBUG] Collected metrics for %s - CPU: %.2f%%, Memory: %d bytes (%.2f%%)",
 		service.Name, service.CPUPercent, service.MemoryUsage, service.MemoryPercent)
 
 	return nil
@@ -152,7 +152,7 @@ func (sm *Manager) collectPerformanceMetrics(service *models.Service) error {
 	}
 
 	start := time.Now()
-	
+
 	// Perform HTTP request to health endpoint
 	client := sm.createHealthCheckClient()
 	req, err := sm.createHealthCheckRequest(service.HealthURL)
@@ -162,7 +162,7 @@ func (sm *Manager) collectPerformanceMetrics(service *models.Service) error {
 
 	resp, err := client.Do(req)
 	duration := time.Since(start)
-	
+
 	// Record response time
 	responseTime := models.ResponseTime{
 		Timestamp: time.Now(),
@@ -212,7 +212,7 @@ func (sm *Manager) collectPerformanceMetrics(service *models.Service) error {
 
 	service.Metrics.LastChecked = time.Now()
 
-	log.Printf("[DEBUG] Performance metrics for %s - Response time: %v, Status: %d, Error rate: %.2f%%", 
+	log.Printf("[DEBUG] Performance metrics for %s - Response time: %v, Status: %d, Error rate: %.2f%%",
 		service.Name, duration, responseTime.Status, service.Metrics.ErrorRate)
 
 	return nil
@@ -221,7 +221,7 @@ func (sm *Manager) collectPerformanceMetrics(service *models.Service) error {
 // getSystemResourceSummary returns overall system resource usage
 func (sm *Manager) getSystemResourceSummary() map[string]interface{} {
 	summary := make(map[string]interface{})
-	
+
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 

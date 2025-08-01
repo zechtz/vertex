@@ -13,11 +13,11 @@ import (
 
 // PortCleanupResult represents the result of port cleanup operation
 type PortCleanupResult struct {
-	Port         int      `json:"port"`
-	ProcessesFound int    `json:"processesFound"`
-	ProcessesKilled int   `json:"processesKilled"`
-	PIDs         []int    `json:"pids"`
-	Errors       []string `json:"errors"`
+	Port            int      `json:"port"`
+	ProcessesFound  int      `json:"processesFound"`
+	ProcessesKilled int      `json:"processesKilled"`
+	PIDs            []int    `json:"pids"`
+	Errors          []string `json:"errors"`
 }
 
 // KillProcessesOnPort finds and kills all processes using the specified port
@@ -26,8 +26,8 @@ func KillProcessesOnPort(port int) *PortCleanupResult {
 		Port:            port,
 		ProcessesFound:  0,
 		ProcessesKilled: 0,
-		PIDs:           []int{},
-		Errors:         []string{},
+		PIDs:            []int{},
+		Errors:          []string{},
 	}
 
 	log.Printf("[INFO] Cleaning up processes on port %d", port)
@@ -62,7 +62,7 @@ func KillProcessesOnPort(port int) *PortCleanupResult {
 	remainingPids := findProcessesOnPort(port)
 	if len(remainingPids) > 0 {
 		log.Printf("[WARN] %d process(es) still using port %d after cleanup: %v", len(remainingPids), port, remainingPids)
-		
+
 		// Force kill remaining processes
 		for _, pid := range remainingPids {
 			if err := killProcessForcefully(pid); err != nil {
@@ -121,7 +121,7 @@ func findProcessesWithLsof(port int) []int {
 func findProcessesWithNetstat(port int) []int {
 	// Try different netstat variations based on OS
 	commands := [][]string{
-		{"netstat", "-tlnp"}, // Linux style
+		{"netstat", "-tlnp"},            // Linux style
 		{"netstat", "-an", "-p", "tcp"}, // Alternative
 	}
 
@@ -194,7 +194,7 @@ func parsePidsFromOutput(output string) []int {
 		if pidStr == "" {
 			continue
 		}
-		
+
 		if pid, err := strconv.Atoi(pidStr); err == nil && pid > 0 {
 			pids = append(pids, pid)
 		}
@@ -278,7 +278,7 @@ func killProcessForcefully(pid int) error {
 // CleanupPortBeforeStart ensures a port is available before starting a service
 func CleanupPortBeforeStart(port int) error {
 	result := KillProcessesOnPort(port)
-	
+
 	if len(result.Errors) > 0 {
 		log.Printf("[WARN] Port cleanup had %d error(s): %v", len(result.Errors), result.Errors)
 	}

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 var logLevelRegex = regexp.MustCompile(`(?i)(INFO|WARN|ERROR|DEBUG|TRACE)`)
@@ -48,29 +48,14 @@ func (sm *Manager) WaitForServiceReady(serviceName string, timeout time.Duration
 		healthStatus := service.HealthStatus
 		service.Mutex.RUnlock()
 
-		// Optimized readiness criteria for faster startup
-		// Focus on basic availability rather than full health for quicker startup
-		serviceNameUpper := strings.ToUpper(serviceName)
-		
+		// Generic readiness criteria - all services treated equally
 		if status == "running" {
-			// For critical infrastructure services, wait for at least "starting" health status
-			// This means the service is up and initializing, which is sufficient for dependents to start
-			if serviceNameUpper == "EUREKA" || serviceNameUpper == "CONFIG" || serviceNameUpper == "NEST-REGISTRY-SERVER" || serviceNameUpper == "NEST-CONFIG-SERVER" {
-				if healthStatus == "healthy" || healthStatus == "starting" {
-					log.Printf("[INFO] Critical service %s is ready (status: %s, health: %s)", serviceName, status, healthStatus)
-					return nil
-				} else if healthStatus == "running" {
-					// For very fast startup, accept "running" health status after a short delay
-					// This allows dependent services to start while this service is still initializing
-					log.Printf("[INFO] Critical service %s is running and responsive, proceeding (status: %s, health: %s)", serviceName, status, healthStatus)
-					return nil
-				} else {
-					log.Printf("[DEBUG] Critical service %s is running but not yet initialized (health: %s), continuing to wait...", serviceName, healthStatus)
-				}
-			} else {
-				// Non-critical services just need to be running
+			// Accept running services with healthy, starting, or running health status
+			if healthStatus == "healthy" || healthStatus == "starting" || healthStatus == "running" {
 				log.Printf("[INFO] Service %s is ready (status: %s, health: %s)", serviceName, status, healthStatus)
 				return nil
+			} else {
+				log.Printf("[DEBUG] Service %s is running but not yet ready (health: %s), continuing to wait...", serviceName, healthStatus)
 			}
 		}
 
@@ -90,66 +75,6 @@ func (sm *Manager) WaitForServiceReady(serviceName string, timeout time.Duration
 	}
 }
 
-func (sm *Manager) StartService(serviceName string) error {
-	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
-	sm.mutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
-	}
-
-	log.Printf("[INFO] Starting service %s (without dependency checks)", serviceName)
-
-	return sm.startService(service)
-}
-
-func (sm *Manager) StopService(serviceName string) error {
-	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
-	sm.mutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
-	}
-
-	return sm.stopService(service)
-}
-
-func (sm *Manager) RestartService(serviceName string) error {
-	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
-	sm.mutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
-	}
-
-	log.Printf("[INFO] Restarting service %s (port %d)", serviceName, service.Port)
-
-	// Stop the service first
-	if service.Status == "running" {
-		if err := sm.stopService(service); err != nil {
-			log.Printf("[WARN] Failed to stop service gracefully: %v", err)
-			// Continue anyway - we'll clean up the port
-		}
-		// Wait a moment for cleanup
-		time.Sleep(2 * time.Second)
-	}
-
-	// Clean up any processes still using the service's port
-	if service.Port > 0 {
-		log.Printf("[INFO] Cleaning up port %d before restarting service %s", service.Port, serviceName)
-		if err := CleanupPortBeforeStart(service.Port); err != nil {
-			log.Printf("[WARN] Port cleanup failed: %v", err)
-			// Continue anyway - the port might be available by now
-		}
-	}
-
-	// Start the service
-	return sm.startService(service)
-}
-
 func (sm *Manager) StartAllServices() error {
 	// Get all services and sort by order field
 	services := make([]*models.Service, 0, len(sm.services))
@@ -158,12 +83,12 @@ func (sm *Manager) StartAllServices() error {
 		services = append(services, service)
 	}
 	sm.mutex.RUnlock()
-	
+
 	// Sort by the service order field
 	sort.Slice(services, func(i, j int) bool {
 		return services[i].Order < services[j].Order
 	})
-	
+
 	// Extract service names in order
 	orderedNames := make([]string, 0, len(services))
 	for _, service := range services {
@@ -190,7 +115,7 @@ func (sm *Manager) StartAllServices() error {
 
 			if status != "running" && isEnabled {
 				log.Printf("[INFO] Starting service %s (order %d) and waiting for it to be ready...", serviceName, service.Order)
-				
+
 				// Start the service
 				if err := sm.StartService(serviceName); err != nil {
 					log.Printf("[ERROR] Failed to start service %s: %v", serviceName, err)
@@ -201,13 +126,13 @@ func (sm *Manager) StartAllServices() error {
 				// Optimized timeout based on service type for faster startup
 				var timeout time.Duration
 				switch strings.ToUpper(serviceName) {
-				case "EUREKA", "NEST-REGISTRY-SERVER":
+				case "EUREKA":
 					timeout = 90 * time.Second // Registry services typically start fastest
-				case "CONFIG", "NEST-CONFIG-SERVER":
+				case "CONFIG":
 					timeout = 2 * time.Minute // Config services need more time to load configurations
-				case "CACHE", "NEST-CACHE":
+				case "CACHE":
 					timeout = 60 * time.Second // Cache services are usually quick
-				case "GATEWAY", "NEST-GATEWAY":
+				case "GATEWAY":
 					timeout = 90 * time.Second // Gateways need time to discover services
 				default:
 					timeout = 2 * time.Minute // Default for other services
@@ -265,27 +190,31 @@ func (sm *Manager) StopAllServices() error {
 
 // StopAllServicesForProfile stops all services that belong to a specific profile
 func (sm *Manager) StopAllServicesForProfile(profileServicesJson string) error {
-	// Parse the profile services JSON to get the list of service names
-	var profileServiceNames []string
-	if err := json.Unmarshal([]byte(profileServicesJson), &profileServiceNames); err != nil {
+	// Parse the profile services JSON to get the list of service UUIDs
+	var profileServiceUUIDs []string
+	if err := json.Unmarshal([]byte(profileServicesJson), &profileServiceUUIDs); err != nil {
 		return fmt.Errorf("failed to parse profile services: %v", err)
 	}
 
+	log.Printf("[INFO] Stopping services for profile: %v", profileServiceUUIDs)
+
 	// Create a map for quick lookup of profile services
 	profileServicesMap := make(map[string]bool)
-	for _, serviceName := range profileServiceNames {
-		profileServicesMap[serviceName] = true
+	for _, serviceUUID := range profileServiceUUIDs {
+		profileServicesMap[serviceUUID] = true
 	}
 
 	// Get all services and filter only those in the profile
 	sm.mutex.RLock()
 	var profileServices []*models.Service
 	for _, service := range sm.services {
-		if profileServicesMap[service.Name] {
+		if profileServicesMap[service.ID] {
 			profileServices = append(profileServices, service)
 		}
 	}
 	sm.mutex.RUnlock()
+
+	log.Printf("[INFO] Found %d services in profile to stop", len(profileServices))
 
 	// Sort by reverse order (stop in reverse dependency order)
 	sort.Slice(profileServices, func(i, j int) bool {
@@ -312,28 +241,32 @@ func (sm *Manager) StopAllServicesForProfile(profileServicesJson string) error {
 }
 
 // StartAllServicesForProfile starts all services that belong to a specific profile
-func (sm *Manager) StartAllServicesForProfile(profileServicesJson string, projectsDir string) error {
-	// Parse the profile services JSON to get the list of service names
-	var profileServiceNames []string
-	if err := json.Unmarshal([]byte(profileServicesJson), &profileServiceNames); err != nil {
+func (sm *Manager) StartAllServicesForProfile(profileServicesJSON string, projectsDir string) error {
+	// Parse the profile services JSON to get the list of service UUIDs
+	var profileServiceUUIDs []string
+	if err := json.Unmarshal([]byte(profileServicesJSON), &profileServiceUUIDs); err != nil {
 		return fmt.Errorf("failed to parse profile services: %v", err)
 	}
 
+	log.Printf("[INFO] Starting services for profile: %v", profileServiceUUIDs)
+
 	// Create a map for quick lookup of profile services
 	profileServicesMap := make(map[string]bool)
-	for _, serviceName := range profileServiceNames {
-		profileServicesMap[serviceName] = true
+	for _, serviceUUID := range profileServiceUUIDs {
+		profileServicesMap[serviceUUID] = true
 	}
 
 	// Get all services and filter only those in the profile
 	sm.mutex.RLock()
 	var profileServices []*models.Service
 	for _, service := range sm.services {
-		if profileServicesMap[service.Name] {
+		if profileServicesMap[service.ID] {
 			profileServices = append(profileServices, service)
 		}
 	}
 	sm.mutex.RUnlock()
+
+	log.Printf("[INFO] Found %d services in profile to start", len(profileServices))
 
 	// Sort by order (start in dependency order)
 	sort.Slice(profileServices, func(i, j int) bool {
@@ -386,7 +319,7 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	// Check and fix Lombok compatibility before starting the service
 	if err := sm.checkAndFixLombokCompatibility(serviceDir, service.Name); err != nil {
 		log.Printf("[WARN] Lombok compatibility check failed for service %s: %v", service.Name, err)
-		// Continue with startup - the error might not be critical
+		// Continue with startup
 	}
 
 	// Get global environment variables
@@ -396,78 +329,109 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 		globalEnvVars = make(map[string]string)
 	}
 
-	// Auto-detect build system if needed and get appropriate command
+	// Auto-detect build system
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
-	
-	// Get the start command for the detected build system
+
+	// Get start command
 	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
-	
-	// Clean up any processes using the service's port before starting
+
+	// Clean up port
 	if service.Port > 0 {
 		log.Printf("[INFO] Checking port %d for conflicts before starting service %s", service.Port, service.Name)
 		if err := CleanupPortBeforeStart(service.Port); err != nil {
 			log.Printf("[WARN] Port cleanup failed for service %s: %v", service.Name, err)
-			// Continue anyway - the service might still be able to start
 		}
 	}
-	
-	log.Printf("[INFO] Starting service %s with command: %s", service.Name, cmdString)
+
 	cmd := exec.Command("bash", "-c", cmdString)
-
-	// Set working directory to the service directory
 	cmd.Dir = serviceDir
-
-	// Set process group for proper cleanup
 	SetProcessGroup(cmd)
 
-	// Combine global environment variables with service-specific ones
-	envVars := make([]string, 0, len(globalEnvVars)+len(service.EnvVars))
-	for k, v := range globalEnvVars {
-		envVars = append(envVars, fmt.Sprintf("%s=%s", k, v))
+	// Start with the current environment
+	cmd.Env = os.Environ()
+
+	// Apply Java Home override
+	if sm.config.JavaHomeOverride != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
 	}
 
-	for k, envVar := range service.EnvVars {
-		envVars = append(envVars, fmt.Sprintf("%s=%s", k, envVar.Value))
+	// Build environment variables with proper precedence
+	// Priority: Service-specific env vars > Global env vars
+
+	// Create a map to track which variables are set by service
+	serviceEnvKeys := make(map[string]bool)
+	for key := range service.EnvVars {
+		serviceEnvKeys[key] = true
 	}
 
-	// Set environment variables for the service
-	cmd.Env = append(os.Environ(), envVars...)
+	// Add global environment variables (only if not overridden by service)
+	for key, value := range globalEnvVars {
+		if !serviceEnvKeys[key] {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
 
-	// Create pipes for stdout and stderr
+	// Add service-specific environment variables (these take precedence)
+	for key, envVar := range service.EnvVars {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, envVar.Value))
+		// Also set SPRING_PROFILES_ACTIVE for Spring Boot if ACTIVE_PROFILE is set
+		if key == "ACTIVE_PROFILE" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", envVar.Value))
+		}
+	}
+
+	// Ensure ACTIVE_PROFILE and SPRING_PROFILES_ACTIVE are set if not already set by service
+	if activeProfile, exists := globalEnvVars["ACTIVE_PROFILE"]; exists {
+		if !serviceEnvKeys["ACTIVE_PROFILE"] {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("ACTIVE_PROFILE=%s", activeProfile))
+			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
+		}
+	}
+
+	// Log the final command and environment variables for profile services
+	log.Printf("[DEBUG] Starting profile service %s with command: %s", service.Name, cmdString)
+	log.Printf("[DEBUG] Working directory: %s", serviceDir)
+	log.Printf("[DEBUG] Environment variables for %s:", service.Name)
+	for _, env := range cmd.Env {
+		if strings.Contains(env, "ACTIVE_PROFILE") || strings.Contains(env, "SPRING_PROFILES") || strings.Contains(env, "SERVICE_PORT") || strings.Contains(env, "CONFIG_") || strings.Contains(env, "JAVA_HOME") {
+			log.Printf("[DEBUG]   %s", env)
+		}
+	}
+
+	// Create stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
-	// Start the process
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 
-	// Update service status
-	service.Cmd = cmd
-	service.PID = cmd.Process.Pid
 	service.Status = "running"
+	service.HealthStatus = "starting"
 	service.LastStarted = time.Now()
+	service.PID = cmd.Process.Pid
+	service.Cmd = cmd
 	service.Uptime = ""
+	service.Logs = []models.LogEntry{}
 
-	// Update the service in the database
+	// Save and broadcast
 	sm.updateServiceInDB(service)
+	sm.broadcastUpdate(service)
 
-	// Start reading logs
 	go sm.readLogs(service, stdout)
 	go sm.readLogs(service, stderr)
 
-	// Monitor process completion
 	go func() {
 		err := cmd.Wait()
 		service.Mutex.Lock()
@@ -475,8 +439,6 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 
 		if err != nil {
 			log.Printf("Service %s exited with error: %v", service.Name, err)
-			
-			// Check if it's a compilation error that might be related to Lombok
 			if strings.Contains(err.Error(), "compilation") || strings.Contains(err.Error(), "cannot find symbol") {
 				log.Printf("[INFO] Compilation error detected for service %s, attempting pom.xml backup restoration", service.Name)
 				pomPath := filepath.Join(serviceDir, "pom.xml")
@@ -498,10 +460,6 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	}()
 
 	log.Printf("[INFO] Service %s started successfully with PID %d", service.Name, service.PID)
-
-	// Broadcast the update
-	sm.broadcastUpdate(service)
-
 	return nil
 }
 
@@ -534,13 +492,13 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Auto-detect build system if needed and get appropriate command
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
-	
+
 	// Get the start command for the detected build system
 	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
-	
+
 	// Clean up any processes using the service's port before starting
 	if service.Port > 0 {
 		log.Printf("[INFO] Checking port %d for conflicts before starting service %s", service.Port, service.Name)
@@ -549,7 +507,7 @@ func (sm *Manager) startService(service *models.Service) error {
 			// Continue anyway - the service might still be able to start
 		}
 	}
-	
+
 	log.Printf("[INFO] Starting service %s with command: %s", service.Name, cmdString)
 	cmd := exec.Command("bash", "-c", cmdString)
 
@@ -568,64 +526,47 @@ func (sm *Manager) startService(service *models.Service) error {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
 	}
 
-	// Add global environment variables
-	for key, value := range globalEnvVars {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+	// Build environment variables with proper precedence
+	// Priority: Service-specific env vars > Global env vars
+
+	// Create a map to track which variables are set by service
+	serviceEnvKeys := make(map[string]bool)
+	for key := range service.EnvVars {
+		serviceEnvKeys[key] = true
 	}
 
-	// Add service-specific environment variables
+	// Add global environment variables (only if not overridden by service)
+	for key, value := range globalEnvVars {
+		if !serviceEnvKeys[key] {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	// Add service-specific environment variables (these take precedence)
 	for key, envVar := range service.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, envVar.Value))
-	}
-
-	// Add service-specific configuration (simplified)
-	switch service.Name {
-	case "nest-uaa":
-		if dbName, exists := globalEnvVars["DB_NAME_UAA"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("DB_NAME=%s", dbName))
-		}
-		if port, exists := globalEnvVars["SERVICE_PORT_UAA"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
-		}
-	case "nest-app":
-		if dbName, exists := globalEnvVars["DB_NAME_APP"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("DB_NAME=%s", dbName))
-		}
-		if port, exists := globalEnvVars["SERVICE_PORT_APP"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
-		}
-	case "nest-contract":
-		if dbName, exists := globalEnvVars["DB_NAME_CONTRACT"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("DB_NAME=%s", dbName))
-		}
-		if port, exists := globalEnvVars["SERVICE_PORT_CONTRACT"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
-		}
-	case "nest-dsms":
-		if dbName, exists := globalEnvVars["DB_NAME_DSMS"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("DB_NAME=%s", dbName))
-		}
-		if port, exists := globalEnvVars["SERVICE_PORT_DSMS"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
-		}
-	case "nest-gateway":
-		if port, exists := globalEnvVars["SERVICE_PORT_GATEWAY"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
-		}
-	case "nest-config-server":
-		if port, exists := globalEnvVars["SERVICE_PORT_CONFIG"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
-		}
-	case "nest-registry-server":
-		if port, exists := globalEnvVars["SERVICE_PORT_REGISTRY"]; exists {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("SERVICE_PORT=%s", port))
+		// Also set SPRING_PROFILES_ACTIVE for Spring Boot if ACTIVE_PROFILE is set
+		if key == "ACTIVE_PROFILE" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", envVar.Value))
 		}
 	}
 
-	// Ensure ACTIVE_PROFILE is set for all services
+	// Ensure ACTIVE_PROFILE and SPRING_PROFILES_ACTIVE are set if not already set by service
 	if activeProfile, exists := globalEnvVars["ACTIVE_PROFILE"]; exists {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("ACTIVE_PROFILE=%s", activeProfile))
-		cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
+		if !serviceEnvKeys["ACTIVE_PROFILE"] {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("ACTIVE_PROFILE=%s", activeProfile))
+			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
+		}
+	}
+
+	// Log the final command and environment variables
+	// log.Printf("[DEBUG] Starting service %s with command: %s", service.Name, cmdString)
+	// log.Printf("[DEBUG] Working directory: %s", serviceDir)
+	// log.Printf("[DEBUG] Environment variables for %s:", service.Name)
+	for _, env := range cmd.Env {
+		if strings.Contains(env, "ACTIVE_PROFILE") || strings.Contains(env, "SPRING_PROFILES") || strings.Contains(env, "SERVICE_PORT") || strings.Contains(env, "CONFIG_") || strings.Contains(env, "JAVA_HOME") {
+			log.Printf("[DEBUG]   %s", env)
+		}
 	}
 
 	// Create pipes for stdout and stderr
@@ -645,7 +586,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	}
 
 	// fmt.Printf("RUNNING THE COMMAND:\n%s\n", cmd)
-	fmt.Printf("THE_CURRENT_ENVs:\n%s\n", cmd)
+	// fmt.Printf("THE_CURRENT_CMD_WITH_OPTS:\n%s\n", cmd)
 
 	service.Status = "running"
 	service.HealthStatus = "starting"
@@ -666,7 +607,7 @@ func (sm *Manager) startService(service *models.Service) error {
 
 		if err != nil {
 			log.Printf("Service %s exited with error: %v", service.Name, err)
-			
+
 			// Check if it's a compilation error that might be related to Lombok
 			if strings.Contains(err.Error(), "compilation") || strings.Contains(err.Error(), "cannot find symbol") {
 				log.Printf("[INFO] Compilation error detected for service %s, attempting pom.xml backup restoration", service.Name)
@@ -756,12 +697,12 @@ func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
 		service.Mutex.Unlock()
 
 		// Store log entry in database for persistent storage
-		if err := sm.db.StoreLogEntry(service.Name, logEntry); err != nil {
-			log.Printf("Failed to store log entry for service %s: %v", service.Name, err)
+		if err := sm.db.StoreLogEntry(service.ID, logEntry); err != nil {
+			log.Printf("Failed to store log entry for service %s: %v", service.ID, err)
 		}
 
 		// Broadcast the new log entry
-		sm.broadcastLogEntry(service.Name, logEntry)
+		sm.broadcastLogEntry(service.ID, logEntry)
 	}
 }
 
@@ -779,19 +720,109 @@ func parseLogLine(line string) models.LogEntry {
 	}
 }
 
-func (sm *Manager) ClearLogs(serviceName string) error {
-	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
-	sm.mutex.RUnlock()
-
+func (sm *Manager) ClearLogs(serviceID string) error {
+	service, exists := sm.GetServiceByUUID(serviceID)
 	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
+		return fmt.Errorf("service %s not found", serviceID)
 	}
 
+	// Clear logs from database first
+	if err := sm.db.ClearServiceLogs(serviceID); err != nil {
+		return fmt.Errorf("failed to clear logs from database: %w", err)
+	}
+
+	// Clear in-memory logs
 	service.Mutex.Lock()
 	service.Logs = []models.LogEntry{}
 	service.Mutex.Unlock()
 
 	sm.broadcastUpdate(service)
 	return nil
+}
+
+func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
+	results := make(map[string]string)
+
+	sm.mutex.RLock()
+	defer sm.mutex.RUnlock()
+
+	// If no specific services provided, clear all services
+	if len(serviceNames) == 0 {
+		// Clear all logs from database
+		if _, err := sm.db.ClearAllServiceLogs([]string{}); err != nil {
+			// If database clear fails, still continue with in-memory clear but log the error
+			log.Printf("[ERROR] Failed to clear all logs from database: %v", err)
+		}
+
+		// Clear in-memory logs for all services
+		for _, service := range sm.services {
+			service.Mutex.Lock()
+			service.Logs = []models.LogEntry{}
+			service.Mutex.Unlock()
+
+			sm.broadcastUpdate(service)
+			results[service.Name] = "Success"
+		}
+	} else {
+		// Clear logs for specific services by name
+		var serviceIDs []string
+		serviceNameToID := make(map[string]string)
+
+		// First, collect service IDs for database operation
+		for _, serviceName := range serviceNames {
+			found := false
+			for _, service := range sm.services {
+				if service.Name == serviceName {
+					serviceIDs = append(serviceIDs, service.ID)
+					serviceNameToID[serviceName] = service.ID
+					found = true
+					break
+				}
+			}
+			if !found {
+				results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
+			}
+		}
+
+		// Clear from database
+		if len(serviceIDs) > 0 {
+			dbResults, err := sm.db.ClearAllServiceLogs(serviceIDs)
+			if err != nil {
+				log.Printf("[ERROR] Failed to clear logs from database: %v", err)
+			} else if dbResults != nil {
+				// Log any database errors but don't fail the entire operation
+				for serviceID, dbErr := range dbResults {
+					if dbErr != nil {
+						log.Printf("[ERROR] Failed to clear logs from database for service %s: %v", serviceID, dbErr)
+					}
+				}
+			}
+		}
+
+		// Clear in-memory logs
+		for _, serviceName := range serviceNames {
+			if _, exists := results[serviceName]; exists {
+				continue // Already marked as not found
+			}
+
+			found := false
+			for _, service := range sm.services {
+				if service.Name == serviceName {
+					service.Mutex.Lock()
+					service.Logs = []models.LogEntry{}
+					service.Mutex.Unlock()
+
+					sm.broadcastUpdate(service)
+					results[serviceName] = "Success"
+					found = true
+					break
+				}
+			}
+			if !found {
+				results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
+			}
+		}
+	}
+
+	return results
 }
