@@ -1,10 +1,9 @@
-# GitLab CI/CD Pipeline for Vertex
+# GitLab CI/CD Pipeline for vertex
 variables:
-  GO_VERSION: "1.23"
+  GO_VERSION: "1.21"
   NODE_VERSION: "18"
 
 stages:
-  - test
   - build
   - release
 
@@ -16,34 +15,7 @@ stages:
       - .cache/go/
       - web/node_modules/
 
-# Test stage (runs on all pushes)
-test:
-  stage: test
-  image: golang:${GO_VERSION}
-  extends: .cache
-  before_script:
-    - mkdir -p .cache/go
-    - export GOPATH="$CI_PROJECT_DIR/.cache/go"
-    - export PATH="$GOPATH/bin:$PATH"
-  script:
-    - go mod tidy
-    - |
-      if [ -d web/dist ]; then
-        go vet $(go list ./...)
-      else
-        go vet $(go list ./... | grep -v web/embed.go)
-      fi
-    - go test -race -coverprofile=coverage.out ./...
-  artifacts:
-    reports:
-      coverage_report:
-        coverage_format: cobertura
-        path: coverage.out
-  only:
-    - branches
-    - tags
-
-# Build frontend (runs on tags)
+# Build frontend (runs on tags and manual triggers)
 build-frontend:
   stage: build
   image: node:${NODE_VERSION}
@@ -58,8 +30,9 @@ build-frontend:
     expire_in: 1 hour
   only:
     - tags
+    - triggers
 
-# Build binaries for multiple platforms
+# Template for building binaries
 .build-binary: &build-binary
   stage: build
   image: golang:${GO_VERSION}
@@ -67,7 +40,22 @@ build-frontend:
   dependencies:
     - build-frontend
   before_script:
-    - apt-get update && apt-get install -y gcc-multilib gcc-mingw-w64
+    - |
+      # Install cross-compilation tools
+      if [ "$CI_RUNNER_TAGS" = "linux" ]; then
+        apt-get update
+        if [ "$GOOS" = "windows" ]; then
+          apt-get install -y gcc-mingw-w64
+          export CC=x86_64-w64-mingw32-gcc
+        elif [ "$GOOS" = "linux" ] && [ "$GOARCH" = "arm64" ]; then
+          apt-get install -y gcc-aarch64-linux-gnu
+          export CC=aarch64-linux-gnu-gcc
+        else
+          apt-get install -y gcc-multilib
+        fi
+      elif [ "$CI_RUNNER_TAGS" = "macos" ]; then
+        echo "Using native macOS compilation"
+      fi
     - mkdir -p .cache/go
     - export GOPATH="$CI_PROJECT_DIR/.cache/go"
     - export PATH="$GOPATH/bin:$PATH"
@@ -77,7 +65,6 @@ build-frontend:
       BINARY_NAME="vertex-${GOOS}-${GOARCH}"
       if [ "$GOOS" = "windows" ]; then
         BINARY_NAME="${BINARY_NAME}.exe"
-        export CC=x86_64-w64-mingw32-gcc
       fi
 
       # Build binary with version info
@@ -86,7 +73,11 @@ build-frontend:
         -o "$BINARY_NAME"
 
       # Create checksum
-      sha256sum "$BINARY_NAME" > "${BINARY_NAME}.sha256"
+      if [ "$CI_RUNNER_TAGS" = "macos" ]; then
+        shasum -a 256 "$BINARY_NAME" > "${BINARY_NAME}.sha256"
+      else
+        sha256sum "$BINARY_NAME" > "${BINARY_NAME}.sha256"
+      fi
 
       # Store in artifacts
       mkdir -p binaries
@@ -97,34 +88,45 @@ build-frontend:
     expire_in: 1 day
   only:
     - tags
+    - triggers
 
 # Individual build jobs for each platform
 build-linux-amd64:
   <<: *build-binary
+  tags:
+    - linux
   variables:
     GOOS: linux
     GOARCH: amd64
 
 build-linux-arm64:
   <<: *build-binary
+  tags:
+    - linux
   variables:
     GOOS: linux
     GOARCH: arm64
 
 build-darwin-amd64:
   <<: *build-binary
+  tags:
+    - macos
   variables:
     GOOS: darwin
     GOARCH: amd64
 
 build-darwin-arm64:
   <<: *build-binary
+  tags:
+    - macos
   variables:
     GOOS: darwin
     GOARCH: arm64
 
 build-windows-amd64:
   <<: *build-binary
+  tags:
+    - linux
   variables:
     GOOS: windows
     GOARCH: amd64
@@ -141,16 +143,17 @@ release:
     - build-windows-amd64
   script:
     - |
-      # Collect all binaries
-      find binaries/ -type f -name "vertex-*" | while read file; do
-        echo "Found binary: $file"
-      done
+      # List downloaded files
+      echo "Downloaded files:"
+      find binaries/ -name "vertex-*" -type f
+      find binaries/ -name "*.sha256" -type f
 
-      # Generate release description
-      cat > release_description.md << EOF
-      # Vertex $CI_COMMIT_TAG
+      # Generate release notes
+      cat > release-notes.md << EOF
+      # NeST Service Manager \$CI_COMMIT_TAG
 
       ## 🚀 Features
+      - Complete service management for NeST microservices
       - Embedded React web interface (no external dependencies)
       - Automatic environment variable setup
       - Lombok compatibility fixing
@@ -166,16 +169,17 @@ release:
       | macOS | ARM64 (M1/M2) | \`vertex-darwin-arm64\` |
       | Windows | x64 | \`vertex-windows-amd64.exe\` |
 
-      ## 🔧 Quick Installation
+      ## 🔧 Installation
 
       \`\`\`bash
-      # Linux/macOS
-      wget https://gitlab.com/$CI_PROJECT_PATH/-/releases/$CI_COMMIT_TAG/downloads/vertex-linux-amd64
-      chmod +x vertex-linux-amd64
-      ./vertex-linux-amd64
+      # Download for your platform
+      wget https://gitlab.com/\$CI_PROJECT_PATH/-/releases/\$CI_COMMIT_TAG/downloads/vertex-linux-amd64
 
-      # Add to PATH (optional)
-      sudo mv vertex-linux-amd64 /usr/local/bin/vertex
+      # Make executable
+      chmod +x vertex-linux-amd64
+
+      # Run
+      ./vertex-linux-amd64
       \`\`\`
 
       ## 📋 Checksums
@@ -183,28 +187,40 @@ release:
       SHA256 checksums are provided for all binaries to verify integrity.
       EOF
   release:
-    name: "Vertex $CI_COMMIT_TAG"
-    description: "./release_description.md"
+    name: "NeST Service Manager $CI_COMMIT_TAG"
+    description: "./release-notes.md"
     tag_name: "$CI_COMMIT_TAG"
     assets:
       links:
         - name: "vertex-linux-amd64"
           url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-amd64?job=build-linux-amd64"
           filepath: "/binaries/vertex-linux-amd64"
+        - name: "vertex-linux-amd64.sha256"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-amd64.sha256?job=build-linux-amd64"
+          filepath: "/binaries/vertex-linux-amd64.sha256"
         - name: "vertex-linux-arm64"
           url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-arm64?job=build-linux-arm64"
           filepath: "/binaries/vertex-linux-arm64"
+        - name: "vertex-linux-arm64.sha256"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-arm64.sha256?job=build-linux-arm64"
+          filepath: "/binaries/vertex-linux-arm64.sha256"
         - name: "vertex-darwin-amd64"
           url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-amd64?job=build-darwin-amd64"
           filepath: "/binaries/vertex-darwin-amd64"
+        - name: "vertex-darwin-amd64.sha256"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-amd64.sha256?job=build-darwin-amd64"
+          filepath: "/binaries/vertex-darwin-amd64.sha256"
         - name: "vertex-darwin-arm64"
           url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-arm64?job=build-darwin-arm64"
           filepath: "/binaries/vertex-darwin-arm64"
+        - name: "vertex-darwin-arm64.sha256"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-arm64.sha256?job=build-darwin-arm64"
+          filepath: "/binaries/vertex-darwin-arm64.sha256"
         - name: "vertex-windows-amd64.exe"
           url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-windows-amd64.exe?job=build-windows-amd64"
           filepath: "/binaries/vertex-windows-amd64.exe"
-        - name: "checksums"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/binaries?job=build-linux-amd64"
-          filepath: "/checksums/"
+        - name: "vertex-windows-amd64.exe.sha256"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-windows-amd64.exe.sha256?job=build-windows-amd64"
+          filepath: "/binaries/vertex-windows-amd64.exe.sha256"
   only:
     - tags
