@@ -53,6 +53,9 @@ cd ..
 
    # Or run directly
    ./vertex
+
+   # Optionally you can specify a port
+   ./vertex --port 3000
    ```
 
 2. **Access the web interface**: Open `http://localhost:8080` in your browser
