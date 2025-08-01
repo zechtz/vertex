@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/zechtz/nest-up/internal/models"
-	"github.com/zechtz/nest-up/internal/database"
+	"github.com/zechtz/vertex/internal/database"
+	"github.com/zechtz/vertex/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService struct {
@@ -24,7 +24,7 @@ func NewAuthService(db *database.Database) *AuthService {
 	// Try to get JWT secret from environment variable first
 	jwtSecretStr := os.Getenv("JWT_SECRET")
 	var secret []byte
-	
+
 	if jwtSecretStr != "" {
 		// Use provided secret from environment
 		secret = []byte(jwtSecretStr)
@@ -127,7 +127,6 @@ func (as *AuthService) ValidateToken(tokenString string) (*models.JWTClaims, err
 		}
 		return as.jwtSecret, nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
@@ -189,11 +188,11 @@ func (as *AuthService) getUserByEmail(email string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if lastLogin.Valid {
 		user.LastLogin = lastLogin.Time
 	}
-	
+
 	return user, nil
 }
 
@@ -211,11 +210,11 @@ func (as *AuthService) getUserByID(userID string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if lastLogin.Valid {
 		user.LastLogin = lastLogin.Time
 	}
-	
+
 	return user, nil
 }
 
