@@ -282,3 +282,291 @@ func (sm *Manager) executeCommand(cmdStr string, envVars map[string]string) erro
 	log.Printf("[DEBUG] Command output: %s", string(output))
 	return nil
 }
+
+// PreviewLibraryInstallation analyzes .gitlab-ci.yml and returns a preview of libraries grouped by environment
+func (sm *Manager) PreviewLibraryInstallation(serviceUUID, projectsDir string) (*models.LibraryPreview, error) {
+	// Validate UUID
+	if _, err := uuid.Parse(serviceUUID); err != nil {
+		return nil, fmt.Errorf("invalid service UUID: %s", serviceUUID)
+	}
+
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	serviceDir := filepath.Join(projectsDir, service.Dir)
+	gitlabCIPath := filepath.Join(serviceDir, ".gitlab-ci.yml")
+
+	log.Printf("[DEBUG] PreviewLibraryInstallation - projectsDir: %s, service.Dir: %s, serviceDir: %s, gitlabCIPath: %s", 
+		projectsDir, service.Dir, serviceDir, gitlabCIPath)
+
+	// Check if .gitlab-ci.yml exists
+	if _, err := os.Stat(gitlabCIPath); os.IsNotExist(err) {
+		log.Printf("[DEBUG] .gitlab-ci.yml file does not exist at: %s", gitlabCIPath)
+		return &models.LibraryPreview{
+			HasLibraries:   false,
+			ServiceName:    service.Name,
+			ServiceID:      serviceUUID,
+			GitlabCIExists: false,
+			ErrorMessage:   "No .gitlab-ci.yml file found in service directory",
+		}, nil
+	}
+
+	// Parse the file and extract environment-based library installations
+	environments, err := sm.parseEnvironmentLibraries(gitlabCIPath)
+	if err != nil {
+		return &models.LibraryPreview{
+			HasLibraries:   false,
+			ServiceName:    service.Name,
+			ServiceID:      serviceUUID,
+			GitlabCIExists: true,
+			ErrorMessage:   fmt.Sprintf("Failed to parse .gitlab-ci.yml: %v", err),
+		}, nil
+	}
+
+	if len(environments) == 0 {
+		log.Printf("[DEBUG] No environments with libraries found for service %s at path: %s", serviceUUID, gitlabCIPath)
+		return &models.LibraryPreview{
+			HasLibraries:   false,
+			ServiceName:    service.Name,
+			ServiceID:      serviceUUID,
+			GitlabCIExists: true,
+			ErrorMessage:   "No library installation commands found in any environment",
+		}, nil
+	}
+
+	totalLibraries := 0
+	for _, env := range environments {
+		totalLibraries += len(env.Libraries)
+	}
+
+	return &models.LibraryPreview{
+		HasLibraries:   true,
+		ServiceName:    service.Name,
+		ServiceID:      serviceUUID,
+		Environments:   environments,
+		TotalLibraries: totalLibraries,
+		GitlabCIExists: true,
+	}, nil
+}
+
+// parseEnvironmentLibraries parses .gitlab-ci.yml and groups library installations by environment
+func (sm *Manager) parseEnvironmentLibraries(gitlabCIPath string) ([]models.EnvironmentLibraries, error) {
+	file, err := os.Open(gitlabCIPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read .gitlab-ci.yml: %w", err)
+	}
+	defer file.Close()
+
+	// Regular expressions for parsing
+	jobNameRegex := regexp.MustCompile(`^([a-zA-Z0-9_-]+):$`)
+	mvnInstallRegex := regexp.MustCompile(`mvn\s+install:install-file\s+(.+)`)
+	onlyRegex := regexp.MustCompile(`^\s*only:\s*$`)
+	branchRegex := regexp.MustCompile(`^\s*-\s*(.+)$`)
+
+	var environments []models.EnvironmentLibraries
+	scanner := bufio.NewScanner(file)
+	
+	var currentJob string
+	var currentLibraries []models.LibraryInstallation
+	var currentBranches []string
+	var inOnlySection bool
+	var inScriptSection bool
+
+	log.Printf("[DEBUG] Starting to parse .gitlab-ci.yml file: %s", gitlabCIPath)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmedLine := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
+
+		log.Printf("[DEBUG] Processing line: '%s' (job: %s, inScript: %v, inOnly: %v)", trimmedLine, currentJob, inScriptSection, inOnlySection)
+
+		// Check for job definition (only jobs that contain "maven-build" or similar patterns)
+		if matches := jobNameRegex.FindStringSubmatch(trimmedLine); matches != nil {
+			jobName := matches[1]
+			
+			// Only treat as a job if it looks like a CI job (contains common job patterns)
+			if strings.Contains(strings.ToLower(jobName), "maven-build") || 
+			   strings.Contains(strings.ToLower(jobName), "build") ||
+			   strings.HasSuffix(strings.ToLower(jobName), "-dev") ||
+			   strings.HasSuffix(strings.ToLower(jobName), "-staging") ||
+			   strings.HasSuffix(strings.ToLower(jobName), "-live") ||
+			   strings.HasSuffix(strings.ToLower(jobName), "-prod") ||
+			   strings.HasSuffix(strings.ToLower(jobName), "-training") {
+				
+				// Save previous job if it had libraries
+				if currentJob != "" && len(currentLibraries) > 0 {
+					env := sm.extractEnvironmentFromJobName(currentJob)
+					environments = append(environments, models.EnvironmentLibraries{
+						Environment: env,
+						JobName:     currentJob,
+						Libraries:   currentLibraries,
+						Branches:    currentBranches,
+					})
+					log.Printf("[DEBUG] Saved job '%s' with %d libraries", currentJob, len(currentLibraries))
+				}
+
+				// Start new job
+				currentJob = jobName
+				currentLibraries = []models.LibraryInstallation{}
+				currentBranches = []string{}
+				inOnlySection = false
+				inScriptSection = false
+				log.Printf("[DEBUG] Starting new CI job: %s", currentJob)
+				continue
+			}
+		}
+
+		// Only process sections if we're in a CI job
+		if currentJob != "" {
+			// Check for "only:" section
+			if onlyRegex.MatchString(trimmedLine) {
+				inOnlySection = true
+				inScriptSection = false
+				log.Printf("[DEBUG] Entering 'only' section for job: %s", currentJob)
+				continue
+			}
+
+			// Check for script section
+			if strings.HasPrefix(trimmedLine, "script:") {
+				inScriptSection = true
+				inOnlySection = false
+				log.Printf("[DEBUG] Entering 'script' section for job: %s", currentJob)
+				continue
+			}
+		}
+
+		// Parse branches in "only" section (only if we're in a CI job)
+		if currentJob != "" && inOnlySection {
+			if matches := branchRegex.FindStringSubmatch(trimmedLine); matches != nil {
+				currentBranches = append(currentBranches, matches[1])
+				log.Printf("[DEBUG] Added branch '%s' to job '%s'", matches[1], currentJob)
+			}
+		}
+
+		// Parse library installations in script section (only if we're in a CI job)
+		if currentJob != "" && inScriptSection {
+			// Handle YAML list items (lines starting with "- ")
+			originalLine := trimmedLine
+			if strings.HasPrefix(trimmedLine, "- ") {
+				trimmedLine = strings.TrimSpace(trimmedLine[2:])
+				log.Printf("[DEBUG] Stripped YAML list prefix: '%s' -> '%s'", originalLine, trimmedLine)
+			}
+
+			// Look for mvn install:install-file commands
+			if matches := mvnInstallRegex.FindStringSubmatch(trimmedLine); matches != nil {
+				fullCommand := strings.TrimSpace(matches[1])
+				log.Printf("[DEBUG] Found Maven install command: %s", fullCommand)
+				
+				// Extract library parameters
+				library := sm.parseLibraryFromCommand(fullCommand, trimmedLine)
+				log.Printf("[DEBUG] Parsed library: %+v", library)
+				if library.GroupID != "" && library.ArtifactID != "" && library.Version != "" {
+					currentLibraries = append(currentLibraries, library)
+					log.Printf("[DEBUG] Added library to current job '%s': %s:%s:%s", currentJob, library.GroupID, library.ArtifactID, library.Version)
+				} else {
+					log.Printf("[DEBUG] Skipped incomplete library: %+v", library)
+				}
+			}
+		}
+	}
+
+	// Don't forget the last job
+	if currentJob != "" && len(currentLibraries) > 0 {
+		env := sm.extractEnvironmentFromJobName(currentJob)
+		environments = append(environments, models.EnvironmentLibraries{
+			Environment: env,
+			JobName:     currentJob,
+			Libraries:   currentLibraries,
+			Branches:    currentBranches,
+		})
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading .gitlab-ci.yml: %w", err)
+	}
+
+	return environments, nil
+}
+
+// extractEnvironmentFromJobName extracts environment name from job names like "maven-build-dev", "maven-build-staging"
+func (sm *Manager) extractEnvironmentFromJobName(jobName string) string {
+	// Common patterns for environment detection
+	envPatterns := map[string][]string{
+		"development": {"dev", "develop", "development"},
+		"staging":     {"staging", "stage", "test"},
+		"production":  {"prod", "production", "live"},
+		"training":    {"training", "train"},
+		"dr":          {"dr", "disaster", "recovery"},
+		"newlive":     {"newlive", "new-live"},
+	}
+
+	jobLower := strings.ToLower(jobName)
+	
+	for env, patterns := range envPatterns {
+		for _, pattern := range patterns {
+			if strings.Contains(jobLower, pattern) {
+				return env
+			}
+		}
+	}
+
+	// If no pattern matches, try to extract the last part after the last dash
+	parts := strings.Split(jobName, "-")
+	if len(parts) > 1 {
+		return parts[len(parts)-1]
+	}
+
+	return "unknown"
+}
+
+// parseLibraryFromCommand parses Maven install command and extracts library information
+func (sm *Manager) parseLibraryFromCommand(fullCommand, originalLine string) models.LibraryInstallation {
+	fileRegex := regexp.MustCompile(`-Dfile=([^\s]+)`)
+	groupIdRegex := regexp.MustCompile(`-DgroupId=([^\s]+)`)
+	artifactIdRegex := regexp.MustCompile(`-DartifactId=([^\s]+)`)
+	versionRegex := regexp.MustCompile(`-Dversion=([^\s]+)`)
+	packagingRegex := regexp.MustCompile(`-Dpackaging=([^\s]+)`)
+
+	var file, groupId, artifactId, version, packaging string
+
+	if fileMatch := fileRegex.FindStringSubmatch(fullCommand); fileMatch != nil {
+		file = fileMatch[1]
+	}
+
+	if groupIdMatch := groupIdRegex.FindStringSubmatch(fullCommand); groupIdMatch != nil {
+		groupId = groupIdMatch[1]
+	}
+
+	if artifactIdMatch := artifactIdRegex.FindStringSubmatch(fullCommand); artifactIdMatch != nil {
+		artifactId = artifactIdMatch[1]
+	}
+
+	if versionMatch := versionRegex.FindStringSubmatch(fullCommand); versionMatch != nil {
+		version = versionMatch[1]
+	}
+
+	if packagingMatch := packagingRegex.FindStringSubmatch(fullCommand); packagingMatch != nil {
+		packaging = packagingMatch[1]
+	} else {
+		packaging = "jar" // Default to jar if not specified
+	}
+
+	return models.LibraryInstallation{
+		File:       file,
+		GroupID:    groupId,
+		ArtifactID: artifactId,
+		Version:    version,
+		Packaging:  packaging,
+		Command:    "mvn install:install-file " + fullCommand,
+	}
+}
