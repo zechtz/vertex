@@ -1,35 +1,31 @@
 # GitLab CI/CD Pipeline for vertex
+
 stages:
   - build
   - release
 
 variables:
   GO_VERSION: "1.23"
-  PROJECT_NAME: "nest-up"
+  PROJECT_NAME: "service-manager"
   OUTPUT_DIR: "dist"
   CGO_ENABLED: "0"
 
 default:
-  image: golang:${GO_VERSION}
+  image: node:20
   before_script:
+    - apt-get update && apt-get install -y golang-${GO_VERSION}
+    - export PATH="/usr/lib/go-${GO_VERSION}/bin:$PATH"
     - mkdir -p $OUTPUT_DIR
 
 build:
   stage: build
-  image: node:20
-
-  before_script:
-    - apt-get update && apt-get install -y golang
-    - export OUTPUT_DIR=output
-    - export PROJECT_NAME=service-manager
-
   script:
     - cd web
     - npm ci
-    - npm run build # generates web/dist/
+    - npm run build
     - cd ..
-    - mkdir -p $OUTPUT_DIR
     - go mod tidy
+    - mkdir -p $OUTPUT_DIR
     - GOOS=linux   GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-linux-amd64
     - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-windows-amd64.exe
     - GOOS=darwin  GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-darwin-amd64
