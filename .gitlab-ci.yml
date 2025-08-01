@@ -27,7 +27,12 @@ test:
     - export PATH="$GOPATH/bin:$PATH"
   script:
     - go mod tidy
-    - go vet $(go list ./... | grep -v web/embed.go)
+    - |
+      if [ -d web/dist ]; then
+        go vet $(go list ./...)
+      else
+        go vet $(go list ./... | grep -v web/embed.go)
+      fi
     - go test -race -coverprofile=coverage.out ./...
   artifacts:
     reports:
