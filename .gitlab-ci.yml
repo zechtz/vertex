@@ -1,226 +1,67 @@
 # GitLab CI/CD Pipeline for vertex
-variables:
-  GO_VERSION: "1.21"
-  NODE_VERSION: "18"
-
 stages:
   - build
   - release
 
-# Cache for faster builds
-.cache:
-  cache:
-    key: "$CI_COMMIT_REF_SLUG"
-    paths:
-      - .cache/go/
-      - web/node_modules/
+variables:
+  GO_VERSION: "1.23"
+  PROJECT_NAME: "nest-up"
+  OUTPUT_DIR: "dist"
+  CGO_ENABLED: "0"
 
-# Build frontend (runs on tags and manual triggers)
-build-frontend:
+default:
+  image: golang:${GO_VERSION}
+  before_script:
+    - mkdir -p $OUTPUT_DIR
+
+build:
   stage: build
-  image: node:${NODE_VERSION}
-  extends: .cache
+  image: node:20
+
+  before_script:
+    - apt-get update && apt-get install -y golang
+    - export OUTPUT_DIR=output
+    - export PROJECT_NAME=service-manager
+
   script:
     - cd web
     - npm ci
-    - npm run build
-  artifacts:
-    paths:
-      - web/dist/
-    expire_in: 1 hour
-  only:
-    - tags
-    - triggers
+    - npm run build # generates web/dist/
+    - cd ..
+    - mkdir -p $OUTPUT_DIR
+    - go mod tidy
+    - GOOS=linux   GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-linux-amd64
+    - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-windows-amd64.exe
+    - GOOS=darwin  GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-darwin-amd64
 
-# Template for building binaries
-.build-binary: &build-binary
-  stage: build
-  image: golang:${GO_VERSION}
-  extends: .cache
-  dependencies:
-    - build-frontend
-  before_script:
-    - |
-      # Install cross-compilation tools
-      if [ "$CI_RUNNER_TAGS" = "linux" ]; then
-        apt-get update
-        if [ "$GOOS" = "windows" ]; then
-          apt-get install -y gcc-mingw-w64
-          export CC=x86_64-w64-mingw32-gcc
-        elif [ "$GOOS" = "linux" ] && [ "$GOARCH" = "arm64" ]; then
-          apt-get install -y gcc-aarch64-linux-gnu
-          export CC=aarch64-linux-gnu-gcc
-        else
-          apt-get install -y gcc-multilib
-        fi
-      elif [ "$CI_RUNNER_TAGS" = "macos" ]; then
-        echo "Using native macOS compilation"
-      fi
-    - mkdir -p .cache/go
-    - export GOPATH="$CI_PROJECT_DIR/.cache/go"
-    - export PATH="$GOPATH/bin:$PATH"
-  script:
-    - |
-      # Set binary name
-      BINARY_NAME="vertex-${GOOS}-${GOARCH}"
-      if [ "$GOOS" = "windows" ]; then
-        BINARY_NAME="${BINARY_NAME}.exe"
-      fi
-
-      # Build binary with version info
-      CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build \
-        -ldflags="-s -w -X main.version=$CI_COMMIT_TAG" \
-        -o "$BINARY_NAME"
-
-      # Create checksum
-      if [ "$CI_RUNNER_TAGS" = "macos" ]; then
-        shasum -a 256 "$BINARY_NAME" > "${BINARY_NAME}.sha256"
-      else
-        sha256sum "$BINARY_NAME" > "${BINARY_NAME}.sha256"
-      fi
-
-      # Store in artifacts
-      mkdir -p binaries
-      mv "$BINARY_NAME" "$BINARY_NAME.sha256" binaries/
-  artifacts:
-    paths:
-      - binaries/
-    expire_in: 1 day
-  only:
-    - tags
-    - triggers
-
-# Individual build jobs for each platform
-build-linux-amd64:
-  <<: *build-binary
-  tags:
-    - linux
-  variables:
-    GOOS: linux
-    GOARCH: amd64
-
-build-linux-arm64:
-  <<: *build-binary
-  tags:
-    - linux
-  variables:
-    GOOS: linux
-    GOARCH: arm64
-
-build-darwin-amd64:
-  <<: *build-binary
-  tags:
-    - macos
-  variables:
-    GOOS: darwin
-    GOARCH: amd64
-
-build-darwin-arm64:
-  <<: *build-binary
-  tags:
-    - macos
-  variables:
-    GOOS: darwin
-    GOARCH: arm64
-
-build-windows-amd64:
-  <<: *build-binary
-  tags:
-    - linux
-  variables:
-    GOOS: windows
-    GOARCH: amd64
-
-# Create GitLab release
 release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
-  dependencies:
-    - build-linux-amd64
-    - build-linux-arm64
-    - build-darwin-amd64
-    - build-darwin-arm64
-    - build-windows-amd64
-  script:
-    - |
-      # List downloaded files
-      echo "Downloaded files:"
-      find binaries/ -name "vertex-*" -type f
-      find binaries/ -name "*.sha256" -type f
-
-      # Generate release notes
-      cat > release-notes.md << EOF
-      # NeST Service Manager \$CI_COMMIT_TAG
-
-      ## 🚀 Features
-      - Complete service management for NeST microservices
-      - Embedded React web interface (no external dependencies)
-      - Automatic environment variable setup
-      - Lombok compatibility fixing
-      - Real-time service monitoring and logs
-
-      ## 📦 Downloads
-
-      | Platform | Architecture | Download |
-      |----------|--------------|----------|
-      | Linux | x64 | \`vertex-linux-amd64\` |
-      | Linux | ARM64 | \`vertex-linux-arm64\` |
-      | macOS | x64 | \`vertex-darwin-amd64\` |
-      | macOS | ARM64 (M1/M2) | \`vertex-darwin-arm64\` |
-      | Windows | x64 | \`vertex-windows-amd64.exe\` |
-
-      ## 🔧 Installation
-
-      \`\`\`bash
-      # Download for your platform
-      wget https://gitlab.com/\$CI_PROJECT_PATH/-/releases/\$CI_COMMIT_TAG/downloads/vertex-linux-amd64
-
-      # Make executable
-      chmod +x vertex-linux-amd64
-
-      # Run
-      ./vertex-linux-amd64
-      \`\`\`
-
-      ## 📋 Checksums
-
-      SHA256 checksums are provided for all binaries to verify integrity.
-      EOF
-  release:
-    name: "NeST Service Manager $CI_COMMIT_TAG"
-    description: "./release-notes.md"
-    tag_name: "$CI_COMMIT_TAG"
-    assets:
-      links:
-        - name: "vertex-linux-amd64"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-amd64?job=build-linux-amd64"
-          filepath: "/binaries/vertex-linux-amd64"
-        - name: "vertex-linux-amd64.sha256"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-amd64.sha256?job=build-linux-amd64"
-          filepath: "/binaries/vertex-linux-amd64.sha256"
-        - name: "vertex-linux-arm64"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-arm64?job=build-linux-arm64"
-          filepath: "/binaries/vertex-linux-arm64"
-        - name: "vertex-linux-arm64.sha256"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-linux-arm64.sha256?job=build-linux-arm64"
-          filepath: "/binaries/vertex-linux-arm64.sha256"
-        - name: "vertex-darwin-amd64"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-amd64?job=build-darwin-amd64"
-          filepath: "/binaries/vertex-darwin-amd64"
-        - name: "vertex-darwin-amd64.sha256"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-amd64.sha256?job=build-darwin-amd64"
-          filepath: "/binaries/vertex-darwin-amd64.sha256"
-        - name: "vertex-darwin-arm64"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-arm64?job=build-darwin-arm64"
-          filepath: "/binaries/vertex-darwin-arm64"
-        - name: "vertex-darwin-arm64.sha256"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-darwin-arm64.sha256?job=build-darwin-arm64"
-          filepath: "/binaries/vertex-darwin-arm64.sha256"
-        - name: "vertex-windows-amd64.exe"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-windows-amd64.exe?job=build-windows-amd64"
-          filepath: "/binaries/vertex-windows-amd64.exe"
-        - name: "vertex-windows-amd64.exe.sha256"
-          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/binaries/vertex-windows-amd64.exe.sha256?job=build-windows-amd64"
-          filepath: "/binaries/vertex-windows-amd64.exe.sha256"
   only:
     - tags
+  script:
+    - echo "# Release $CI_COMMIT_TAG" > release-notes.md
+    - echo "" >> release-notes.md
+    - echo "## 🚀 Features" >> release-notes.md
+    - echo "- Cross-platform service manager for NeST microservices" >> release-notes.md
+    - echo "- Embedded React web interface" >> release-notes.md
+    - echo "- Real-time logs and status" >> release-notes.md
+    - echo "" >> release-notes.md
+    - echo "## 📦 Downloads" >> release-notes.md
+    - echo "" >> release-notes.md
+    - ls -lh $OUTPUT_DIR
+    - echo "| Platform | Arch | Binary |" >> release-notes.md
+    - echo "|----------|------|--------|" >> release-notes.md
+    - >
+      for f in $OUTPUT_DIR/${PROJECT_NAME}-*; do
+        platform=$(echo "$f" | cut -d '-' -f3);
+        arch=$(echo "$f" | cut -d '-' -f4 | cut -d '.' -f1);
+        binary=$(basename "$f");
+        echo "| $platform | $arch | \`$binary\` |" >> release-notes.md;
+      done
+    - cat release-notes.md
+    - >
+      curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+           --data-urlencode "name=NeST Release $CI_COMMIT_TAG" \
+           --data-urlencode "tag_name=$CI_COMMIT_TAG" \
+           --data-urlencode "description=$(cat release-notes.md)" \
+           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/releases"
