@@ -440,22 +440,31 @@ func (h *Handler) installLibrariesHandler(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	var request struct {
-		Libraries []models.LibraryInstallation
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		log.Printf("[ERROR] Failed to decode request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// Check if service exists
+	_, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Service with UUID %s not found", serviceUUID), http.StatusNotFound)
 		return
 	}
 
-	if err := h.serviceManager.InstallLibraries(serviceUUID, request.Libraries); err != nil {
+	// Get the correct projects directory using profile-aware logic
+	projectsDir := h.getServiceProjectsDir(serviceUUID)
+	
+	log.Printf("[INFO] Installing libraries for service %s (auto-discovery from .gitlab-ci.yml) using projects dir: %s", serviceUUID, projectsDir)
+
+	// Call InstallLibrariesWithProjectsDir to use the correct directory
+	if err := h.serviceManager.InstallLibrariesWithProjectsDir(serviceUUID, []models.LibraryInstallation{}, projectsDir); err != nil {
 		log.Printf("[ERROR] Failed to install libraries for service UUID %s: %v", serviceUUID, err)
 		http.Error(w, fmt.Sprintf("Failed to install libraries: %v", err), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": fmt.Sprintf("Successfully installed libraries for service %s", serviceUUID),
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *Handler) startAllHandler(w http.ResponseWriter, r *http.Request) {

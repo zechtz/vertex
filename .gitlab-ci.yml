@@ -11,10 +11,9 @@ variables:
   CGO_ENABLED: "0"
 
 default:
-  image: node:20
+  image: golang:1.23
   before_script:
-    - apt-get update && apt-get install -y golang-${GO_VERSION}
-    - export PATH="/usr/lib/go-${GO_VERSION}/bin:$PATH"
+    - apt-get update && apt-get install -y nodejs npm
     - mkdir -p $OUTPUT_DIR
 
 build:

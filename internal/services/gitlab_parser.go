@@ -16,6 +16,12 @@ import (
 
 // ParseGitLabCI parses .gitlab-ci.yml files in service directories to extract Maven library installations
 func (sm *Manager) ParseGitLabCI(serviceUUID string) (*models.GitLabCIConfig, error) {
+	// Use global projects directory for backward compatibility
+	return sm.ParseGitLabCIWithProjectsDir(serviceUUID, sm.config.ProjectsDir)
+}
+
+// ParseGitLabCIWithProjectsDir parses .gitlab-ci.yml files in service directories to extract Maven library installations with a custom projects directory
+func (sm *Manager) ParseGitLabCIWithProjectsDir(serviceUUID, projectsDir string) (*models.GitLabCIConfig, error) {
 	// Validate UUID
 	if _, err := uuid.Parse(serviceUUID); err != nil {
 		return nil, fmt.Errorf("invalid service UUID: %s", serviceUUID)
@@ -29,7 +35,7 @@ func (sm *Manager) ParseGitLabCI(serviceUUID string) (*models.GitLabCIConfig, er
 		return nil, fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
-	serviceDir := filepath.Join(sm.config.ProjectsDir, service.Dir)
+	serviceDir := filepath.Join(projectsDir, service.Dir)
 	gitlabCIPath := filepath.Join(serviceDir, ".gitlab-ci.yml")
 
 	config := &models.GitLabCIConfig{
@@ -67,6 +73,11 @@ func (sm *Manager) ParseGitLabCI(serviceUUID string) (*models.GitLabCIConfig, er
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
+		}
+
+		// Handle YAML list items (lines starting with "- ")
+		if strings.HasPrefix(line, "- ") {
+			line = strings.TrimSpace(line[2:]) // Remove "- " prefix
 		}
 
 		// Look for mvn install:install-file commands
@@ -154,6 +165,12 @@ func (sm *Manager) GetAllGitLabCIConfigs() map[string]*models.GitLabCIConfig {
 
 // InstallLibraries runs the Maven library installation commands for a specific service
 func (sm *Manager) InstallLibraries(serviceUUID string, libraries []models.LibraryInstallation) error {
+	// Use global projects directory for backward compatibility
+	return sm.InstallLibrariesWithProjectsDir(serviceUUID, libraries, sm.config.ProjectsDir)
+}
+
+// InstallLibrariesWithProjectsDir runs the Maven library installation commands for a specific service with a custom projects directory
+func (sm *Manager) InstallLibrariesWithProjectsDir(serviceUUID string, libraries []models.LibraryInstallation, projectsDir string) error {
 	// Validate UUID
 	if _, err := uuid.Parse(serviceUUID); err != nil {
 		return fmt.Errorf("invalid service UUID: %s", serviceUUID)
@@ -167,14 +184,14 @@ func (sm *Manager) InstallLibraries(serviceUUID string, libraries []models.Libra
 		return fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
-	serviceDir := filepath.Join(sm.config.ProjectsDir, service.Dir)
+	serviceDir := filepath.Join(projectsDir, service.Dir)
 
 	// If libraries are provided, use them; otherwise, parse .gitlab-ci.yml
 	var libsToInstall []models.LibraryInstallation
 	if len(libraries) > 0 {
 		libsToInstall = libraries
 	} else {
-		config, err := sm.ParseGitLabCI(serviceUUID)
+		config, err := sm.ParseGitLabCIWithProjectsDir(serviceUUID, projectsDir)
 		if err != nil {
 			return fmt.Errorf("failed to parse GitLab CI config: %w", err)
 		}
@@ -184,7 +201,7 @@ func (sm *Manager) InstallLibraries(serviceUUID string, libraries []models.Libra
 		libsToInstall = config.Libraries
 	}
 
-	log.Printf("[INFO] Installing %d libraries for service UUID %s", len(libsToInstall), serviceUUID)
+	log.Printf("[INFO] Installing %d libraries for service UUID %s in directory %s", len(libsToInstall), serviceUUID, serviceDir)
 
 	for i, library := range libsToInstall {
 		log.Printf("[INFO] Installing library %d/%d: %s:%s:%s",
