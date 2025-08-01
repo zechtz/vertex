@@ -72,8 +72,11 @@ export function ProfileConfigDashboard({ isOpen, onClose, profile: initialProfil
         setAvailableServices(allServices || []);
         
         // Calculate profile stats
+        const profileServiceIds = selectedProfile.services.map(s => 
+          typeof s === 'string' ? s : s.id
+        );
         const profileServices = allServices.filter((service: Service) => 
-          selectedProfile.services.includes(service.name)
+          profileServiceIds.includes(service.id)
         );
         const runningServices = profileServices.filter((service: Service) => 
           service.status === 'running'
@@ -94,8 +97,12 @@ export function ProfileConfigDashboard({ isOpen, onClose, profile: initialProfil
   };
 
   const getProfileServices = () => {
+    if (!selectedProfile) return [];
+    const profileServiceIds = selectedProfile.services.map(s => 
+      typeof s === 'string' ? s : s.id
+    );
     return availableServices.filter(service => 
-      selectedProfile?.services.includes(service.name)
+      profileServiceIds.includes(service.id)
     );
   };
 
@@ -672,11 +679,14 @@ function ComparisonTab({
               <div>
                 <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Services ({selectedProfile.services.length})</h4>
                 <div className="space-y-1">
-                  {selectedProfile.services.map(serviceName => (
-                    <div key={serviceName} className="text-sm px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded">
-                      {serviceName}
-                    </div>
-                  ))}
+                  {selectedProfile.services.map(service => {
+                    const serviceObj = typeof service === 'string' ? { id: service, name: service } : service;
+                    return (
+                      <div key={serviceObj.id} className="text-sm px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded">
+                        {serviceObj.name}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               
@@ -710,19 +720,27 @@ function ComparisonTab({
               <div>
                 <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Services ({compareProfile.services.length})</h4>
                 <div className="space-y-1">
-                  {compareProfile.services.map(serviceName => (
-                    <div 
-                      key={serviceName} 
-                      className={`text-sm px-2 py-1 rounded ${
-                        selectedProfile.services.includes(serviceName)
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                          : 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200'
-                      }`}
-                    >
-                      {serviceName}
-                      {!selectedProfile.services.includes(serviceName) && ' (unique)'}
-                    </div>
-                  ))}
+                  {compareProfile.services.map(service => {
+                    const serviceObj = typeof service === 'string' ? { id: service, name: service } : service;
+                    const selectedProfileServiceIds = selectedProfile.services.map(s => 
+                      typeof s === 'string' ? s : s.id
+                    );
+                    const isInSelectedProfile = selectedProfileServiceIds.includes(serviceObj.id);
+                    
+                    return (
+                      <div 
+                        key={serviceObj.id} 
+                        className={`text-sm px-2 py-1 rounded ${
+                          isInSelectedProfile
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200'
+                        }`}
+                      >
+                        {serviceObj.name}
+                        {!isInSelectedProfile && ' (unique)'}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               
