@@ -74,17 +74,17 @@ func terminateProcess(pid int) error {
 // IsProcessRunning checks if a process is running on Windows systems
 func IsProcessRunning(pid int) bool {
 	const PROCESS_QUERY_INFORMATION = 0x0400
-	
+
 	handle, _, _ := procOpenProcess.Call(
 		PROCESS_QUERY_INFORMATION,
 		0,
 		uintptr(pid),
 	)
-	
+
 	if handle == 0 {
 		return false
 	}
 	defer procCloseHandle.Call(handle)
-	
+
 	return true
 }
