@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -31,8 +32,19 @@ func NewDatabaseWithPath(dbPath string) (*Database, error) {
 			}
 			finalPath = filepath.Join(dataDir, "vertex.db")
 		} else {
-			// Default to current directory for backward compatibility
-			finalPath = "vertex.db"
+			// Use platform-specific default data directory
+			defaultDataDir := getDefaultDataDir()
+			if defaultDataDir != "" {
+				if err := os.MkdirAll(defaultDataDir, 0755); err != nil {
+					// Fall back to current directory if we can't create the default
+					finalPath = "vertex.db"
+				} else {
+					finalPath = filepath.Join(defaultDataDir, "vertex.db")
+				}
+			} else {
+				// Default to current directory for backward compatibility
+				finalPath = "vertex.db"
+			}
 		}
 	}
 
@@ -59,6 +71,35 @@ func NewDatabaseWithPath(dbPath string) (*Database, error) {
 	}
 
 	return database, nil
+}
+
+// getDefaultDataDir returns the platform-specific default data directory
+func getDefaultDataDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		// Use %APPDATA%\Vertex on Windows
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, "Vertex")
+		}
+		// Fallback to user profile
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			return filepath.Join(userProfile, "AppData", "Roaming", "Vertex")
+		}
+	case "darwin":
+		// Use ~/Library/Application Support/Vertex on macOS
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, "Library", "Application Support", "Vertex")
+		}
+	case "linux":
+		// Use ~/.local/share/vertex on Linux (XDG Base Directory Specification)
+		if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
+			return filepath.Join(xdgDataHome, "vertex")
+		}
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, ".local", "share", "vertex")
+		}
+	}
+	return "" // No default found, will use current directory
 }
 
 func (db *Database) initTables() error {
