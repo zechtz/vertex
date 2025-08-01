@@ -1,6 +1,6 @@
 # GitLab CI/CD Pipeline for NeST Service Manager
 variables:
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.23"
   NODE_VERSION: "18"
 
 stages:
