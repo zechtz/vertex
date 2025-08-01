@@ -117,4 +117,20 @@ export class ServiceApi {
       throw new Error(`Failed to clear logs: ${response.status} ${response.statusText}`);
     }
   }
+
+  /**
+   * Normalize service orders to be sequential from 1 to N
+   */
+  static async normalizeServiceOrders(): Promise<{ status: string; message: string; services: Service[] }> {
+    const response = await fetch('/api/services/normalize-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to normalize service orders: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
 }
