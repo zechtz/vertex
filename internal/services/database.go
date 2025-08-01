@@ -1,4 +1,3 @@
-// Package services
 package services
 
 import (
@@ -12,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/google/uuid"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 func (sm *Manager) loadServices(config models.Config) error {
@@ -38,42 +38,46 @@ func (sm *Manager) loadServices(config models.Config) error {
 	for i := range config.Services {
 		service := &config.Services[i]
 
+		// Ensure service has a UUID
+		if service.ID == "" {
+			service.ID = uuid.New().String()
+		}
+
 		// Try to load existing service from database
 		var dbService models.Service
 		row := sm.db.QueryRow(`
-			SELECT name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system
-			FROM services WHERE name = ?`, service.Name)
+			SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system
+			FROM services WHERE id = ?`, service.ID)
 
 		var description sql.NullString
 		var isEnabled sql.NullBool
 		var buildSystem sql.NullString
-		err := row.Scan(&dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
+		err := row.Scan(&dbService.ID, &dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
 			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
 			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem)
 
 		if err == sql.ErrNoRows {
 			// Service doesn't exist in DB, insert it
 			_, err = sm.db.Exec(`
-				INSERT INTO services (name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
+				INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+				service.ID, service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
 				service.HealthStatus, service.HealthURL, service.Port, service.Order, "", true, "auto")
 			if err != nil {
-				return fmt.Errorf("failed to insert service %s: %w", service.Name, err)
+				return fmt.Errorf("failed to insert service UUID %s: %w", service.ID, err)
 			}
 			service.EnvVars = make(map[string]models.EnvVar)
 			service.Logs = []models.LogEntry{}
 			service.BuildSystem = "auto"
-			sm.services[service.Name] = service
+			sm.services[service.ID] = service
 		} else if err != nil {
-			return fmt.Errorf("failed to query service %s: %w", service.Name, err)
+			return fmt.Errorf("failed to query service UUID %s: %w", service.ID, err)
 		} else {
 			// Service exists, use DB data but update only directory path (which is config-based)
 			dbService.Dir = service.Dir
 			dbService.ExtraEnv = service.ExtraEnv
-			
+
 			// Only sync default values if this is the first time loading from config files
-			// After initial sync, preserve all user-configured database values
 			if !initialSyncCompleted {
 				// Initial sync: only use defaults if DB values are empty
 				if dbService.JavaOpts == "" {
@@ -108,7 +112,7 @@ func (sm *Manager) loadServices(config models.Config) error {
 			envRows, err := sm.db.Query(`
 				SELECT var_name, var_value, description, is_required 
 				FROM service_env_vars 
-				WHERE service_name = ?`, dbService.Name)
+				WHERE service_id = ?`, dbService.ID)
 			if err == nil {
 				defer envRows.Close()
 				for envRows.Next() {
@@ -124,7 +128,7 @@ func (sm *Manager) loadServices(config models.Config) error {
 				}
 			}
 
-			sm.services[service.Name] = &dbService
+			sm.services[dbService.ID] = &dbService
 		}
 	}
 
@@ -186,13 +190,15 @@ func (sm *Manager) loadConfigurations() error {
 
 		for _, service := range sm.services {
 			defaultConfig.Services = append(defaultConfig.Services, models.ConfigService{
-				Name:  service.Name,
+				ID:    service.ID,
 				Order: service.Order,
 			})
 		}
 
 		sm.configurations["default"] = defaultConfig
-		sm.saveConfigurationToDB(defaultConfig)
+		if err := sm.saveConfigurationToDB(defaultConfig); err != nil {
+			log.Printf("[WARN] Failed to save default configuration: %v", err)
+		}
 	}
 
 	return nil
@@ -227,41 +233,161 @@ func (sm *Manager) updateConfigurationInDB(config *models.Configuration) error {
 	return err
 }
 
-func (sm *Manager) updateServiceInDB(service *models.Service) error {
-	_, err := sm.db.Exec(`
-		UPDATE services 
-		SET status = ?, health_status = ?, pid = ?, last_started = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE name = ?`,
-		service.Status, service.HealthStatus, service.PID, service.LastStarted, service.Name)
+func (sm *Manager) updateConfigurationDefaults(defaultConfigID string) error {
+	tx, err := sm.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
-	return err
+	// Set all configurations to not default
+	_, err = tx.Exec("UPDATE configurations SET is_default = 0")
+	if err != nil {
+		return fmt.Errorf("failed to clear default flags: %w", err)
+	}
+
+	// Set the specified configuration as default
+	_, err = tx.Exec("UPDATE configurations SET is_default = 1 WHERE id = ?", defaultConfigID)
+	if err != nil {
+		return fmt.Errorf("failed to set default configuration: %w", err)
+	}
+
+	return tx.Commit()
 }
 
-// insertServiceInDB inserts a new service into the database
+func (sm *Manager) saveGlobalConfigToDB(projectsDir, javaHomeOverride string) error {
+	// First, clear existing configuration
+	_, err := sm.db.Exec("DELETE FROM global_config")
+	if err != nil {
+		return fmt.Errorf("failed to clear existing global config: %w", err)
+	}
+
+	// Insert new configuration
+	_, err = sm.db.Exec(`
+		INSERT INTO global_config (projects_dir, java_home_override, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)`,
+		projectsDir, javaHomeOverride)
+	if err != nil {
+		return fmt.Errorf("failed to save global config: %w", err)
+	}
+
+	return nil
+}
+
+func (sm *Manager) loadGlobalConfigFromDB() error {
+	var projectsDir, javaHomeOverride string
+	err := sm.db.QueryRow("SELECT projects_dir, java_home_override FROM global_config ORDER BY id DESC LIMIT 1").
+		Scan(&projectsDir, &javaHomeOverride)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			// No global config in database, use defaults
+			return nil
+		}
+		return fmt.Errorf("failed to load global config from database: %w", err)
+	}
+
+	// Update the configuration
+	sm.config.ProjectsDir = projectsDir
+	sm.config.JavaHomeOverride = javaHomeOverride
+
+	return nil
+}
+
+func (sm *Manager) loadDynamicServices() error {
+	// Query all services from database
+	rows, err := sm.db.Query(`
+		SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system
+		FROM services`)
+	if err != nil {
+		return fmt.Errorf("failed to query dynamic services: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbService models.Service
+		var description sql.NullString
+		var isEnabled sql.NullBool
+		var buildSystem sql.NullString
+
+		err := rows.Scan(&dbService.ID, &dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
+			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
+			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem)
+		if err != nil {
+			log.Printf("[WARN] Failed to scan dynamic service: %v", err)
+			continue
+		}
+
+		// Skip if service is already loaded from config
+		if _, exists := sm.services[dbService.ID]; exists {
+			continue
+		}
+
+		// Handle nullable fields
+		if description.Valid {
+			dbService.Description = description.String
+		}
+		if isEnabled.Valid {
+			dbService.IsEnabled = isEnabled.Bool
+		} else {
+			dbService.IsEnabled = true
+		}
+		if buildSystem.Valid {
+			dbService.BuildSystem = buildSystem.String
+		} else {
+			dbService.BuildSystem = "auto"
+		}
+
+		// Initialize required fields
+		dbService.EnvVars = make(map[string]models.EnvVar)
+		dbService.Logs = []models.LogEntry{}
+
+		// Load environment variables for this service
+		envRows, err := sm.db.Query("SELECT var_name, var_value, description, is_required FROM service_env_vars WHERE service_id = ?", dbService.ID)
+		if err == nil {
+			for envRows.Next() {
+				var envVar models.EnvVar
+				var envDesc sql.NullString
+				err := envRows.Scan(&envVar.Name, &envVar.Value, &envDesc, &envVar.IsRequired)
+				if err == nil {
+					if envDesc.Valid {
+						envVar.Description = envDesc.String
+					}
+					dbService.EnvVars[envVar.Name] = envVar
+				}
+			}
+			envRows.Close()
+		}
+
+		// Add to services map
+		sm.services[dbService.ID] = &dbService
+		log.Printf("[INFO] Loaded dynamic service from database: UUID %s (Name: %s)", dbService.ID, dbService.Name)
+	}
+
+	return rows.Err()
+}
+
 func (sm *Manager) insertServiceInDB(service *models.Service) error {
 	_, err := sm.db.Exec(`
-		INSERT INTO services (name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-		service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
-		service.HealthStatus, service.HealthURL, service.Port, service.Order, 
+		INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		service.ID, service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
+		service.HealthStatus, service.HealthURL, service.Port, service.Order,
 		service.Description, service.IsEnabled, service.BuildSystem)
 
 	return err
 }
 
-// upsertServiceInDB inserts a new service or updates an existing one
 func (sm *Manager) upsertServiceInDB(service *models.Service) error {
 	// Try to update first
 	result, err := sm.db.Exec(`
 		UPDATE services 
-		SET dir = ?, extra_env = ?, java_opts = ?, status = ?, health_status = ?, health_url = ?, 
+		SET name = ?, dir = ?, extra_env = ?, java_opts = ?, status = ?, health_status = ?, health_url = ?, 
 		    port = ?, service_order = ?, description = ?, is_enabled = ?, build_system = ?, 
 		    pid = ?, last_started = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE name = ?`,
-		service.Dir, service.ExtraEnv, service.JavaOpts, service.Status, service.HealthStatus, 
-		service.HealthURL, service.Port, service.Order, service.Description, service.IsEnabled, 
-		service.BuildSystem, service.PID, service.LastStarted, service.Name)
-	
+		WHERE id = ?`,
+		service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status, service.HealthStatus,
+		service.HealthURL, service.Port, service.Order, service.Description, service.IsEnabled,
+		service.BuildSystem, service.PID, service.LastStarted, service.ID)
 	if err != nil {
 		return err
 	}
@@ -280,28 +406,111 @@ func (sm *Manager) upsertServiceInDB(service *models.Service) error {
 	return nil
 }
 
-// UpdateServiceInDB updates a service in the database (public method)
 func (sm *Manager) UpdateServiceInDB(service *models.Service) error {
 	_, err := sm.db.Exec(`
 		UPDATE services 
 		SET status = ?, health_status = ?, pid = ?, last_started = ?, service_order = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE name = ?`,
-		service.Status, service.HealthStatus, service.PID, service.LastStarted, service.Order, service.Name)
+		WHERE id = ?`,
+		service.Status, service.HealthStatus, service.PID, service.LastStarted, service.Order, service.ID)
 
 	return err
 }
 
-// UpdateServiceConfigInDB updates service configuration fields in the database
 func (sm *Manager) UpdateServiceConfigInDB(service *models.Service) error {
 	_, err := sm.db.Exec(`
 		UPDATE services 
-		SET java_opts = ?, health_url = ?, port = ?, service_order = ?, description = ?, 
+		SET name = ?, java_opts = ?, health_url = ?, port = ?, service_order = ?, description = ?, 
 		    is_enabled = ?, build_system = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE name = ?`,
-		service.JavaOpts, service.HealthURL, service.Port, service.Order, 
-		service.Description, service.IsEnabled, service.BuildSystem, service.Name)
+		WHERE id = ?`,
+		service.Name, service.JavaOpts, service.HealthURL, service.Port, service.Order,
+		service.Description, service.IsEnabled, service.BuildSystem, service.ID)
 
 	return err
+}
+
+func (sm *Manager) DeleteService(serviceUUID string) error {
+	_, err := sm.db.Exec("DELETE FROM services WHERE id = ?", serviceUUID)
+	if err != nil {
+		return fmt.Errorf("failed to delete service UUID %s: %w", serviceUUID, err)
+	}
+	return nil
+}
+
+func (sm *Manager) GetServiceEnvVars(serviceUUID string) (map[string]models.EnvVar, error) {
+	rows, err := sm.db.Query(`
+		SELECT var_name, var_value, description, is_required 
+		FROM service_env_vars 
+		WHERE service_id = ?`, serviceUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query service env vars: %w", err)
+	}
+	defer rows.Close()
+
+	envVars := make(map[string]models.EnvVar)
+	for rows.Next() {
+		var envVar models.EnvVar
+		var description sql.NullString
+
+		err := rows.Scan(&envVar.Name, &envVar.Value, &description, &envVar.IsRequired)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan env var: %w", err)
+		}
+
+		if description.Valid {
+			envVar.Description = description.String
+		}
+
+		envVars[envVar.Name] = envVar
+	}
+
+	return envVars, nil
+}
+
+func (sm *Manager) UpdateServiceEnvVars(serviceUUID string, envVars map[string]models.EnvVar) error {
+	// Start a transaction to ensure atomicity
+	tx, err := sm.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Clear existing environment variables for this service
+	_, err = tx.Exec("DELETE FROM service_env_vars WHERE service_id = ?", serviceUUID)
+	if err != nil {
+		return fmt.Errorf("failed to clear existing service env vars: %w", err)
+	}
+
+	// Insert new environment variables
+	for _, envVar := range envVars {
+		if envVar.Name == "" {
+			continue // Skip empty names
+		}
+
+		_, err = tx.Exec(`
+			INSERT INTO service_env_vars (service_id, var_name, var_value, description, is_required, updated_at)
+			VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+			serviceUUID, envVar.Name, envVar.Value, envVar.Description, envVar.IsRequired)
+		if err != nil {
+			return fmt.Errorf("failed to insert service env var %s: %w", envVar.Name, err)
+		}
+	}
+
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Update the in-memory service with new environment variables
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	if service, exists := sm.services[serviceUUID]; exists {
+		service.Mutex.Lock()
+		service.EnvVars = envVars
+		service.Mutex.Unlock()
+	}
+
+	return nil
 }
 
 func (sm *Manager) loadEnvVarsFromFishFile() error {
@@ -360,11 +569,9 @@ func (sm *Manager) GetGlobalEnvVars() (map[string]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query global env vars: %w", err)
 	}
-
 	defer rows.Close()
 
 	envVars := make(map[string]string)
-
 	for rows.Next() {
 		var name, value string
 		if err := rows.Scan(&name, &value); err != nil {
@@ -413,222 +620,9 @@ func (sm *Manager) UpdateGlobalEnvVars(envVars map[string]string) error {
 	return nil
 }
 
-// Service-specific environment variable methods
-func (sm *Manager) GetServiceEnvVars(serviceName string) (map[string]models.EnvVar, error) {
-	rows, err := sm.db.Query(`
-		SELECT var_name, var_value, description, is_required 
-		FROM service_env_vars 
-		WHERE service_name = ?`, serviceName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query service env vars: %w", err)
-	}
-	defer rows.Close()
-
-	envVars := make(map[string]models.EnvVar)
-	for rows.Next() {
-		var envVar models.EnvVar
-		var description sql.NullString
-
-		err := rows.Scan(&envVar.Name, &envVar.Value, &description, &envVar.IsRequired)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan env var: %w", err)
-		}
-
-		if description.Valid {
-			envVar.Description = description.String
-		}
-
-		envVars[envVar.Name] = envVar
-	}
-
-	return envVars, nil
-}
-
-func (sm *Manager) UpdateServiceEnvVars(serviceName string, envVars map[string]models.EnvVar) error {
-	// Start a transaction to ensure atomicity
-	tx, err := sm.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Clear existing environment variables for this service
-	_, err = tx.Exec("DELETE FROM service_env_vars WHERE service_name = ?", serviceName)
-	if err != nil {
-		return fmt.Errorf("failed to clear existing service env vars: %w", err)
-	}
-
-	// Insert new environment variables
-	for _, envVar := range envVars {
-		if envVar.Name == "" {
-			continue // Skip empty names
-		}
-
-		_, err = tx.Exec(`
-			INSERT INTO service_env_vars (service_name, var_name, var_value, description, is_required, updated_at)
-			VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-			serviceName, envVar.Name, envVar.Value, envVar.Description, envVar.IsRequired)
-		if err != nil {
-			return fmt.Errorf("failed to insert service env var %s: %w", envVar.Name, err)
-		}
-	}
-
-	// Commit the transaction
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	// Update the in-memory service with new environment variables
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	if service, exists := sm.services[serviceName]; exists {
-		service.Mutex.Lock()
-		service.EnvVars = envVars
-		service.Mutex.Unlock()
-	}
-
-	return nil
-}
-
-// updateConfigurationDefaults updates which configuration is marked as default
-func (sm *Manager) updateConfigurationDefaults(defaultConfigID string) error {
-	tx, err := sm.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Set all configurations to not default
-	_, err = tx.Exec("UPDATE configurations SET is_default = 0")
-	if err != nil {
-		return fmt.Errorf("failed to clear default flags: %w", err)
-	}
-
-	// Set the specified configuration as default
-	_, err = tx.Exec("UPDATE configurations SET is_default = 1 WHERE id = ?", defaultConfigID)
-	if err != nil {
-		return fmt.Errorf("failed to set default configuration: %w", err)
-	}
-
-	return tx.Commit()
-}
-
-// saveGlobalConfigToDB persists global configuration to database
-func (sm *Manager) saveGlobalConfigToDB(projectsDir, javaHomeOverride string) error {
-	// First, clear existing configuration
-	_, err := sm.db.Exec("DELETE FROM global_config")
-	if err != nil {
-		return fmt.Errorf("failed to clear existing global config: %w", err)
-	}
-
-	// Insert new configuration
-	_, err = sm.db.Exec(`
-		INSERT INTO global_config (projects_dir, java_home_override, updated_at)
-		VALUES (?, ?, CURRENT_TIMESTAMP)`,
-		projectsDir, javaHomeOverride)
-	if err != nil {
-		return fmt.Errorf("failed to save global config: %w", err)
-	}
-
-	return nil
-}
-
-// loadGlobalConfigFromDB loads global configuration from database
-func (sm *Manager) loadGlobalConfigFromDB() error {
-	var projectsDir, javaHomeOverride string
-	err := sm.db.QueryRow("SELECT projects_dir, java_home_override FROM global_config ORDER BY id DESC LIMIT 1").
-		Scan(&projectsDir, &javaHomeOverride)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			// No global config in database, use defaults
-			return nil
-		}
-		return fmt.Errorf("failed to load global config from database: %w", err)
-	}
-
-	// Update the configuration
-	sm.config.ProjectsDir = projectsDir
-	sm.config.JavaHomeOverride = javaHomeOverride
-
-	return nil
-}
-
-// loadDynamicServices loads services that exist in the database but not in the config file
-// These are services that were dynamically created through the UI
-func (sm *Manager) loadDynamicServices() error {
-	// Query all services from database
-	rows, err := sm.db.Query(`
-		SELECT name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system
-		FROM services`)
-	if err != nil {
-		return fmt.Errorf("failed to query dynamic services: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var dbService models.Service
-		var description sql.NullString
-		var isEnabled sql.NullBool
-		var buildSystem sql.NullString
-
-		err := rows.Scan(&dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
-			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
-			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem)
-		if err != nil {
-			log.Printf("[WARN] Failed to scan dynamic service: %v", err)
-			continue
-		}
-
-		// Skip if service is already loaded from config
-		if _, exists := sm.services[dbService.Name]; exists {
-			continue
-		}
-
-		// Handle nullable fields
-		if description.Valid {
-			dbService.Description = description.String
-		}
-		if isEnabled.Valid {
-			dbService.IsEnabled = isEnabled.Bool
-		} else {
-			dbService.IsEnabled = true
-		}
-		if buildSystem.Valid {
-			dbService.BuildSystem = buildSystem.String
-		} else {
-			dbService.BuildSystem = "auto"
-		}
-
-		// Initialize required fields
-		dbService.EnvVars = make(map[string]models.EnvVar)
-		dbService.Logs = []models.LogEntry{}
-
-		// Load environment variables for this service
-		envRows, err := sm.db.Query("SELECT name, value, description, is_required FROM service_env_vars WHERE service_name = ?", dbService.Name)
-		if err == nil {
-			for envRows.Next() {
-				var envVar models.EnvVar
-				err := envRows.Scan(&envVar.Name, &envVar.Value, &envVar.Description, &envVar.IsRequired)
-				if err == nil {
-					dbService.EnvVars[envVar.Name] = envVar
-				}
-			}
-			envRows.Close()
-		}
-
-		// Add to services map
-		sm.services[dbService.Name] = &dbService
-		log.Printf("[INFO] Loaded dynamic service from database: %s", dbService.Name)
-	}
-
-	return rows.Err()
-}
-
-// CleanupOldLogs removes old log entries to prevent database bloat
 func (sm *Manager) CleanupOldLogs(maxDays int, maxLogsPerService int) error {
 	log.Printf("[INFO] Starting log cleanup - keeping logs from last %d days and max %d logs per service", maxDays, maxLogsPerService)
-	
+
 	// Start a transaction for consistency
 	tx, err := sm.db.Begin()
 	if err != nil {
@@ -651,30 +645,29 @@ func (sm *Manager) CleanupOldLogs(maxDays int, maxLogsPerService int) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete old logs: %w", err)
 	}
-	
+
 	deletedOld, _ := result.RowsAffected()
 
 	// For each service, keep only the most recent maxLogsPerService logs
 	services := sm.GetServices()
 	var deletedPerService int64 = 0
-	
+
 	for _, service := range services {
 		// Delete excess logs for this service, keeping only the most recent ones
 		result, err := tx.Exec(`
 			DELETE FROM service_logs 
-			WHERE service_name = ? 
+			WHERE service_id = ? 
 			AND id NOT IN (
 				SELECT id FROM service_logs 
-				WHERE service_name = ? 
+				WHERE service_id = ? 
 				ORDER BY created_at DESC 
 				LIMIT ?
-			)`, service.Name, service.Name, maxLogsPerService)
-		
+			)`, service.ID, service.ID, maxLogsPerService)
 		if err != nil {
-			log.Printf("[WARN] Failed to cleanup logs for service %s: %v", service.Name, err)
+			log.Printf("[WARN] Failed to cleanup logs for service UUID %s: %v", service.ID, err)
 			continue
 		}
-		
+
 		deleted, _ := result.RowsAffected()
 		deletedPerService += deleted
 	}
@@ -692,13 +685,12 @@ func (sm *Manager) CleanupOldLogs(maxDays int, maxLogsPerService int) error {
 	}
 
 	totalDeleted := deletedOld + deletedPerService
-	log.Printf("[INFO] Log cleanup completed - deleted %d logs (%d old, %d excess per service). Logs: %d -> %d", 
+	log.Printf("[INFO] Log cleanup completed - deleted %d logs (%d old, %d excess per service). Logs: %d -> %d",
 		totalDeleted, deletedOld, deletedPerService, totalLogsBefore, totalLogsAfter)
 
 	return nil
 }
 
-// AutoCleanupLogs performs automatic log cleanup with default settings
 func (sm *Manager) AutoCleanupLogs() error {
 	// Default: keep logs from last 7 days and max 1000 logs per service
 	return sm.CleanupOldLogs(7, 1000)

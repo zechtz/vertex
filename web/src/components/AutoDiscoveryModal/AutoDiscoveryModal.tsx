@@ -15,7 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast, toast } from '@/components/ui/toast';
 
 interface DiscoveredService {
   name: string;
@@ -41,11 +43,14 @@ export function AutoDiscoveryModal({
   onServiceImported
 }: AutoDiscoveryModalProps) {
   const { token } = useAuth();
+  const { addToast } = useToast();
   const [discoveredServices, setDiscoveredServices] = useState<DiscoveredService[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isImporting, setIsImporting] = useState<Record<string, boolean>>({});
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
 
   const filteredServices = discoveredServices.filter(service =>
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -87,9 +92,18 @@ export function AutoDiscoveryModal({
   const importService = async (service: DiscoveredService) => {
     setIsImporting(prev => ({ ...prev, [service.name]: true }));
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/auto-discovery/import', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(service)
       });
 
@@ -105,13 +119,146 @@ export function AutoDiscoveryModal({
         prev.map(s => s.name === service.name ? { ...s, exists: true } : s)
       );
 
+      // Show success toast
+      addToast(
+        toast.success(
+          'Service imported',
+          `${service.name} has been imported and added to active profile`
+        )
+      );
+
       // Notify parent component
       onServiceImported();
     } catch (error) {
       console.error('Failed to import service:', error);
-      alert('Failed to import service: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      addToast(
+        toast.error(
+          'Failed to import service',
+          error instanceof Error ? error.message : 'Unknown error'
+        )
+      );
     } finally {
       setIsImporting(prev => ({ ...prev, [service.name]: false }));
+    }
+  };
+
+  const importSelectedServices = async () => {
+    if (selectedServices.size === 0) {
+      addToast(
+        toast.warning(
+          'No services selected',
+          'Please select services to import'
+        )
+      );
+      return;
+    }
+
+    setIsBulkImporting(true);
+    try {
+      const servicesToImport = discoveredServices.filter(service => 
+        selectedServices.has(service.name) && !service.exists
+      );
+
+      if (servicesToImport.length === 0) {
+        addToast(
+          toast.info(
+            'Services already imported',
+            'All selected services are already imported'
+          )
+        );
+        return;
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/auto-discovery/import-bulk', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ services: servicesToImport })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to bulk import services: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Bulk import completed:', result);
+      
+      // Mark only successfully imported services as existing in our local state
+      const importedServiceNames = new Set(result.importedServices?.map((s: any) => s.name) || []);
+      setDiscoveredServices(prev =>
+        prev.map(service => {
+          if (importedServiceNames.has(service.name)) {
+            return { ...service, exists: true };
+          }
+          return service;
+        })
+      );
+
+      // Clear selection
+      setSelectedServices(new Set());
+
+      // Notify parent component
+      onServiceImported();
+
+      // Show result message
+      if (result.errors && result.errors.length > 0) {
+        addToast(
+          toast.warning(
+            'Bulk import completed with errors',
+            `${result.totalImported} services imported successfully, but ${result.errors.length} failed. Check logs for details.`
+          )
+        );
+      } else {
+        addToast(
+          toast.success(
+            'Bulk import successful',
+            `Successfully imported ${result.totalImported} service(s) and added to active profile`
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Failed to bulk import services:', error);
+      addToast(
+        toast.error(
+          'Failed to bulk import services',
+          error instanceof Error ? error.message : 'Unknown error'
+        )
+      );
+    } finally {
+      setIsBulkImporting(false);
+    }
+  };
+
+  const toggleServiceSelection = (serviceName: string) => {
+    setSelectedServices(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(serviceName)) {
+        newSet.delete(serviceName);
+      } else {
+        newSet.add(serviceName);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const availableServices = filteredServices.filter(service => !service.exists);
+    const allSelected = availableServices.every(service => selectedServices.has(service.name));
+    
+    if (allSelected) {
+      // Deselect all
+      setSelectedServices(new Set());
+    } else {
+      // Select all available services
+      setSelectedServices(new Set(availableServices.map(service => service.name)));
     }
   };
 
@@ -296,6 +443,46 @@ export function AutoDiscoveryModal({
                     </div>
                   </div>
 
+                  {/* Bulk Actions */}
+                  {filteredServices.filter(s => !s.exists).length > 0 && (
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <Checkbox
+                          id="select-all"
+                          checked={filteredServices.filter(s => !s.exists).length > 0 && 
+                                  filteredServices.filter(s => !s.exists).every(s => selectedServices.has(s.name))}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Select all services"
+                        />
+                        <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
+                          Select All ({filteredServices.filter(s => !s.exists).length} services)
+                        </label>
+                        {selectedServices.size > 0 && (
+                          <Badge variant="secondary">
+                            {selectedServices.size} selected
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        onClick={importSelectedServices}
+                        disabled={selectedServices.size === 0 || isBulkImporting}
+                        className="ml-4"
+                      >
+                        {isBulkImporting ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Importing...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4 mr-2" />
+                            Import Selected ({selectedServices.size})
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Services List */}
                   {filteredServices.length === 0 && discoveredServices.length > 0 && (
                     <div className="text-center py-8">
@@ -317,6 +504,14 @@ export function AutoDiscoveryModal({
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-2">
+                              {!service.exists && (
+                                <Checkbox
+                                  id={`service-${service.name}`}
+                                  checked={selectedServices.has(service.name)}
+                                  onCheckedChange={() => toggleServiceSelection(service.name)}
+                                  aria-label={`Select ${service.name}`}
+                                />
+                              )}
                               {getServiceTypeIcon(service.type)}
                               <CardTitle className="text-lg">{service.name}</CardTitle>
                             </div>

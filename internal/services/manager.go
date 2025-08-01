@@ -1,16 +1,18 @@
-// Package services
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/zechtz/nest-up/internal/database"
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/database"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 type Manager struct {
@@ -115,10 +117,61 @@ func (sm *Manager) GetServices() []models.Service {
 	return services
 }
 
-func (sm *Manager) GetService(name string) (*models.Service, bool) {
+// NormalizeServiceOrders ensures service orders are sequential from 1 to N
+func (sm *Manager) NormalizeServiceOrders() error {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// Get all services and sort them by current order
+	services := make([]*models.Service, 0, len(sm.services))
+	for _, service := range sm.services {
+		services = append(services, service)
+	}
+
+	// Sort by current order
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].Order < services[j].Order
+	})
+
+	// Normalize orders to 1, 2, 3, ... N
+	hasChanges := false
+	for i, service := range services {
+		newOrder := i + 1
+		if service.Order != newOrder {
+			service.Order = newOrder
+			hasChanges = true
+
+			// Update in database
+			if err := sm.UpdateServiceConfigInDB(service); err != nil {
+				log.Printf("[ERROR] Failed to update service order for UUID %s: %v", service.ID, err)
+				return fmt.Errorf("failed to normalize order for service UUID %s: %w", service.ID, err)
+			}
+		}
+	}
+
+	if hasChanges {
+		log.Printf("[INFO] Normalized service orders - services now ordered 1 to %d", len(services))
+		// Broadcast updates for all changed services
+		for _, service := range services {
+			sm.broadcastUpdate(service)
+		}
+	}
+
+	return nil
+}
+
+// GetServiceByUUID retrieves a service by its UUID from the services map.
+// It returns the service and a boolean indicating whether the service was found.
+// If the UUID is empty, it returns nil and false.
+func (sm *Manager) GetServiceByUUID(uuid string) (*models.Service, bool) {
+	if uuid == "" {
+		log.Printf("[WARN] Empty UUID provided for service lookup")
+		return nil, false
+	}
+
 	sm.mutex.RLock()
-	service, exists := sm.services[name]
-	sm.mutex.RUnlock()
+	defer sm.mutex.RUnlock()
+	service, exists := sm.services[uuid]
 	return service, exists
 }
 
@@ -161,17 +214,23 @@ func (sm *Manager) broadcastUpdate(service *models.Service) {
 	}
 }
 
-func (sm *Manager) broadcastLogEntry(serviceName string, logEntry models.LogEntry) {
+func (sm *Manager) broadcastLogEntry(serviceUUID string, logEntry models.LogEntry) {
 	sm.clientsMutex.Lock()
 	defer sm.clientsMutex.Unlock()
+
+	_, exists := sm.services[serviceUUID]
+	if !exists {
+		log.Printf("[WARN] Service UUID %s not found for log broadcast", serviceUUID)
+		return
+	}
 
 	message := WebSocketMessage{
 		Type: "log_entry",
 		Payload: struct {
-			ServiceName string           `json:"serviceName"`
+			ServiceUUID string          `json:"serviceUUID"`
 			LogEntry    models.LogEntry `json:"logEntry"`
 		}{
-			ServiceName: serviceName,
+			ServiceUUID: serviceUUID,
 			LogEntry:    logEntry,
 		},
 	}
@@ -216,11 +275,11 @@ func (sm *Manager) GracefulShutdown() {
 
 	// Stop each service
 	for _, service := range runningServices {
-		log.Printf("[INFO] %s - Stopping service: %s", time.Now().Format("2006-01-02 15:04:05"), service.Name)
-		if err := sm.StopService(service.Name); err != nil {
-			log.Printf("Failed to stop service %s: %v", service.Name, err)
+		log.Printf("[INFO] %s - Stopping service UUID: %s", time.Now().Format("2006-01-02 15:04:05"), service.ID)
+		if err := sm.StopService(service.ID); err != nil {
+			log.Printf("Failed to stop service UUID %s: %v", service.ID, err)
 		} else {
-			log.Printf("[INFO] %s - Successfully stopped service: %s", time.Now().Format("2006-01-02 15:04:05"), service.Name)
+			log.Printf("[INFO] %s - Successfully stopped service UUID: %s", time.Now().Format("2006-01-02 15:04:05"), service.ID)
 		}
 		// Small delay between stops to allow clean shutdown
 		time.Sleep(500 * time.Millisecond)
@@ -233,7 +292,7 @@ func (sm *Manager) GracefulShutdown() {
 	for _, service := range runningServices {
 		service.Mutex.Lock()
 		if service.Cmd != nil && service.Cmd.Process != nil {
-			log.Printf("[INFO] %s - Force cleaning up remaining process for %s (PID: %d)", time.Now().Format("2006-01-02 15:04:05"), service.Name, service.PID)
+			log.Printf("[INFO] %s - Force cleaning up remaining process for UUID %s (PID: %d)", time.Now().Format("2006-01-02 15:04:05"), service.ID, service.PID)
 			if pgid, err := GetProcessGroup(service.Cmd.Process.Pid); err == nil {
 				ForceKillProcessGroup(pgid)
 			} else {
@@ -292,15 +351,15 @@ func (sm *Manager) UpdateGlobalConfig(projectsDir, javaHomeOverride string) (Glo
 func (sm *Manager) SaveConfiguration(config *models.Configuration) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	
+
 	// Save to database
 	if err := sm.saveConfigurationToDB(config); err != nil {
 		return fmt.Errorf("failed to save configuration to database: %w", err)
 	}
-	
+
 	// Update in-memory cache
 	sm.configurations[config.ID] = config
-	
+
 	return nil
 }
 
@@ -308,21 +367,21 @@ func (sm *Manager) SaveConfiguration(config *models.Configuration) error {
 func (sm *Manager) UpdateConfiguration(config *models.Configuration) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	
+
 	// Check if configuration exists
 	_, exists := sm.configurations[config.ID]
 	if !exists {
 		return fmt.Errorf("configuration %s not found", config.ID)
 	}
-	
+
 	// Update database
 	if err := sm.updateConfigurationInDB(config); err != nil {
 		return fmt.Errorf("failed to update configuration in database: %w", err)
 	}
-	
+
 	// Update in-memory cache
 	sm.configurations[config.ID] = config
-	
+
 	return nil
 }
 
@@ -330,25 +389,25 @@ func (sm *Manager) UpdateConfiguration(config *models.Configuration) error {
 func (sm *Manager) ApplyConfiguration(configID string) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	
+
 	config, exists := sm.configurations[configID]
 	if !exists {
 		return fmt.Errorf("configuration %s not found", configID)
 	}
-	
+
 	// Update service orders based on configuration
 	for _, configService := range config.Services {
-		if service, exists := sm.services[configService.Name]; exists {
+		if service, exists := sm.services[configService.ID]; exists {
 			service.Order = configService.Order
 			sm.updateServiceInDB(service)
 		}
 	}
-	
+
 	// Mark this configuration as default and others as not default
 	for _, cfg := range sm.configurations {
 		cfg.IsDefault = (cfg.ID == configID)
 	}
-	
+
 	// Update database to reflect the new default
 	return sm.updateConfigurationDefaults(configID)
 }
@@ -357,13 +416,22 @@ func (sm *Manager) ApplyConfiguration(configID string) error {
 func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	
-	service, exists := sm.services[serviceConfig.Name]
+
+	service, exists := sm.services[serviceConfig.ID]
 	if !exists {
-		return fmt.Errorf("service %s not found", serviceConfig.Name)
+		return fmt.Errorf("service UUID %s not found", serviceConfig.ID)
 	}
-	
+
+	// Check for directory conflicts if directory is being changed
+	if service.Dir != serviceConfig.Dir {
+		if err := sm.ValidateServiceUniqueness(serviceConfig.ID, serviceConfig.Dir); err != nil {
+			return err
+		}
+	}
+
 	// Update service fields
+	service.Name = serviceConfig.Name
+	service.Dir = serviceConfig.Dir
 	service.JavaOpts = serviceConfig.JavaOpts
 	service.HealthURL = serviceConfig.HealthURL
 	service.Port = serviceConfig.Port
@@ -372,15 +440,56 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 	service.IsEnabled = serviceConfig.IsEnabled
 	service.BuildSystem = serviceConfig.BuildSystem
 	service.EnvVars = serviceConfig.EnvVars
-	
+
 	// Save to database
 	if err := sm.UpdateServiceConfigInDB(service); err != nil {
 		return fmt.Errorf("failed to update service in database: %w", err)
 	}
-	
+
 	// Broadcast update
 	sm.broadcastUpdate(service)
-	
+
+	return nil
+}
+
+// RenameService renames an existing service's name (not UUID)
+func (sm *Manager) RenameService(serviceUUID, newName string) error {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// Check if service exists
+	service, exists := sm.services[serviceUUID]
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Check if new name is already taken
+	for _, s := range sm.services {
+		if s.Name == newName && s.ID != serviceUUID {
+			return fmt.Errorf("service name %s already exists", newName)
+		}
+	}
+
+	// If names are the same, no rename needed
+	if service.Name == newName {
+		return nil
+	}
+
+	// Update the service name
+	oldName := service.Name
+	service.Name = newName
+
+	// Update in database
+	if err := sm.UpdateServiceConfigInDB(service); err != nil {
+		// Revert the change if database update fails
+		service.Name = oldName
+		return fmt.Errorf("failed to rename service in database: %w", err)
+	}
+
+	// Broadcast update
+	sm.broadcastUpdate(service)
+
+	log.Printf("[INFO] Successfully renamed service UUID %s from %s to %s", serviceUUID, oldName, newName)
 	return nil
 }
 
@@ -394,14 +503,126 @@ func (sm *Manager) CleanupPort(port int) *PortCleanupResult {
 	return KillProcessesOnPort(port)
 }
 
+// ValidateServiceUniqueness checks if a service would conflict with existing services
+// based on the combination of profile root directory and service directory
+// Note: This method assumes the caller already holds the appropriate mutex lock
+func (sm *Manager) ValidateServiceUniqueness(serviceUUID, serviceDir string) error {
+	// Get the default projects directory (global)
+	globalProjectsDir := sm.config.ProjectsDir
+
+	// If global projects directory is empty, use current working directory
+	if globalProjectsDir == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			globalProjectsDir = cwd
+		} else {
+			globalProjectsDir = "."
+		}
+	}
+
+	// Calculate the proposed service path using global projects directory
+	proposedPath := filepath.Join(globalProjectsDir, serviceDir)
+	proposedPath = filepath.Clean(proposedPath)
+
+	// Check against all existing services (using direct map access to avoid mutex deadlock)
+	for _, existing := range sm.services {
+		// Skip self when updating
+		if existing.ID == serviceUUID {
+			continue
+		}
+
+		// Get the existing service's projects directory
+		existingProjectsDir := sm.getServiceProjectsDirectory(existing.ID)
+		if existingProjectsDir == "" {
+			existingProjectsDir = globalProjectsDir
+		}
+
+		// Calculate existing service path
+		existingPath := filepath.Join(existingProjectsDir, existing.Dir)
+		existingPath = filepath.Clean(existingPath)
+
+		// Check if paths would conflict
+		if proposedPath == existingPath {
+			return fmt.Errorf("service path conflict: UUID '%s' would use the same directory as existing service UUID '%s' (%s)", serviceUUID, existing.ID, existingPath)
+		}
+	}
+
+	// Also check against all profiles to ensure no conflicts across profiles
+	profiles, err := sm.db.GetAllServiceProfiles()
+	if err != nil {
+		log.Printf("[WARN] Failed to check profile conflicts: %v", err)
+		// Continue without profile validation rather than failing
+	} else {
+		for _, profile := range profiles {
+			// Skip if profile has no custom projects directory
+			if profile.ProjectsDir == "" {
+				continue
+			}
+
+			// Parse profile services (now storing UUIDs)
+			var profileServiceUUIDs []string
+			if err := json.Unmarshal([]byte(profile.ServicesJSON), &profileServiceUUIDs); err != nil {
+				continue
+			}
+
+			// Check if any profile service would conflict
+			for _, profileServiceUUID := range profileServiceUUIDs {
+				if profileServiceUUID == serviceUUID {
+					continue // Skip self
+				}
+
+				// Find the actual service details
+				existingService, exists := sm.services[profileServiceUUID]
+				if !exists {
+					continue
+				}
+
+				// Calculate profile service path
+				profileServicePath := filepath.Join(profile.ProjectsDir, existingService.Dir)
+				profileServicePath = filepath.Clean(profileServicePath)
+
+				if proposedPath == profileServicePath {
+					return fmt.Errorf("service path conflict: UUID '%s' would use the same directory as service UUID '%s' in profile '%s' (%s)", serviceUUID, profileServiceUUID, profile.Name, profileServicePath)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// getServiceProjectsDirectory returns the projects directory for a specific service
+func (sm *Manager) getServiceProjectsDirectory(serviceUUID string) string {
+	// Query database to find the profile that contains this service
+	query := `SELECT projects_dir FROM service_profiles 
+			  WHERE services_json LIKE ? AND projects_dir != '' AND projects_dir IS NOT NULL
+			  ORDER BY is_active DESC, is_default DESC, created_at DESC
+			  LIMIT 1`
+
+	searchPattern := fmt.Sprintf("%%\"%s\"%%", serviceUUID)
+
+	var projectsDir string
+	err := sm.db.QueryRow(query, searchPattern).Scan(&projectsDir)
+	if err != nil {
+		// No profile found, return empty string to use global default
+		return ""
+	}
+
+	return projectsDir
+}
+
 // AddService adds a new service to the manager
 func (sm *Manager) AddService(service *models.Service) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	// Check if service with this name already exists
-	if _, exists := sm.services[service.Name]; exists {
-		return fmt.Errorf("service with name '%s' already exists", service.Name)
+	// Check if service with this UUID already exists
+	if _, exists := sm.services[service.ID]; exists {
+		return fmt.Errorf("service with UUID '%s' already exists", service.ID)
+	}
+
+	// Validate system-wide uniqueness based on directory path
+	if err := sm.ValidateServiceUniqueness(service.ID, service.Dir); err != nil {
+		return err
 	}
 
 	// Initialize service fields if not set
@@ -419,52 +640,124 @@ func (sm *Manager) AddService(service *models.Service) error {
 	}
 
 	// Add service to memory
-	sm.services[service.Name] = service
+	sm.services[service.ID] = service
 
 	// Save to database (insert or update)
 	if err := sm.upsertServiceInDB(service); err != nil {
 		// Remove from memory if database save fails
-		delete(sm.services, service.Name)
+		delete(sm.services, service.ID)
 		return fmt.Errorf("failed to save service to database: %w", err)
 	}
 
 	// Broadcast the update
 	sm.broadcastUpdate(service)
 
-	log.Printf("[INFO] Successfully added service: %s", service.Name)
+	log.Printf("[INFO] Successfully added service: %s (UUID: %s)", service.Name, service.ID)
+
+	// Normalize orders to ensure sequential ordering
+	go func() {
+		if err := sm.NormalizeServiceOrders(); err != nil {
+			log.Printf("[WARN] Failed to normalize service orders after adding UUID %s: %v", service.ID, err)
+		}
+	}()
+
 	return nil
 }
 
 // DeleteService removes a service from the manager
-// GetServiceProjectsDir returns the appropriate projects directory for a service
-// If the service belongs to an active profile with a custom projectsDir, use that
-// Otherwise, use the global projectsDir
-// StartServiceWithProjectsDir starts a service using a specific projects directory
-func (sm *Manager) StartServiceWithProjectsDir(serviceName, projectsDir string) error {
+func (sm *Manager) deleteService(serviceUUID string) error {
+	// First, check if service exists and get its status
 	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
+	service, exists := sm.services[serviceUUID]
+	isRunning := exists && service.Status == "running"
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
+		return fmt.Errorf("service UUID '%s' not found", serviceUUID)
 	}
 
-	log.Printf("[INFO] Starting service %s from projects directory: %s", serviceName, projectsDir)
+	// Stop the service if it's running (without holding the main lock)
+	if isRunning {
+		log.Printf("[INFO] Stopping service UUID %s before deletion", serviceUUID)
+		if err := sm.StopService(serviceUUID); err != nil {
+			log.Printf("[WARN] Failed to stop service UUID %s before deletion: %v", serviceUUID, err)
+			// Continue with deletion even if stop fails
+		}
+	}
 
-	return sm.startServiceWithProjectsDir(service, projectsDir)
+	// Now acquire the write lock for deletion
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// Double-check the service still exists (in case it was deleted by another goroutine)
+	service, exists = sm.services[serviceUUID]
+	if !exists {
+		return fmt.Errorf("service UUID '%s' not found", serviceUUID)
+	}
+
+	// Remove from memory
+	delete(sm.services, serviceUUID)
+
+	// Remove from database
+	if err := sm.db.DeleteService(serviceUUID); err != nil {
+		// Re-add to memory if database deletion fails
+		sm.services[serviceUUID] = service
+		return fmt.Errorf("failed to delete service from database: %w", err)
+	}
+
+	log.Printf("[INFO] Successfully deleted service UUID: %s", serviceUUID)
+
+	// Normalize orders to ensure sequential ordering
+	go func() {
+		if err := sm.NormalizeServiceOrders(); err != nil {
+			log.Printf("[WARN] Failed to normalize service orders after deleting UUID %s: %v", serviceUUID, err)
+		}
+	}()
+
+	return nil
 }
 
-// RestartServiceWithProjectsDir restarts a service using a specific projects directory
-func (sm *Manager) RestartServiceWithProjectsDir(serviceName, projectsDir string) error {
+// StartService starts a service by UUID
+func (sm *Manager) StartService(serviceUUID string) error {
 	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
+	service, exists := sm.services[serviceUUID]
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
-	log.Printf("[INFO] Restarting service %s from projects directory: %s (port %d)", serviceName, projectsDir, service.Port)
+	log.Printf("[INFO] Starting service UUID: %s", serviceUUID)
+
+	return sm.startService(service)
+}
+
+// StopService stops a service by UUID
+func (sm *Manager) StopService(serviceUUID string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	log.Printf("[INFO] Stopping service UUID: %s", serviceUUID)
+
+	return sm.stopService(service)
+}
+
+// RestartService restarts a service by UUID
+func (sm *Manager) RestartService(serviceUUID string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	log.Printf("[INFO] Restarting service UUID: %s (port %d)", serviceUUID, service.Port)
 
 	// Stop the service first
 	if service.Status == "running" {
@@ -478,7 +771,57 @@ func (sm *Manager) RestartServiceWithProjectsDir(serviceName, projectsDir string
 
 	// Clean up any processes still using the service's port
 	if service.Port > 0 {
-		log.Printf("[INFO] Cleaning up port %d before restarting service %s", service.Port, serviceName)
+		log.Printf("[INFO] Cleaning up port %d before restarting service UUID %s", service.Port, serviceUUID)
+		if err := CleanupPortBeforeStart(service.Port); err != nil {
+			log.Printf("[WARN] Port cleanup failed: %v", err)
+			// Continue anyway - the port might be available by now
+		}
+	}
+
+	// Start the service
+	return sm.startService(service)
+}
+
+// StartServiceWithProjectsDir starts a service using a specific projects directory
+func (sm *Manager) StartServiceWithProjectsDir(serviceUUID, projectsDir string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	log.Printf("[INFO] Starting service UUID %s from projects directory: %s", serviceUUID, projectsDir)
+
+	return sm.startServiceWithProjectsDir(service, projectsDir)
+}
+
+// RestartServiceWithProjectsDir restarts a service using a specific projects directory
+func (sm *Manager) RestartServiceWithProjectsDir(serviceUUID, projectsDir string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	log.Printf("[INFO] Restarting service UUID %s from projects directory: %s (port %d)", serviceUUID, projectsDir, service.Port)
+
+	// Stop the service first
+	if service.Status == "running" {
+		if err := sm.stopService(service); err != nil {
+			log.Printf("[WARN] Failed to stop service gracefully: %v", err)
+			// Continue anyway - we'll clean up the port
+		}
+		// Wait a moment for cleanup
+		time.Sleep(2 * time.Second)
+	}
+
+	// Clean up any processes still using the service's port
+	if service.Port > 0 {
+		log.Printf("[INFO] Cleaning up port %d before restarting service UUID %s", service.Port, serviceUUID)
 		if err := CleanupPortBeforeStart(service.Port); err != nil {
 			log.Printf("[WARN] Port cleanup failed: %v", err)
 			// Continue anyway - the port might be available by now
@@ -487,50 +830,6 @@ func (sm *Manager) RestartServiceWithProjectsDir(serviceName, projectsDir string
 
 	// Start the service with custom projects directory
 	return sm.startServiceWithProjectsDir(service, projectsDir)
-}
-
-func (sm *Manager) DeleteService(serviceName string) error {
-	// First, check if service exists and get its status
-	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
-	isRunning := exists && service.Status == "running"
-	sm.mutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("service '%s' not found", serviceName)
-	}
-
-	// Stop the service if it's running (without holding the main lock)
-	if isRunning {
-		log.Printf("[INFO] Stopping service %s before deletion", serviceName)
-		if err := sm.StopService(serviceName); err != nil {
-			log.Printf("[WARN] Failed to stop service %s before deletion: %v", serviceName, err)
-			// Continue with deletion even if stop fails
-		}
-	}
-
-	// Now acquire the write lock for deletion
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	// Double-check the service still exists (in case it was deleted by another goroutine)
-	service, exists = sm.services[serviceName]
-	if !exists {
-		return fmt.Errorf("service '%s' not found", serviceName)
-	}
-
-	// Remove from memory
-	delete(sm.services, serviceName)
-
-	// Remove from database
-	if err := sm.db.DeleteService(serviceName); err != nil {
-		// Re-add to memory if database deletion fails
-		sm.services[serviceName] = service
-		return fmt.Errorf("failed to delete service from database: %w", err)
-	}
-
-	log.Printf("[INFO] Successfully deleted service: %s", serviceName)
-	return nil
 }
 
 // startLogCleanupRoutine starts a background routine that periodically cleans up old logs
@@ -558,4 +857,17 @@ func (sm *Manager) startLogCleanupRoutine() {
 			}
 		}
 	}
+}
+
+// updateServiceInDB updates a service's status, health status, PID, last started time, and order in the database
+func (sm *Manager) updateServiceInDB(service *models.Service) error {
+	_, err := sm.db.Exec(`
+		UPDATE services 
+		SET status = ?, health_status = ?, pid = ?, last_started = ?, service_order = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`,
+		service.Status, service.HealthStatus, service.PID, service.LastStarted, service.Order, service.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update service UUID %s in database: %w", service.ID, err)
+	}
+	return nil
 }

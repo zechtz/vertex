@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   User,
   LogOut,
@@ -9,12 +9,12 @@ import {
   ChevronDown,
   Activity,
   Shield,
-  Clock
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { DarkModeToggle } from '@/components/DarkModeToggle/DarkModeToggle';
-import { ProfileSwitcher } from '@/components/ProfileSwitcher';
+  Clock,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { DarkModeToggle } from "@/components/DarkModeToggle/DarkModeToggle";
+import { ProfileSwitcher } from "@/components/ProfileSwitcher";
 
 interface ToolbarUser {
   id: string;
@@ -31,17 +31,17 @@ interface ToolbarProps {
   isSidebarCollapsed: boolean;
 }
 
-export function Toolbar({ 
-  user, 
-  onLogout, 
-  onToggleSidebar, 
-  isSidebarCollapsed 
+export function Toolbar({
+  user,
+  onLogout,
+  onToggleSidebar,
+  isSidebarCollapsed,
 }: ToolbarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const formatLastLogin = (lastLogin: string) => {
-    if (!lastLogin) return 'First login';
+    if (!lastLogin) return "First login";
     const date = new Date(lastLogin);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -49,7 +49,7 @@ export function Toolbar({
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
@@ -58,20 +58,20 @@ export function Toolbar({
 
   const getRoleColor = (role: string) => {
     switch (role.toLowerCase()) {
-      case 'admin':
-        return 'bg-red-100 text-red-800';
-      case 'user':
-        return 'bg-blue-100 text-blue-800';
-      case 'viewer':
-        return 'bg-gray-100 text-gray-800';
+      case "admin":
+        return "bg-red-100 text-red-800";
+      case "user":
+        return "bg-blue-100 text-blue-800";
+      case "viewer":
+        return "bg-gray-100 text-gray-800";
       default:
-        return 'bg-green-100 text-green-800';
+        return "bg-green-100 text-green-800";
     }
   };
 
   const getRoleIcon = (role: string) => {
     switch (role.toLowerCase()) {
-      case 'admin':
+      case "admin":
         return <Shield className="h-3 w-3" />;
       default:
         return <User className="h-3 w-3" />;
@@ -101,9 +101,11 @@ export function Toolbar({
             {!isSidebarCollapsed && (
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  NeST Manager
+                  MicroService Manager
                 </h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Service Management Platform</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Service Management Platform
+                </p>
               </div>
             )}
           </div>
@@ -127,7 +129,7 @@ export function Toolbar({
         <div className="flex items-center gap-3">
           {/* Profile Switcher */}
           <ProfileSwitcher />
-          
+
           {/* Dark Mode Toggle */}
           <DarkModeToggle />
 
@@ -170,7 +172,9 @@ export function Toolbar({
                     </div>
                   </div>
                 </div>
-                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  className={`h-4 w-4 text-gray-400 transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                />
               </button>
 
               {/* User Dropdown Menu */}
@@ -183,12 +187,19 @@ export function Toolbar({
                         <User className="h-6 w-6 text-white" />
                       </div>
                       <div className="flex-1">
-                        <div className="font-medium text-gray-900 dark:text-gray-100">{user.username}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-300">{user.email}</div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100">
+                          {user.username}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-300">
+                          {user.email}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
-                          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
+                          <div
+                            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}
+                          >
                             {getRoleIcon(user.role)}
-                            {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                            {user.role.charAt(0).toUpperCase() +
+                              user.role.slice(1)}
                           </div>
                           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                             <Clock className="h-3 w-3" />
@@ -237,8 +248,8 @@ export function Toolbar({
 
       {/* Click outside to close user menu */}
       {showUserMenu && (
-        <div 
-          className="fixed inset-0 z-40" 
+        <div
+          className="fixed inset-0 z-40"
           onClick={() => setShowUserMenu(false)}
         />
       )}

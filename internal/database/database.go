@@ -1,10 +1,10 @@
-// Package database
 package database
 
 import (
 	"database/sql"
 	"fmt"
 
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -32,10 +32,11 @@ func NewDatabase() (*Database, error) {
 }
 
 func (db *Database) initTables() error {
-	// Create services table
+	// Create services table with UUID primary key
 	createServicesTable := `
 	CREATE TABLE IF NOT EXISTS services (
-		name TEXT PRIMARY KEY,
+		id TEXT PRIMARY KEY, -- UUID
+		name TEXT UNIQUE NOT NULL,
 		dir TEXT NOT NULL,
 		extra_env TEXT,
 		java_opts TEXT,
@@ -48,35 +49,24 @@ func (db *Database) initTables() error {
 		last_started DATETIME,
 		description TEXT,
 		is_enabled BOOLEAN DEFAULT TRUE,
+		build_system TEXT DEFAULT 'auto',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
-
-	// Add missing columns to existing services table if they don't exist
-	alterTableQueries := []string{
-		`ALTER TABLE services ADD COLUMN description TEXT;`,
-		`ALTER TABLE services ADD COLUMN is_enabled BOOLEAN DEFAULT TRUE;`,
-		`ALTER TABLE services ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;`,
-		`ALTER TABLE services ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;`,
-		`ALTER TABLE services ADD COLUMN build_system TEXT DEFAULT 'auto';`,
-		`ALTER TABLE service_profiles ADD COLUMN projects_dir TEXT DEFAULT '';`,
-		`ALTER TABLE service_profiles ADD COLUMN java_home_override TEXT DEFAULT '';`,
-		`ALTER TABLE service_profiles ADD COLUMN is_active BOOLEAN DEFAULT FALSE;`,
-	}
 
 	// Create environment variables table
 	createEnvVarsTable := `
 	CREATE TABLE IF NOT EXISTS service_env_vars (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		service_name TEXT NOT NULL,
+		service_id TEXT NOT NULL,
 		var_name TEXT NOT NULL,
 		var_value TEXT NOT NULL,
 		description TEXT,
 		is_required BOOLEAN DEFAULT FALSE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (service_name) REFERENCES services(name) ON DELETE CASCADE,
-		UNIQUE(service_name, var_name)
+		FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+		UNIQUE(service_id, var_name)
 	);`
 
 	// Create global environment variables table
@@ -126,8 +116,8 @@ func (db *Database) initTables() error {
 	createServiceDependenciesTable := `
 	CREATE TABLE IF NOT EXISTS service_dependencies (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		service_name TEXT NOT NULL,
-		dependency_service_name TEXT NOT NULL,
+		service_id TEXT NOT NULL,
+		dependency_service_id TEXT NOT NULL,
 		dependency_type TEXT NOT NULL DEFAULT 'hard',
 		health_check BOOLEAN DEFAULT TRUE,
 		timeout_seconds INTEGER DEFAULT 120,
@@ -136,8 +126,9 @@ func (db *Database) initTables() error {
 		description TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (service_name) REFERENCES services(name) ON DELETE CASCADE,
-		UNIQUE(service_name, dependency_service_name)
+		FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+		FOREIGN KEY (dependency_service_id) REFERENCES services(id) ON DELETE CASCADE,
+		UNIQUE(service_id, dependency_service_id)
 	);`
 
 	// Create users table
@@ -204,7 +195,7 @@ func (db *Database) initTables() error {
 	CREATE TABLE IF NOT EXISTS profile_service_configs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		profile_id TEXT NOT NULL,
-		service_name TEXT NOT NULL,
+		service_id TEXT NOT NULL,
 		config_key TEXT NOT NULL,
 		config_value TEXT NOT NULL,
 		config_type TEXT DEFAULT 'string',
@@ -212,7 +203,8 @@ func (db *Database) initTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (profile_id) REFERENCES service_profiles(id) ON DELETE CASCADE,
-		UNIQUE(profile_id, service_name, config_key)
+		FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+		UNIQUE(profile_id, service_id, config_key)
 	);`
 
 	// Create profile-scoped dependencies table
@@ -220,8 +212,8 @@ func (db *Database) initTables() error {
 	CREATE TABLE IF NOT EXISTS profile_dependencies (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		profile_id TEXT NOT NULL,
-		service_name TEXT NOT NULL,
-		dependency_service_name TEXT NOT NULL,
+		service_id TEXT NOT NULL,
+		dependency_service_id TEXT NOT NULL,
 		dependency_type TEXT NOT NULL DEFAULT 'hard',
 		health_check BOOLEAN DEFAULT TRUE,
 		timeout_seconds INTEGER DEFAULT 120,
@@ -231,10 +223,26 @@ func (db *Database) initTables() error {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (profile_id) REFERENCES service_profiles(id) ON DELETE CASCADE,
-		UNIQUE(profile_id, service_name, dependency_service_name)
+		FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+		FOREIGN KEY (dependency_service_id) REFERENCES services(id) ON DELETE CASCADE,
+		UNIQUE(profile_id, service_id, dependency_service_id)
 	);`
 
-	tables := []string{createServicesTable, createEnvVarsTable, createGlobalEnvTable, createConfigsTable, createGlobalConfigTable, createSyncMetadataTable, createServiceDependenciesTable, createUsersTable, createUserProfilesTable, createServiceProfilesTable, createProfileEnvVarsTable, createProfileServiceConfigsTable, createProfileDependenciesTable}
+	tables := []string{
+		createServicesTable,
+		createEnvVarsTable,
+		createGlobalEnvTable,
+		createConfigsTable,
+		createGlobalConfigTable,
+		createSyncMetadataTable,
+		createServiceDependenciesTable,
+		createUsersTable,
+		createUserProfilesTable,
+		createServiceProfilesTable,
+		createProfileEnvVarsTable,
+		createProfileServiceConfigsTable,
+		createProfileDependenciesTable,
+	}
 
 	for _, table := range tables {
 		if _, err := db.Exec(table); err != nil {
@@ -242,13 +250,49 @@ func (db *Database) initTables() error {
 		}
 	}
 
-	// Apply schema migrations for existing tables
-	for _, query := range alterTableQueries {
-		// Ignore errors for columns that already exist
-		db.Exec(query)
+	// No need for alterTableQueries since we're starting fresh
+	// migrateServicesToUUID is unnecessary with no existing data, but kept for completeness
+	if err := db.migrateServicesToUUID(); err != nil {
+		return fmt.Errorf("failed to migrate services to UUID: %w", err)
 	}
 
 	return nil
+}
+
+// migrateServicesToUUID generates UUIDs for existing services (not needed for fresh database)
+func (db *Database) migrateServicesToUUID() error {
+	// Since we're starting from scratch, this should be a no-op
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM services WHERE id IS NULL OR id = ''").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check for services needing UUID migration: %w", err)
+	}
+
+	if count == 0 {
+		return nil // No services to migrate
+	}
+
+	// This should not run with a fresh database, but included for robustness
+	rows, err := db.Query("SELECT name FROM services WHERE id IS NULL OR id = ''")
+	if err != nil {
+		return fmt.Errorf("failed to query services for UUID migration: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var serviceName string
+		if err := rows.Scan(&serviceName); err != nil {
+			return fmt.Errorf("failed to scan service name: %w", err)
+		}
+
+		serviceUUID := uuid.New().String()
+		_, err = db.Exec("UPDATE services SET id = ? WHERE name = ?", serviceUUID, serviceName)
+		if err != nil {
+			return fmt.Errorf("failed to update service %s with UUID: %w", serviceName, err)
+		}
+	}
+
+	return rows.Err()
 }
 
 // GetGlobalEnvVars retrieves all global environment variables
@@ -330,7 +374,7 @@ func (db *Database) MarkSyncCompleted(syncType string) error {
 }
 
 // SaveServiceDependencies saves service dependencies to the database
-func (db *Database) SaveServiceDependencies(serviceName string, dependencies []interface{}) error {
+func (db *Database) SaveServiceDependencies(serviceUUID string, dependencies []any) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -338,18 +382,18 @@ func (db *Database) SaveServiceDependencies(serviceName string, dependencies []i
 	defer tx.Rollback()
 
 	// Clear existing dependencies for this service
-	_, err = tx.Exec("DELETE FROM service_dependencies WHERE service_name = ?", serviceName)
+	_, err = tx.Exec("DELETE FROM service_dependencies WHERE service_id = ?", serviceUUID)
 	if err != nil {
-		return fmt.Errorf("failed to clear existing dependencies: %w", err)
+		return fmt.Errorf("failed to clear existing dependencies for UUID %s: %w", serviceUUID, err)
 	}
 
 	// Insert new dependencies
 	for _, dep := range dependencies {
-		if depMap, ok := dep.(map[string]interface{}); ok {
-			dependencyServiceName, _ := depMap["serviceName"].(string)
+		if depMap, ok := dep.(map[string]any); ok {
+			dependencyServiceUUID, _ := depMap["serviceId"].(string)
 			dependencyType, _ := depMap["type"].(string)
 			healthCheck, _ := depMap["healthCheck"].(bool)
-			timeoutSeconds := 120 // default
+			timeoutSeconds := 120     // default
 			retryIntervalSeconds := 5 // default
 			isRequired, _ := depMap["required"].(bool)
 			description, _ := depMap["description"].(string)
@@ -367,15 +411,15 @@ func (db *Database) SaveServiceDependencies(serviceName string, dependencies []i
 
 			_, err = tx.Exec(`
 				INSERT INTO service_dependencies (
-					service_name, dependency_service_name, dependency_type, 
+					service_id, dependency_service_id, dependency_type, 
 					health_check, timeout_seconds, retry_interval_seconds, 
 					is_required, description, updated_at
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-				serviceName, dependencyServiceName, dependencyType,
+				serviceUUID, dependencyServiceUUID, dependencyType,
 				healthCheck, timeoutSeconds, retryIntervalSeconds,
 				isRequired, description)
 			if err != nil {
-				return fmt.Errorf("failed to insert dependency %s -> %s: %w", serviceName, dependencyServiceName, err)
+				return fmt.Errorf("failed to insert dependency %s -> %s: %w", serviceUUID, dependencyServiceUUID, err)
 			}
 		}
 	}
@@ -384,38 +428,38 @@ func (db *Database) SaveServiceDependencies(serviceName string, dependencies []i
 }
 
 // LoadServiceDependencies loads service dependencies from the database
-func (db *Database) LoadServiceDependencies(serviceName string) ([]map[string]interface{}, error) {
+func (db *Database) LoadServiceDependencies(serviceUUID string) ([]map[string]any, error) {
 	rows, err := db.Query(`
-		SELECT dependency_service_name, dependency_type, health_check, 
+		SELECT dependency_service_id, dependency_type, health_check, 
 		       timeout_seconds, retry_interval_seconds, is_required, description
 		FROM service_dependencies 
-		WHERE service_name = ?
-		ORDER BY dependency_service_name`, serviceName)
+		WHERE service_id = ?
+		ORDER BY dependency_service_id`, serviceUUID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query dependencies: %w", err)
+		return nil, fmt.Errorf("failed to query dependencies for UUID %s: %w", serviceUUID, err)
 	}
 	defer rows.Close()
 
-	var dependencies []map[string]interface{}
+	var dependencies []map[string]any
 	for rows.Next() {
-		var dependencyServiceName, dependencyType, description string
+		var dependencyServiceUUID, dependencyType, description string
 		var healthCheck, isRequired bool
 		var timeoutSeconds, retryIntervalSeconds int
 
-		err := rows.Scan(&dependencyServiceName, &dependencyType, &healthCheck,
+		err := rows.Scan(&dependencyServiceUUID, &dependencyType, &healthCheck,
 			&timeoutSeconds, &retryIntervalSeconds, &isRequired, &description)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan dependency: %w", err)
 		}
 
-		dependencies = append(dependencies, map[string]interface{}{
-			"serviceName":            dependencyServiceName,
-			"type":                   dependencyType,
-			"healthCheck":            healthCheck,
-			"timeoutSeconds":         timeoutSeconds,
-			"retryIntervalSeconds":   retryIntervalSeconds,
-			"required":               isRequired,
-			"description":            description,
+		dependencies = append(dependencies, map[string]any{
+			"serviceId":            dependencyServiceUUID,
+			"type":                 dependencyType,
+			"healthCheck":          healthCheck,
+			"timeoutSeconds":       timeoutSeconds,
+			"retryIntervalSeconds": retryIntervalSeconds,
+			"required":             isRequired,
+			"description":          description,
 		})
 	}
 
@@ -423,41 +467,41 @@ func (db *Database) LoadServiceDependencies(serviceName string) ([]map[string]in
 }
 
 // GetAllServiceDependencies returns all service dependencies
-func (db *Database) GetAllServiceDependencies() (map[string][]map[string]interface{}, error) {
+func (db *Database) GetAllServiceDependencies() (map[string][]map[string]any, error) {
 	rows, err := db.Query(`
-		SELECT service_name, dependency_service_name, dependency_type, health_check, 
+		SELECT service_id, dependency_service_id, dependency_type, health_check, 
 		       timeout_seconds, retry_interval_seconds, is_required, description
 		FROM service_dependencies 
-		ORDER BY service_name, dependency_service_name`)
+		ORDER BY service_id, dependency_service_id`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query all dependencies: %w", err)
 	}
 	defer rows.Close()
 
-	allDependencies := make(map[string][]map[string]interface{})
+	allDependencies := make(map[string][]map[string]any)
 	for rows.Next() {
-		var serviceName, dependencyServiceName, dependencyType, description string
+		var serviceUUID, dependencyServiceUUID, dependencyType, description string
 		var healthCheck, isRequired bool
 		var timeoutSeconds, retryIntervalSeconds int
 
-		err := rows.Scan(&serviceName, &dependencyServiceName, &dependencyType, &healthCheck,
+		err := rows.Scan(&serviceUUID, &dependencyServiceUUID, &dependencyType, &healthCheck,
 			&timeoutSeconds, &retryIntervalSeconds, &isRequired, &description)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan dependency: %w", err)
 		}
 
-		if allDependencies[serviceName] == nil {
-			allDependencies[serviceName] = []map[string]interface{}{}
+		if allDependencies[serviceUUID] == nil {
+			allDependencies[serviceUUID] = []map[string]any{}
 		}
 
-		allDependencies[serviceName] = append(allDependencies[serviceName], map[string]interface{}{
-			"serviceName":            dependencyServiceName,
-			"type":                   dependencyType,
-			"healthCheck":            healthCheck,
-			"timeoutSeconds":         timeoutSeconds,
-			"retryIntervalSeconds":   retryIntervalSeconds,
-			"required":               isRequired,
-			"description":            description,
+		allDependencies[serviceUUID] = append(allDependencies[serviceUUID], map[string]any{
+			"serviceId":            dependencyServiceUUID,
+			"type":                 dependencyType,
+			"healthCheck":          healthCheck,
+			"timeoutSeconds":       timeoutSeconds,
+			"retryIntervalSeconds": retryIntervalSeconds,
+			"required":             isRequired,
+			"description":          description,
 		})
 	}
 
@@ -511,12 +555,12 @@ func (db *Database) DeleteProfileEnvVar(profileID, name string) error {
 // Profile-scoped service configuration methods
 
 // GetProfileServiceConfig retrieves service configuration overrides for a specific profile
-func (db *Database) GetProfileServiceConfig(profileID, serviceName string) (map[string]string, error) {
+func (db *Database) GetProfileServiceConfig(profileID, serviceUUID string) (map[string]string, error) {
 	query := `SELECT config_key, config_value FROM profile_service_configs 
-			  WHERE profile_id = ? AND service_name = ? ORDER BY config_key`
-	rows, err := db.Query(query, profileID, serviceName)
+			  WHERE profile_id = ? AND service_id = ? ORDER BY config_key`
+	rows, err := db.Query(query, profileID, serviceUUID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query profile service config: %w", err)
+		return nil, fmt.Errorf("failed to query profile service config for UUID %s: %w", serviceUUID, err)
 	}
 	defer rows.Close()
 
@@ -533,23 +577,23 @@ func (db *Database) GetProfileServiceConfig(profileID, serviceName string) (map[
 }
 
 // SetProfileServiceConfig sets a service configuration override for a specific profile
-func (db *Database) SetProfileServiceConfig(profileID, serviceName, key, value, configType, description string) error {
+func (db *Database) SetProfileServiceConfig(profileID, serviceUUID, key, value, configType, description string) error {
 	query := `INSERT OR REPLACE INTO profile_service_configs 
-			  (profile_id, service_name, config_key, config_value, config_type, description, updated_at) 
+			  (profile_id, service_id, config_key, config_value, config_type, description, updated_at) 
 			  VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-	_, err := db.Exec(query, profileID, serviceName, key, value, configType, description)
+	_, err := db.Exec(query, profileID, serviceUUID, key, value, configType, description)
 	if err != nil {
-		return fmt.Errorf("failed to set profile service config %s.%s: %w", serviceName, key, err)
+		return fmt.Errorf("failed to set profile service config %s.%s: %w", serviceUUID, key, err)
 	}
 	return nil
 }
 
 // DeleteProfileServiceConfig deletes a service configuration override for a specific profile
-func (db *Database) DeleteProfileServiceConfig(profileID, serviceName, key string) error {
-	query := `DELETE FROM profile_service_configs WHERE profile_id = ? AND service_name = ? AND config_key = ?`
-	_, err := db.Exec(query, profileID, serviceName, key)
+func (db *Database) DeleteProfileServiceConfig(profileID, serviceUUID, key string) error {
+	query := `DELETE FROM profile_service_configs WHERE profile_id = ? AND service_id = ? AND config_key = ?`
+	_, err := db.Exec(query, profileID, serviceUUID, key)
 	if err != nil {
-		return fmt.Errorf("failed to delete profile service config %s.%s: %w", serviceName, key, err)
+		return fmt.Errorf("failed to delete profile service config %s.%s: %w", serviceUUID, key, err)
 	}
 	return nil
 }
@@ -597,13 +641,13 @@ func (db *Database) SetActiveProfile(userID, profileID string) error {
 }
 
 // DeleteService removes a service from the database
-func (db *Database) DeleteService(serviceName string) error {
+func (db *Database) DeleteService(serviceUUID string) error {
 	// Delete the service - this will cascade delete all related records
 	// due to foreign key constraints (env vars, dependencies, etc.)
-	query := `DELETE FROM services WHERE name = ?`
-	result, err := db.Exec(query, serviceName)
+	query := `DELETE FROM services WHERE id = ?`
+	result, err := db.Exec(query, serviceUUID)
 	if err != nil {
-		return fmt.Errorf("failed to delete service: %w", err)
+		return fmt.Errorf("failed to delete service UUID %s: %w", serviceUUID, err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -611,8 +655,37 @@ func (db *Database) DeleteService(serviceName string) error {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("service '%s' not found", serviceName)
+		return fmt.Errorf("service UUID '%s' not found", serviceUUID)
 	}
 
 	return nil
+}
+
+// ServiceProfileInfo represents minimal profile information for conflict checking
+type ServiceProfileInfo struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ProjectsDir  string `json:"projects_dir"`
+	ServicesJSON string `json:"services_json"`
+}
+
+// GetAllServiceProfiles retrieves all service profiles for conflict checking
+func (db *Database) GetAllServiceProfiles() ([]ServiceProfileInfo, error) {
+	query := `SELECT id, name, projects_dir, services_json FROM service_profiles`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query service profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []ServiceProfileInfo
+	for rows.Next() {
+		var profile ServiceProfileInfo
+		if err := rows.Scan(&profile.ID, &profile.Name, &profile.ProjectsDir, &profile.ServicesJSON); err != nil {
+			return nil, fmt.Errorf("failed to scan service profile: %w", err)
+		}
+		profiles = append(profiles, profile)
+	}
+
+	return profiles, rows.Err()
 }

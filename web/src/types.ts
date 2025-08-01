@@ -22,13 +22,14 @@ export interface ServiceDependency {
   serviceName: string;
   type: string; // "hard", "soft", "optional"
   healthCheck: boolean;
-  timeout: number; // Duration in nanoseconds  
+  timeout: number; // Duration in nanoseconds
   retryInterval: number; // Duration in nanoseconds
   required: boolean;
   description: string;
 }
 
 export interface Service {
+  id: string; // UUID - unique identifier for the service
   name: string;
   dir: string;
   extraEnv: string;
@@ -48,11 +49,11 @@ export interface Service {
   logs: LogEntry[];
   // Resource monitoring fields
   cpuPercent: number;
-  memoryUsage: number;   // in bytes
+  memoryUsage: number; // in bytes
   memoryPercent: number;
-  diskUsage: number;     // in bytes
-  networkRx: number;     // bytes received
-  networkTx: number;     // bytes transmitted
+  diskUsage: number; // in bytes
+  networkRx: number; // bytes received
+  networkTx: number; // bytes transmitted
   metrics: ServiceMetrics;
   // Service dependencies
   dependencies: ServiceDependency[] | null;
@@ -82,6 +83,7 @@ export interface Configuration {
   id: string;
   name: string;
   services: Array<{
+    id: string;
     name: string;
     order: number;
   }>;
@@ -155,12 +157,17 @@ export interface UserProfile {
   updatedAt: string;
 }
 
+export type ServiceType = {
+  id: string;
+  name: string;
+};
+
 export interface ServiceProfile {
   id: string;
   userId: string;
   name: string;
   description: string;
-  services: string[];
+  services: ServiceType[];
   envVars: Record<string, string>;
   projectsDir: string;
   javaHomeOverride: string;

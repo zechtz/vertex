@@ -93,7 +93,7 @@ jobs:
           CGO_ENABLED: 1
         run: |
           # Set binary name with platform suffix
-          BINARY_NAME="nest-up-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BINARY_NAME="vertex-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY_NAME="${BINARY_NAME}.exe"
           fi
@@ -113,7 +113,7 @@ jobs:
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            nest-up-${{ matrix.goos }}-${{ matrix.goarch }}*
+            vertex-${{ matrix.goos }}-${{ matrix.goarch }}*
 
   release:
     name: Create Release
@@ -134,7 +134,7 @@ jobs:
       - name: List downloaded files
         run: |
           echo "Downloaded files:"
-          find . -name "nest-up-*" -type f
+          find . -name "vertex-*" -type f
           find . -name "*.sha256" -type f
 
       - name: Generate release notes
@@ -152,30 +152,30 @@ jobs:
           echo "" >> release-notes.md
           echo "| Platform | Architecture | Download |" >> release-notes.md
           echo "|----------|--------------|----------|" >> release-notes.md
-          echo "| Linux | x64 | \`nest-up-linux-amd64\` |" >> release-notes.md
-          echo "| Linux | ARM64 | \`nest-up-linux-arm64\` |" >> release-notes.md
-          echo "| macOS | x64 | \`nest-up-darwin-amd64\` |" >> release-notes.md
-          echo "| macOS | ARM64 (M1/M2) | \`nest-up-darwin-arm64\` |" >> release-notes.md
-          echo "| Windows | x64 | \`nest-up-windows-amd64.exe\` |" >> release-notes.md
+          echo "| Linux | x64 | \`vertex-linux-amd64\` |" >> release-notes.md
+          echo "| Linux | ARM64 | \`vertex-linux-arm64\` |" >> release-notes.md
+          echo "| macOS | x64 | \`vertex-darwin-amd64\` |" >> release-notes.md
+          echo "| macOS | ARM64 (M1/M2) | \`vertex-darwin-arm64\` |" >> release-notes.md
+          echo "| Windows | x64 | \`vertex-windows-amd64.exe\` |" >> release-notes.md
           echo "" >> release-notes.md
           echo "## 🔧 Installation" >> release-notes.md
           echo "" >> release-notes.md
           echo '```bash' >> release-notes.md
           echo "# Download for your platform" >> release-notes.md
-          echo "wget https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF#refs/tags/}/nest-up-linux-amd64" >> release-notes.md
+          echo "wget https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF#refs/tags/}/vertex-linux-amd64" >> release-notes.md
           echo "" >> release-notes.md
           echo "# Make executable" >> release-notes.md
-          echo "chmod +x nest-up-linux-amd64" >> release-notes.md
+          echo "chmod +x vertex-linux-amd64" >> release-notes.md
           echo "" >> release-notes.md
           echo "# Run" >> release-notes.md
-          echo "./nest-up-linux-amd64" >> release-notes.md
+          echo "./vertex-linux-amd64" >> release-notes.md
           echo '```' >> release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            nest-up-*
+            vertex-*
           body_path: release-notes.md
           draft: false
           prerelease: false

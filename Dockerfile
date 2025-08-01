@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for NeST Service Manager
+# Multi-stage Dockerfile for vertex
 FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/web
@@ -26,7 +26,7 @@ COPY . .
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
 # Build the binary
-RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up
+RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex
 
 FROM alpine:latest
 
@@ -36,7 +36,7 @@ RUN apk --no-cache add ca-certificates sqlite
 WORKDIR /app
 
 # Copy the binary
-COPY --from=backend-builder /app/nest-up .
+COPY --from=backend-builder /app/vertex .
 
 # Create directory for database
 RUN mkdir -p /app/data
@@ -52,4 +52,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
 # Run the application
-CMD ["./nest-up"]
+CMD ["./vertex"]

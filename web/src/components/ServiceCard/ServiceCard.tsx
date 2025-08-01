@@ -1,10 +1,10 @@
-import { 
-  Play, 
-  Square, 
-  RotateCcw, 
-  Activity, 
-  FileText, 
-  Settings, 
+import {
+  Play,
+  Square,
+  RotateCcw,
+  Activity,
+  FileText,
+  Settings,
   Database,
   Folder,
   Trash2,
@@ -18,13 +18,13 @@ import {
   XCircle,
   Loader,
   Package,
-  MoreVertical
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Service } from '@/types';
-import { useState, useRef, useEffect } from 'react';
+  MoreVertical,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Service } from "@/types";
+import { useState, useRef, useEffect } from "react";
 
 interface ServiceCardProps {
   service: Service;
@@ -59,7 +59,7 @@ export function ServiceCard({
   onDelete,
   onViewFiles,
   onEditEnv,
-  onInstallLibraries
+  onInstallLibraries,
 }: ServiceCardProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -67,72 +67,75 @@ export function ServiceCard({
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setShowDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
   const getStatusColor = () => {
-    if (service.status === 'running') {
+    if (service.status === "running") {
       switch (service.healthStatus) {
-        case 'healthy':
-          return 'bg-green-500';
-        case 'unhealthy':
-          return 'bg-red-500';
-        case 'starting':
-          return 'bg-yellow-500';
+        case "healthy":
+          return "bg-green-500";
+        case "unhealthy":
+          return "bg-red-500";
+        case "starting":
+          return "bg-yellow-500";
         default:
-          return 'bg-blue-500';
+          return "bg-blue-500";
       }
     }
-    return 'bg-gray-400';
+    return "bg-gray-400";
   };
 
   const getStatusText = () => {
-    if (service.status === 'running') {
+    if (service.status === "running") {
       switch (service.healthStatus) {
-        case 'healthy':
-          return 'Healthy';
-        case 'unhealthy':
-          return 'Unhealthy';
-        case 'starting':
-          return 'Starting';
+        case "healthy":
+          return "Healthy";
+        case "unhealthy":
+          return "Unhealthy";
+        case "starting":
+          return "Starting";
         default:
-          return 'Running';
+          return "Running";
       }
     }
-    return 'Stopped';
+    return "Stopped";
   };
 
   const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) return "0 B";
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
   const formatUptime = (uptime: string) => {
-    if (!uptime || uptime === '0s') return 'Not running';
+    if (!uptime || uptime === "0s") return "Not running";
     return uptime;
   };
 
-  const isLoading = Object.values(loadingStates).some(state => state);
+  const isLoading = Object.values(loadingStates).some((state) => state);
 
   const getStatusIcon = () => {
-    if (service.status === 'running') {
+    if (service.status === "running") {
       switch (service.healthStatus) {
-        case 'healthy':
+        case "healthy":
           return <CheckCircle className="w-4 h-4 text-green-500" />;
-        case 'unhealthy':
+        case "unhealthy":
           return <XCircle className="w-4 h-4 text-red-500" />;
-        case 'starting':
+        case "starting":
           return <Loader className="w-4 h-4 text-yellow-500 animate-spin" />;
         default:
           return <Activity className="w-4 h-4 text-blue-500" />;
@@ -142,23 +145,25 @@ export function ServiceCard({
   };
 
   const getCardBorderColor = () => {
-    if (service.status === 'running') {
+    if (service.status === "running") {
       switch (service.healthStatus) {
-        case 'healthy':
-          return 'border-l-green-500';
-        case 'unhealthy':
-          return 'border-l-red-500';
-        case 'starting':
-          return 'border-l-yellow-500';
+        case "healthy":
+          return "border-l-green-500";
+        case "unhealthy":
+          return "border-l-red-500";
+        case "starting":
+          return "border-l-yellow-500";
         default:
-          return 'border-l-blue-500';
+          return "border-l-blue-500";
       }
     }
-    return 'border-l-gray-300';
+    return "border-l-gray-300";
   };
 
   return (
-    <Card className={`h-full hover:shadow-lg transition-all duration-200 group border-l-2 ${getCardBorderColor()} bg-white dark:bg-gray-800 hover:bg-gray-50/30 dark:hover:bg-gray-700/30 relative overflow-hidden z-10 hover:z-20`}>
+    <Card
+      className={`h-full hover:shadow-lg transition-all duration-200 group border-l-2 ${getCardBorderColor()} bg-white dark:bg-gray-800 hover:bg-gray-50/30 dark:hover:bg-gray-700/30 relative overflow-hidden z-10 hover:z-20`}
+    >
       <CardContent className="p-0 relative">
         {/* Header Section */}
         <div className="p-5 pb-4">
@@ -166,16 +171,21 @@ export function ServiceCard({
             <div className="flex items-center gap-3 flex-1 min-w-0">
               {/* Service Icon */}
               <div className="relative flex-shrink-0">
-                <div className={`p-3 rounded-xl ${service.status === 'running' ? 'bg-blue-500' : 'bg-gray-400'} shadow-sm`}>
+                <div
+                  className={`p-3 rounded-xl ${service.status === "running" ? "bg-blue-500" : "bg-gray-400"} shadow-sm`}
+                >
                   <Server className="w-6 h-6 text-white" />
                 </div>
-                <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor()} rounded-full border-2 border-white flex items-center justify-center`}>
-                  {service.status === 'running' && service.healthStatus === 'starting' && (
-                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                  )}
+                <div
+                  className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor()} rounded-full border-2 border-white flex items-center justify-center`}
+                >
+                  {service.status === "running" &&
+                    service.healthStatus === "starting" && (
+                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                    )}
                 </div>
               </div>
-              
+
               {/* Service Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
@@ -183,26 +193,34 @@ export function ServiceCard({
                     {service.name}
                   </h3>
                   {service.port && (
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 flex-shrink-0">
+                    <Badge
+                      variant="outline"
+                      className="text-xs px-1.5 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 flex-shrink-0"
+                    >
                       :{service.port}
                     </Badge>
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-2 mb-2">
                   {getStatusIcon()}
-                  <span className={`text-sm font-medium ${
-                    service.status === 'running' 
-                      ? service.healthStatus === 'healthy' ? 'text-green-600' 
-                        : service.healthStatus === 'unhealthy' ? 'text-red-600'
-                        : service.healthStatus === 'starting' ? 'text-yellow-600'
-                        : 'text-blue-600'
-                      : 'text-gray-500'
-                  }`}>
+                  <span
+                    className={`text-sm font-medium ${
+                      service.status === "running"
+                        ? service.healthStatus === "healthy"
+                          ? "text-green-600"
+                          : service.healthStatus === "unhealthy"
+                            ? "text-red-600"
+                            : service.healthStatus === "starting"
+                              ? "text-yellow-600"
+                              : "text-blue-600"
+                        : "text-gray-500"
+                    }`}
+                  >
                     {getStatusText()}
                   </span>
                 </div>
-                
+
                 {service.description && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
                     {service.description}
@@ -210,7 +228,7 @@ export function ServiceCard({
                 )}
               </div>
             </div>
-            
+
             {/* Actions Menu */}
             <div className="relative flex-shrink-0 ml-2" ref={dropdownRef}>
               <Button
@@ -222,7 +240,7 @@ export function ServiceCard({
                 <MoreVertical className="w-4 h-4" />
                 <span className="sr-only">More actions</span>
               </Button>
-              
+
               {showDropdown && (
                 <div className="absolute top-full mt-1 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1 min-w-[160px]">
                   <button
@@ -235,7 +253,7 @@ export function ServiceCard({
                     <Folder className="w-3 h-3" />
                     View Files
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       onEditEnv();
@@ -246,7 +264,7 @@ export function ServiceCard({
                     <Database className="w-3 h-3" />
                     Environment Variables
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       onInstallLibraries();
@@ -262,9 +280,9 @@ export function ServiceCard({
                     )}
                     Install Libraries
                   </button>
-                  
+
                   <hr className="my-1 border-gray-100 dark:border-gray-700" />
-                  
+
                   <button
                     onClick={() => {
                       onEdit();
@@ -275,7 +293,7 @@ export function ServiceCard({
                     <Settings className="w-3 h-3" />
                     Edit Service
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       onDelete();
@@ -293,7 +311,7 @@ export function ServiceCard({
         </div>
 
         {/* Metrics Section - Progressive Disclosure */}
-        {service.status === 'running' ? (
+        {service.status === "running" ? (
           <div className="px-5 py-3 bg-gray-50/30 dark:bg-gray-800/30 border-y border-gray-100 dark:border-gray-700">
             <div className="grid grid-cols-2 gap-3">
               {/* CPU & Memory */}
@@ -303,26 +321,30 @@ export function ServiceCard({
                     <Cpu className="w-3 h-3 text-blue-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">CPU</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      CPU
+                    </div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {service.cpuPercent?.toFixed(1)}%
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-green-100 rounded-md">
                     <MemoryStick className="w-3 h-3 text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Memory</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Memory
+                    </div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {formatBytes(service.memoryUsage || 0)}
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               {/* Uptime & Logs */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -330,18 +352,26 @@ export function ServiceCard({
                     <Clock className="w-3 h-3 text-purple-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Uptime</div>
-                    <div className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{formatUptime(service.uptime)}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Uptime
+                    </div>
+                    <div className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+                      {formatUptime(service.uptime)}
+                    </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-orange-100 rounded-md">
                     <FileText className="w-3 h-3 text-orange-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Logs</div>
-                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{service.logs?.length || 0}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Logs
+                    </div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {service.logs?.length || 0}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -360,7 +390,7 @@ export function ServiceCard({
         <div className="p-5 pt-4 space-y-3">
           {/* Primary Actions */}
           <div className="flex gap-2">
-            {service.status === 'running' ? (
+            {service.status === "running" ? (
               <>
                 <Button
                   onClick={onStop}
@@ -374,7 +404,7 @@ export function ServiceCard({
                     <Square className="w-4 h-4" />
                   )}
                   <span className="ml-2">
-                    {loadingStates.stopping ? 'Stopping...' : 'Stop'}
+                    {loadingStates.stopping ? "Stopping..." : "Stop"}
                   </span>
                 </Button>
                 <Button
@@ -389,7 +419,7 @@ export function ServiceCard({
                     <RotateCcw className="w-4 h-4" />
                   )}
                   <span className="ml-2">
-                    {loadingStates.restarting ? 'Restarting...' : 'Restart'}
+                    {loadingStates.restarting ? "Restarting..." : "Restart"}
                   </span>
                 </Button>
               </>
@@ -405,7 +435,7 @@ export function ServiceCard({
                   <Play className="w-4 h-4" />
                 )}
                 <span className="ml-2">
-                  {loadingStates.starting ? 'Starting...' : 'Start Service'}
+                  {loadingStates.starting ? "Starting..." : "Start Service"}
                 </span>
               </Button>
             )}
@@ -415,7 +445,7 @@ export function ServiceCard({
           <div className="grid grid-cols-2 gap-2">
             <Button
               onClick={onCheckHealth}
-              disabled={isLoading || service.status !== 'running'}
+              disabled={isLoading || service.status !== "running"}
               variant="outline"
               size="sm"
               className="h-9 text-xs hover:bg-green-50 hover:border-green-300 hover:text-green-700"
@@ -437,7 +467,6 @@ export function ServiceCard({
               <span className="ml-1">Logs</span>
             </Button>
           </div>
-
         </div>
 
         {/* Disabled Status Banner */}
@@ -445,7 +474,9 @@ export function ServiceCard({
           <div className="mx-5 mb-5 -mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-center justify-center gap-2">
               <AlertTriangle className="w-3 h-3 text-yellow-600" />
-              <p className="text-xs font-medium text-yellow-800">Service disabled</p>
+              <p className="text-xs font-medium text-yellow-800">
+                Service disabled
+              </p>
             </div>
           </div>
         )}

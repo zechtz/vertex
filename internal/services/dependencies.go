@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 // DependencyManager handles service dependency management and startup ordering
@@ -27,204 +27,27 @@ func NewDependencyManager(serviceManager *Manager) *DependencyManager {
 	}
 }
 
-// InitializeDefaultDependencies sets up default NeST microservice dependencies
+// InitializeDefaultDependencies sets up empty dependencies - users configure their own
 func (dm *DependencyManager) InitializeDefaultDependencies() error {
 	dm.mutex.Lock()
 	defer dm.mutex.Unlock()
 
-	// Default NeST microservice dependency configuration
-	dependencyConfig := map[string][]models.ServiceDependency{
-		"CONFIG": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "Config server needs registry for service discovery",
-			},
-		},
-		"CACHE": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "Cache service needs registry for service discovery",
-			},
-			{
-				ServiceName:   "CONFIG",
-				Type:          "soft",
-				HealthCheck:   true,
-				Timeout:       1 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      false,
-				Description:   "Cache service can use config server for configuration",
-			},
-		},
-		"GATEWAY": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "Gateway needs registry to discover services",
-			},
-			{
-				ServiceName:   "CONFIG",
-				Type:          "soft",
-				HealthCheck:   true,
-				Timeout:       1 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      false,
-				Description:   "Gateway can use config server for routing configuration",
-			},
-		},
-		"UAA": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "UAA needs registry for service discovery",
-			},
-			{
-				ServiceName:   "CONFIG",
-				Type:          "soft",
-				HealthCheck:   true,
-				Timeout:       1 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      false,
-				Description:   "UAA can use config server for configuration",
-			},
-		},
-		"APP": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "App service needs registry for service discovery",
-			},
-			{
-				ServiceName:   "CONFIG",
-				Type:          "soft",
-				HealthCheck:   true,
-				Timeout:       1 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      false,
-				Description:   "App service can use config server for configuration",
-			},
-			{
-				ServiceName:   "UAA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       3 * time.Minute,
-				RetryInterval: 10 * time.Second,
-				Required:      true,
-				Description:   "App service needs UAA for authentication",
-			},
-		},
-		"CONTRACT": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "Contract service needs registry for service discovery",
-			},
-			{
-				ServiceName:   "CONFIG",
-				Type:          "soft",
-				HealthCheck:   true,
-				Timeout:       1 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      false,
-				Description:   "Contract service can use config server for configuration",
-			},
-			{
-				ServiceName:   "UAA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       3 * time.Minute,
-				RetryInterval: 10 * time.Second,
-				Required:      true,
-				Description:   "Contract service needs UAA for authentication",
-			},
-		},
-		"DSMS": {
-			{
-				ServiceName:   "EUREKA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       2 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      true,
-				Description:   "DSMS service needs registry for service discovery",
-			},
-			{
-				ServiceName:   "CONFIG",
-				Type:          "soft",
-				HealthCheck:   true,
-				Timeout:       1 * time.Minute,
-				RetryInterval: 5 * time.Second,
-				Required:      false,
-				Description:   "DSMS service can use config server for configuration",
-			},
-			{
-				ServiceName:   "UAA",
-				Type:          "hard",
-				HealthCheck:   true,
-				Timeout:       3 * time.Minute,
-				RetryInterval: 10 * time.Second,
-				Required:      true,
-				Description:   "DSMS service needs UAA for authentication",
-			},
-		},
-	}
-
-	// Apply dependencies to services
+	// No default dependencies - users will configure through UI/API
 	services := dm.serviceManager.GetServices()
 	for i := range services {
 		service := &services[i]
-		if deps, exists := dependencyConfig[service.Name]; exists {
-			service.Dependencies = deps
-			
-			// Set startup delay based on dependency complexity
-			switch service.Name {
-			case "EUREKA":
-				service.StartupDelay = 0 // No dependencies, start immediately
-			case "CONFIG", "CACHE":
-				service.StartupDelay = 30 * time.Second // Wait for Eureka
-			case "GATEWAY":
-				service.StartupDelay = 45 * time.Second // Wait for Eureka and Config
-			case "UAA":
-				service.StartupDelay = 60 * time.Second // Wait for infrastructure
-			case "APP", "CONTRACT", "DSMS":
-				service.StartupDelay = 90 * time.Second // Wait for UAA and infrastructure
-			}
-		}
-		
+		// Initialize with empty dependencies and no startup delay
+		service.Dependencies = []models.ServiceDependency{}
+		service.StartupDelay = 0
+
 		// Update the service in the manager
-		// Note: We need to update this through the service manager's internal map
 		dm.updateServiceDependencies(service.Name, service.Dependencies, service.StartupDelay)
 	}
 
 	// Calculate dependent services (reverse dependencies)
 	dm.calculateReverseDependencies()
 
-	log.Printf("[INFO] Initialized default dependencies for %d services", len(dependencyConfig))
+	log.Printf("[INFO] Initialized empty dependencies for %d services - users can configure via UI", len(services))
 	return nil
 }
 
@@ -233,17 +56,17 @@ func (dm *DependencyManager) updateServiceDependencies(serviceName string, depen
 	// Access the service manager's services map to update dependencies
 	dm.serviceManager.mutex.Lock()
 	defer dm.serviceManager.mutex.Unlock()
-	
+
 	if service, exists := dm.serviceManager.services[serviceName]; exists {
 		service.Dependencies = dependencies
 		service.StartupDelay = startupDelay
 	}
-	
+
 	// Track this in our dependency status
 	if dm.dependencyStatus[serviceName] == nil {
 		dm.dependencyStatus[serviceName] = make(map[string]bool)
 	}
-	
+
 	for _, dep := range dependencies {
 		dm.dependencyStatus[serviceName][dep.ServiceName] = false
 	}
@@ -253,14 +76,14 @@ func (dm *DependencyManager) updateServiceDependencies(serviceName string, depen
 func (dm *DependencyManager) calculateReverseDependencies() {
 	services := dm.serviceManager.GetServices()
 	reverseDeps := make(map[string][]string)
-	
+
 	// Build reverse dependency map
 	for _, service := range services {
 		for _, dep := range service.Dependencies {
 			reverseDeps[dep.ServiceName] = append(reverseDeps[dep.ServiceName], service.Name)
 		}
 	}
-	
+
 	// Update DependentOn fields (this would need service manager access to update properly)
 	for serviceName, dependents := range reverseDeps {
 		log.Printf("[DEBUG] Service %s has dependents: %v", serviceName, dependents)
@@ -389,7 +212,7 @@ func (dm *DependencyManager) checkSingleDependency(ctx context.Context, dep mode
 	// Check if service is running
 	services := dm.serviceManager.GetServices()
 	var depService *models.Service
-	
+
 	for i, service := range services {
 		if service.Name == dep.ServiceName {
 			depService = &services[i]
@@ -443,7 +266,7 @@ func (dm *DependencyManager) performHealthCheck(ctx context.Context, service *mo
 func (dm *DependencyManager) WaitForDependencies(ctx context.Context, serviceName string) error {
 	services := dm.serviceManager.GetServices()
 	var targetService *models.Service
-	
+
 	for i, service := range services {
 		if service.Name == serviceName {
 			targetService = &services[i]
@@ -464,13 +287,13 @@ func (dm *DependencyManager) WaitForDependencies(ctx context.Context, serviceNam
 		}
 
 		log.Printf("[INFO] Checking dependency %s for %s", dep.ServiceName, serviceName)
-		
+
 		// Wait with retry logic
 		ticker := time.NewTicker(dep.RetryInterval)
 		defer ticker.Stop()
-		
+
 		timeout := time.After(dep.Timeout)
-		
+
 		for {
 			// Check if dependency is ready
 			if err := dm.checkSingleDependency(ctx, dep); err == nil {
@@ -526,7 +349,7 @@ func (dm *DependencyManager) GetDependencyGraph() map[string][]models.ServiceDep
 func (dm *DependencyManager) ValidateDependencies() error {
 	services := dm.serviceManager.GetServices()
 	serviceNames := make(map[string]bool)
-	
+
 	// Build service name set
 	for _, service := range services {
 		serviceNames[service.Name] = true

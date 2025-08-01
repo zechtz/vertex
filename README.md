@@ -1,6 +1,6 @@
-# NeST Service Manager
+# Vertex
 
-A comprehensive service management tool for NeST microservices ecosystem, providing automated service startup, environment management, and build compatibility fixes.
+A comprehensive Spring Boot microservice management platform providing automated service startup, environment management, monitoring, and build compatibility fixes.
 
 ## 📦 Installation
 
@@ -9,32 +9,32 @@ A comprehensive service management tool for NeST microservices ecosystem, provid
 1. **Download the latest binary** from the [Releases](https://github.com/zechtz/service-manager/releases) page
 2. **Make it executable**:
    ```bash
-   chmod +x nest-up
+   chmod +x vertex
    ```
 3. **Add to PATH** (optional but recommended):
 
    ```bash
    # Move to a directory in your PATH
-   sudo mv nest-up /usr/local/bin/
+   sudo mv vertex /usr/local/bin/
 
    # Or create a symlink
-   sudo ln -s /path/to/nest-up /usr/local/bin/nest-up
+   sudo ln -s /path/to/vertex /usr/local/bin/vertex
    ```
 
 4. **Verify installation**:
    ```bash
-   nest-up --version
+   vertex --version
    ```
 
 ### Option 2: Build from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/nest-up.git
-cd nest-up
+git clone https://github.com/your-org/vertex.git
+cd vertex
 
 # Build the backend
-go build -o nest-up
+go build -o vertex
 
 # Build the frontend
 cd web
@@ -49,27 +49,18 @@ cd ..
 
    ```bash
    # If installed to PATH
-   nest-up
+   vertex
 
    # Or run directly
-   ./nest-up
+   ./vertex
+
+   # Optionally you can specify a port
+   ./vertex --port 3000
    ```
 
 2. **Access the web interface**: Open `http://localhost:8080` in your browser
 
 > **Note**: Environment setup is now automatic! The service manager will automatically detect and configure missing environment variables when started. No manual setup script is needed when using the binary.
-
-### First Run
-
-On first startup, the service manager will:
-
-- ✅ **Automatically detect** your current environment setup
-- ✅ **Initialize database** with default NeST environment variables
-- ✅ **Configure shell profile** (adds sourcing to `.zshrc` or `.bashrc`)
-- ✅ **Generate configuration files** (`common_env_settings.sh`) for compatibility
-- ✅ **Start web interface** on `http://localhost:8080`
-
-No additional setup required! 🎉
 
 ## 📋 Features
 
@@ -139,51 +130,9 @@ The service manager includes a comprehensive environment management system that 
 
 - ✅ **Startup Detection**: Automatically checks environment variables when the application starts
 - ✅ **Smart Sync**: Loads from existing `common_env_settings.sh` and `env_vars.fish` files if available
-- ✅ **Default Fallback**: Sets up default NeST environment variables if no configuration files exist
 - ✅ **Manual Sync**: "Sync Environment" button in web interface for manual synchronization
 
-#### **What It Configures**
-
-The system automatically sets up all required NeST environment variables:
-
-```bash
-# Database Settings
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASS=P057gr35
-
-# Service Discovery
-DISCOVERY_SERVER=nest-registry-server
-DEFAULT_ZONE=http://nest-registry-server:8800/eureka/
-
-# Configuration Server
-CONFIG_SERVER=nest-config-server
-CONFIG_USERNAME=nest
-CONFIG_PASSWORD=1kzwjz2nzegt3nest@ppra.go.tza1q@BmM0Oo
-
-# RabbitMQ Settings
-RABBIT_HOSTNAME=localhost
-RABBIT_PORT=5672
-RABBIT_USERNAME=rabbitmq
-RABBIT_PASSWORD=R@bb17mq
-
-# Redis Settings
-REDIS_HOST=localhost
-REDIS_USER=default
-REDIS_PASS=mypassword
-
-# Service-Specific Database Names
-DB_NAME_UAA=nest_uaa
-DB_NAME_APP=nest_app
-DB_NAME_CONTRACT=nest_contract
-DB_NAME_DSMS=nest_dsms
-
-# Service Ports
-SERVICE_PORT_UAA=8803
-SERVICE_PORT_APP=8805
-# ... and more
-```
+````
 
 #### **Binary Distribution Benefits**
 
@@ -233,7 +182,7 @@ If you need to manually configure a new Java service, ensure your `pom.xml` incl
         </plugin>
     </plugins>
 </build>
-```
+````
 
 ### **Troubleshooting Build Issues**
 
@@ -258,7 +207,7 @@ cannot find symbol: method setUuid(java.lang.String)
 ## 📁 Project Structure
 
 ```
-nest-up/
+vertex/
 ├── internal/
 │   ├── config/         # Configuration management
 │   ├── database/       # SQLite database operations
@@ -276,20 +225,8 @@ nest-up/
 │   └── embed.go        # Embeds dist/* into Go binary
 ├── README.md           # This file
 ├── ENVIRONMENT_SETUP.md # Environment configuration guide
-└── nest-up             # Main executable
+└── vertex             # Main executable
 ```
-
-## 🌐 Services Supported
-
-| Service Name             | Database      | Port | Description                         |
-| ------------------------ | ------------- | ---- | ----------------------------------- |
-| **nest-registry-server** | -             | 8800 | Eureka service discovery            |
-| **nest-config-server**   | -             | 8801 | Spring Cloud Config server          |
-| **nest-gateway**         | -             | 8802 | API Gateway                         |
-| **nest-uaa**             | nest_uaa      | 8803 | User Authentication & Authorization |
-| **nest-app**             | nest_app      | 8805 | Main application service            |
-| **nest-contract**        | nest_contract | 8818 | Contract management                 |
-| **nest-dsms**            | nest_dsms     | 8812 | Document management                 |
 
 ## 🚀 Automated Releases
 
@@ -340,7 +277,7 @@ The project includes CI/CD pipelines for both GitHub Actions and GitLab CI that 
 
 ```bash
 # Build Go backend
-go build -o nest-up
+go build -o vertex
 
 # Build React frontend
 cd web
@@ -406,7 +343,7 @@ This approach provides:
 
 # Or build manually
 cd web && npm run build && cd ..
-CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up
+CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex
 ```
 
 #### Release Build (All Platforms)
@@ -416,11 +353,11 @@ CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up
 ./release.sh v1.0.0
 
 # This creates:
-# - nest-up-linux-amd64
-# - nest-up-linux-arm64
-# - nest-up-darwin-amd64
-# - nest-up-darwin-arm64
-# - nest-up-windows-amd64.exe
+# - vertex-linux-amd64
+# - vertex-linux-arm64
+# - vertex-darwin-amd64
+# - vertex-darwin-arm64
+# - vertex-windows-amd64.exe
 # - checksums.txt
 ```
 
@@ -430,13 +367,13 @@ CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up
 
 ```bash
 # Linux 64-bit
-GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up-linux-amd64
+GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex-linux-amd64
 
 # macOS 64-bit
-GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up-darwin-amd64
+GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex-darwin-amd64
 
 # Windows 64-bit
-GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -ldflags="-s -w" -o nest-up-windows-amd64.exe
+GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex-windows-amd64.exe
 ```
 
 > **Note**: CGO is required for SQLite support. For cross-compilation, you may need platform-specific CGO toolchains.
@@ -532,8 +469,6 @@ source ./common_env_settings.sh
 ```
 
 ## 📝 License
-
-This project is part of the NeST (National e-procurement System of Tanzania) ecosystem.
 
 ## 🤝 Contributing
 

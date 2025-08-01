@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProfile } from '@/contexts/ProfileContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { UserProfileUpdateRequest, UserPreferences } from '@/types';
 import { useToast, toast } from '@/components/ui/toast';
 
@@ -15,6 +16,7 @@ interface UserProfileModalProps {
 export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
   const { user } = useAuth();
   const { userProfile, updateUserProfile, isUpdating } = useProfile();
+  const { theme, setTheme } = useTheme();
   const { addToast } = useToast();
   const [formData, setFormData] = useState<UserProfileUpdateRequest>({
     displayName: '',
@@ -41,6 +43,8 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
         avatar: userProfile.avatar || '',
         preferences: {
           ...userProfile.preferences,
+          // Use current theme from context if profile doesn't have it set
+          theme: userProfile.preferences.theme || theme,
           // Ensure all fields have defaults
           notificationSettings: {
             serviceStatus: true,
@@ -51,12 +55,12 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
         },
       });
     } else if (user && isOpen && !userProfile) {
-      // Set defaults if no profile exists yet
+      // Set defaults if no profile exists yet, use current theme
       setFormData({
         displayName: user.username,
         avatar: '',
         preferences: {
-          theme: 'light',
+          theme: theme,
           language: 'en',
           notificationSettings: {
             serviceStatus: true,
@@ -69,13 +73,19 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
         },
       });
     }
-  }, [userProfile, user, isOpen]);
+  }, [userProfile, user, isOpen, theme]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       await updateUserProfile(formData);
+      
+      // Update the theme context immediately if theme changed
+      if (formData.preferences.theme !== theme) {
+        setTheme(formData.preferences.theme as 'light' | 'dark');
+      }
+      
       addToast(toast.success('Success', 'Profile updated successfully!'));
       onClose();
     } catch (error) {

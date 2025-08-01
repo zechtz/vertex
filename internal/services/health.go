@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 func (sm *Manager) CheckServiceHealth(serviceName string) error {
@@ -128,9 +128,9 @@ func (sm *Manager) checkServiceHealth(service *models.Service) {
 				return
 			}
 		}
-		
+
 		log.Printf("[DEBUG] Health check failed for %s: %v", service.Name, err)
-		
+
 		// If health endpoint fails, try a simple connectivity test to the service port
 		simpleURL := fmt.Sprintf("http://localhost:%d/", service.Port)
 		simpleReq, err := http.NewRequest("GET", simpleURL, nil)
@@ -138,7 +138,7 @@ func (sm *Manager) checkServiceHealth(service *models.Service) {
 			simpleResp, err := client.Do(simpleReq)
 			if err == nil {
 				defer simpleResp.Body.Close()
-				log.Printf("[DEBUG] Service %s is responsive on port %d (HTTP %d) but health endpoint failed", 
+				log.Printf("[DEBUG] Service %s is responsive on port %d (HTTP %d) but health endpoint failed",
 					service.Name, service.Port, simpleResp.StatusCode)
 				service.HealthStatus = "running" // Service is running but health endpoint misconfigured
 			} else {
@@ -260,12 +260,6 @@ func (sm *Manager) createHealthCheckRequest(healthURL string) (*http.Request, er
 		// Get credentials from environment variables
 		username := os.Getenv("CONFIG_USERNAME")
 		password := os.Getenv("CONFIG_PASSWORD")
-		if username == "" {
-			username = "nest"
-		}
-		if password == "" {
-			password = "1kzwjz2nzegt3nest@ppra.go.tza1q@BmM0Oo"
-		}
 		req.SetBasicAuth(username, password)
 	}
 

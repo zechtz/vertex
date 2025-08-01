@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 // InitializeLogTables creates the log-related database tables
@@ -17,18 +17,18 @@ func (db *Database) InitializeLogTables() error {
 	createLogsTable := `
 		CREATE TABLE IF NOT EXISTS service_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			service_name TEXT NOT NULL,
+			service_id TEXT NOT NULL,
 			timestamp DATETIME NOT NULL,
 			level TEXT NOT NULL,
 			message TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY(service_name) REFERENCES services(name)
+			FOREIGN KEY(service_id) REFERENCES services(id)
 		);
 	`
 
 	// Create indexes for better search performance
 	createIndexes := []string{
-		`CREATE INDEX IF NOT EXISTS idx_service_logs_service_name ON service_logs(service_name);`,
+		`CREATE INDEX IF NOT EXISTS idx_service_logs_service_id ON service_logs(service_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_service_logs_timestamp ON service_logs(timestamp);`,
 		`CREATE INDEX IF NOT EXISTS idx_service_logs_level ON service_logs(level);`,
 		`CREATE INDEX IF NOT EXISTS idx_service_logs_message_fts ON service_logs(message);`,
@@ -79,9 +79,9 @@ func (db *Database) InitializeLogTables() error {
 }
 
 // StoreLogEntry stores a single log entry in the database
-func (db *Database) StoreLogEntry(serviceName string, logEntry models.LogEntry) error {
+func (db *Database) StoreLogEntry(serviceID string, logEntry models.LogEntry) error {
 	query := `
-		INSERT INTO service_logs (service_name, timestamp, level, message)
+		INSERT INTO service_logs (service_id, timestamp, level, message)
 		VALUES (?, ?, ?, ?)
 	`
 
@@ -92,16 +92,16 @@ func (db *Database) StoreLogEntry(serviceName string, logEntry models.LogEntry) 
 		timestamp = time.Now()
 	}
 
-	_, err = db.DB.Exec(query, serviceName, timestamp, logEntry.Level, logEntry.Message)
+	_, err = db.DB.Exec(query, serviceID, timestamp, logEntry.Level, logEntry.Message)
 	if err != nil {
-		return fmt.Errorf("failed to store log entry for service %s: %w", serviceName, err)
+		return fmt.Errorf("failed to store log entry for service %s: %w", serviceID, err)
 	}
 
 	return nil
 }
 
 // StoreLogEntries stores multiple log entries in a single transaction
-func (db *Database) StoreLogEntries(serviceName string, logEntries []models.LogEntry) error {
+func (db *Database) StoreLogEntries(serviceID string, logEntries []models.LogEntry) error {
 	if len(logEntries) == 0 {
 		return nil
 	}
@@ -113,7 +113,7 @@ func (db *Database) StoreLogEntries(serviceName string, logEntries []models.LogE
 	defer tx.Rollback()
 
 	query := `
-		INSERT INTO service_logs (service_name, timestamp, level, message)
+		INSERT INTO service_logs (service_id, timestamp, level, message)
 		VALUES (?, ?, ?, ?)
 	`
 
@@ -130,9 +130,9 @@ func (db *Database) StoreLogEntries(serviceName string, logEntries []models.LogE
 			timestamp = time.Now()
 		}
 
-		_, err = stmt.Exec(serviceName, timestamp, logEntry.Level, logEntry.Message)
+		_, err = stmt.Exec(serviceID, timestamp, logEntry.Level, logEntry.Message)
 		if err != nil {
-			return fmt.Errorf("failed to execute log insert for service %s: %w", serviceName, err)
+			return fmt.Errorf("failed to execute log insert for service %s: %w", serviceID, err)
 		}
 	}
 
@@ -145,7 +145,7 @@ func (db *Database) StoreLogEntries(serviceName string, logEntries []models.LogE
 
 // LogSearchCriteria defines search parameters for log queries
 type LogSearchCriteria struct {
-	ServiceNames []string  `json:"serviceNames"`
+	ServiceIDs   []string  `json:"serviceIds"`
 	Levels       []string  `json:"levels"`
 	SearchText   string    `json:"searchText"`
 	StartTime    time.Time `json:"startTime"`
@@ -156,12 +156,12 @@ type LogSearchCriteria struct {
 
 // LogSearchResult represents a log entry with additional metadata
 type LogSearchResult struct {
-	ID          int64     `json:"id"`
-	ServiceName string    `json:"serviceName"`
-	Timestamp   time.Time `json:"timestamp"`
-	Level       string    `json:"level"`
-	Message     string    `json:"message"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID        int64     `json:"id"`
+	ServiceID string    `json:"serviceId"`
+	Timestamp time.Time `json:"timestamp"`
+	Level     string    `json:"level"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // SearchLogs performs advanced search across service logs
@@ -171,23 +171,23 @@ func (db *Database) SearchLogs(criteria LogSearchCriteria) ([]LogSearchResult, i
 		FROM service_logs 
 		WHERE 1=1
 	`
-	
+
 	countQuery := "SELECT COUNT(*) " + baseQuery
 	selectQuery := `
-		SELECT id, service_name, timestamp, level, message, created_at 
+		SELECT id, service_id, timestamp, level, message, created_at 
 	` + baseQuery
 
 	var args []interface{}
 	var conditions []string
 
-	// Add service name filter
-	if len(criteria.ServiceNames) > 0 {
-		placeholders := make([]string, len(criteria.ServiceNames))
-		for i, serviceName := range criteria.ServiceNames {
+	// Add service ID filter
+	if len(criteria.ServiceIDs) > 0 {
+		placeholders := make([]string, len(criteria.ServiceIDs))
+		for i, serviceID := range criteria.ServiceIDs {
 			placeholders[i] = "?"
-			args = append(args, serviceName)
+			args = append(args, serviceID)
 		}
-		serviceInClause := "service_name IN (" + strings.Join(placeholders, ", ") + ")"
+		serviceInClause := "service_id IN (" + strings.Join(placeholders, ", ") + ")"
 		conditions = append(conditions, serviceInClause)
 	}
 
@@ -228,7 +228,7 @@ func (db *Database) SearchLogs(criteria LogSearchCriteria) ([]LogSearchResult, i
 		baseQuery += whereClause
 		countQuery = "SELECT COUNT(*) " + baseQuery
 		selectQuery = `
-			SELECT id, service_name, timestamp, level, message, created_at 
+			SELECT id, service_id, timestamp, level, message, created_at 
 		` + baseQuery
 	}
 
@@ -236,7 +236,7 @@ func (db *Database) SearchLogs(criteria LogSearchCriteria) ([]LogSearchResult, i
 	var totalCount int
 	countArgs := make([]interface{}, len(args))
 	copy(countArgs, args)
-	
+
 	err := db.DB.QueryRow(countQuery, countArgs...).Scan(&totalCount)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get log count: %w", err)
@@ -244,7 +244,7 @@ func (db *Database) SearchLogs(criteria LogSearchCriteria) ([]LogSearchResult, i
 
 	// Add ordering and pagination
 	selectQuery += " ORDER BY timestamp DESC"
-	
+
 	if criteria.Limit > 0 {
 		selectQuery += " LIMIT ?"
 		args = append(args, criteria.Limit)
@@ -267,7 +267,7 @@ func (db *Database) SearchLogs(criteria LogSearchCriteria) ([]LogSearchResult, i
 		var result LogSearchResult
 		err := rows.Scan(
 			&result.ID,
-			&result.ServiceName,
+			&result.ServiceID,
 			&result.Timestamp,
 			&result.Level,
 			&result.Message,
@@ -287,18 +287,18 @@ func (db *Database) SearchLogs(criteria LogSearchCriteria) ([]LogSearchResult, i
 }
 
 // GetRecentLogs retrieves the most recent logs for a service
-func (db *Database) GetRecentLogs(serviceName string, limit int) ([]models.LogEntry, error) {
+func (db *Database) GetRecentLogs(serviceID string, limit int) ([]models.LogEntry, error) {
 	query := `
 		SELECT timestamp, level, message
 		FROM service_logs
-		WHERE service_name = ?
+		WHERE service_id = ?
 		ORDER BY timestamp DESC
 		LIMIT ?
 	`
 
-	rows, err := db.DB.Query(query, serviceName, limit)
+	rows, err := db.DB.Query(query, serviceID, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve recent logs for service %s: %w", serviceName, err)
+		return nil, fmt.Errorf("failed to retrieve recent logs for service %s: %w", serviceID, err)
 	}
 	defer rows.Close()
 
@@ -306,7 +306,7 @@ func (db *Database) GetRecentLogs(serviceName string, limit int) ([]models.LogEn
 	for rows.Next() {
 		var logEntry models.LogEntry
 		var timestamp time.Time
-		
+
 		err := rows.Scan(&timestamp, &logEntry.Level, &logEntry.Message)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan log entry: %w", err)
@@ -334,13 +334,13 @@ func (db *Database) CleanupOldLogs() error {
 	// Get retention settings
 	var retentionDays int
 	var autoCleanupEnabled bool
-	
+
 	query := `
 		SELECT retention_days, auto_cleanup_enabled 
 		FROM log_retention_settings 
 		WHERE id = 1
 	`
-	
+
 	err := db.DB.QueryRow(query).Scan(&retentionDays, &autoCleanupEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to get retention settings: %w", err)
@@ -386,12 +386,12 @@ func (db *Database) GetLogStatistics() (map[string]interface{}, error) {
 
 	// Logs per service
 	serviceLogsQuery := `
-		SELECT service_name, COUNT(*) as log_count
+		SELECT service_id, COUNT(*) as log_count
 		FROM service_logs
-		GROUP BY service_name
+		GROUP BY service_id
 		ORDER BY log_count DESC
 	`
-	
+
 	rows, err := db.DB.Query(serviceLogsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logs per service: %w", err)
@@ -400,12 +400,12 @@ func (db *Database) GetLogStatistics() (map[string]interface{}, error) {
 
 	serviceStats := make(map[string]int64)
 	for rows.Next() {
-		var serviceName string
+		var serviceID string
 		var logCount int64
-		if err := rows.Scan(&serviceName, &logCount); err != nil {
+		if err := rows.Scan(&serviceID, &logCount); err != nil {
 			return nil, fmt.Errorf("failed to scan service log stats: %w", err)
 		}
-		serviceStats[serviceName] = logCount
+		serviceStats[serviceID] = logCount
 	}
 	stats["logsByService"] = serviceStats
 
@@ -416,7 +416,7 @@ func (db *Database) GetLogStatistics() (map[string]interface{}, error) {
 		GROUP BY level
 		ORDER BY log_count DESC
 	`
-	
+
 	rows, err = db.DB.Query(levelLogsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logs by level: %w", err)
@@ -440,7 +440,7 @@ func (db *Database) GetLogStatistics() (map[string]interface{}, error) {
 		SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest
 		FROM service_logs
 	`
-	
+
 	err = db.DB.QueryRow(dateRangeQuery).Scan(&oldestLog, &newestLog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get log date range: %w", err)
@@ -452,4 +452,44 @@ func (db *Database) GetLogStatistics() (map[string]interface{}, error) {
 	}
 
 	return stats, nil
+}
+
+// ClearServiceLogs deletes all logs for a specific service from the database
+func (db *Database) ClearServiceLogs(serviceID string) error {
+	query := `DELETE FROM service_logs WHERE service_id = ?`
+	
+	result, err := db.DB.Exec(query, serviceID)
+	if err != nil {
+		return fmt.Errorf("failed to clear logs for service %s: %w", serviceID, err)
+	}
+	
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("[INFO] Cleared %d log entries for service %s", rowsAffected, serviceID)
+	
+	return nil
+}
+
+// ClearAllServiceLogs deletes logs for multiple services from the database
+func (db *Database) ClearAllServiceLogs(serviceIDs []string) (map[string]error, error) {
+	if len(serviceIDs) == 0 {
+		// Clear all logs
+		result, err := db.DB.Exec("DELETE FROM service_logs")
+		if err != nil {
+			return nil, fmt.Errorf("failed to clear all logs: %w", err)
+		}
+		
+		rowsAffected, _ := result.RowsAffected()
+		log.Printf("[INFO] Cleared all %d log entries from database", rowsAffected)
+		return nil, nil
+	}
+	
+	// Clear logs for specific services
+	results := make(map[string]error)
+	
+	for _, serviceID := range serviceIDs {
+		err := db.ClearServiceLogs(serviceID)
+		results[serviceID] = err
+	}
+	
+	return results, nil
 }

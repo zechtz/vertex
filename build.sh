@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build script for NeST Service Manager
+# Build script for Vertex
 set -e
 
 # Colors for output
@@ -15,7 +15,7 @@ VERSION=${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo "d
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-echo -e "${BLUE}🏗️  Building NeST Service Manager${NC}"
+echo -e "${BLUE}🏗️  Building Vertex${NC}"
 echo -e "${YELLOW}Version: ${VERSION}${NC}"
 echo -e "${YELLOW}Commit:  ${COMMIT}${NC}"
 echo -e "${YELLOW}Date:    ${DATE}${NC}"
@@ -38,20 +38,20 @@ echo -e "${BLUE}🔧 Building backend...${NC}"
 LDFLAGS="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
 
 # Default build
-CGO_ENABLED=1 go build -ldflags="${LDFLAGS}" -o nest-up
+CGO_ENABLED=1 go build -ldflags="${LDFLAGS}" -o vertex
 
 echo -e "${GREEN}✅ Backend built successfully${NC}"
 echo
 
 # Show binary info
-BINARY_SIZE=$(ls -lh nest-up | awk '{print $5}')
-echo -e "${GREEN}📊 Binary created: nest-up (${BINARY_SIZE})${NC}"
+BINARY_SIZE=$(ls -lh vertex | awk '{print $5}')
+echo -e "${GREEN}📊 Binary created: vertex (${BINARY_SIZE})${NC}"
 
 # Test version
 echo -e "${BLUE}🧪 Testing binary...${NC}"
-./nest-up -version
+./vertex -version
 echo
 
 echo -e "${GREEN}🎉 Build complete!${NC}"
-echo -e "${YELLOW}To run: ./nest-up${NC}"
+echo -e "${YELLOW}To run: ./vertex${NC}"
 echo -e "${YELLOW}Web interface: http://localhost:8080${NC}"

@@ -11,7 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/google/uuid"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 type AutoDiscoveryService struct {
@@ -75,7 +76,7 @@ func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredServ
 
 		// Look for Maven projects (pom.xml files)
 		if info.Name() == "pom.xml" {
-			service := ads.analyzeMavenProject(path)
+			service := ads.analyzeMavenProjectWithScanDir(path, scanDir)
 			if service != nil {
 				discoveredServices = append(discoveredServices, *service)
 			}
@@ -83,7 +84,7 @@ func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredServ
 
 		// Look for Gradle projects (build.gradle files)
 		if info.Name() == "build.gradle" || info.Name() == "build.gradle.kts" {
-			service := ads.analyzeGradleProject(path)
+			service := ads.analyzeGradleProjectWithScanDir(path, scanDir)
 			if service != nil {
 				discoveredServices = append(discoveredServices, *service)
 			}
@@ -102,9 +103,16 @@ func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredServ
 	return discoveredServices, nil
 }
 
-func (ads *AutoDiscoveryService) analyzeMavenProject(pomPath string) *DiscoveredService {
+func (ads *AutoDiscoveryService) analyzeMavenProjectWithScanDir(pomPath, scanDir string) *DiscoveredService {
 	projectDir := filepath.Dir(pomPath)
-	relativePath, _ := filepath.Rel(ads.projectDir, projectDir)
+	relativePath, _ := filepath.Rel(scanDir, projectDir)
+
+	// Handle the case where project is in the scan directory itself
+	if relativePath == "." {
+		relativePath = filepath.Base(projectDir)
+	}
+
+	log.Printf("[DEBUG] Maven project analysis: scanDir=%s, projectDir=%s, relativePath=%s", scanDir, projectDir, relativePath)
 
 	// Read pom.xml
 	pomContent, err := ioutil.ReadFile(pomPath)
@@ -153,8 +161,19 @@ func (ads *AutoDiscoveryService) analyzeMavenProject(pomPath string) *Discovered
 }
 
 func (ads *AutoDiscoveryService) analyzeGradleProject(buildPath string) *DiscoveredService {
+	return ads.analyzeGradleProjectWithScanDir(buildPath, ads.projectDir)
+}
+
+func (ads *AutoDiscoveryService) analyzeGradleProjectWithScanDir(buildPath, scanDir string) *DiscoveredService {
 	projectDir := filepath.Dir(buildPath)
-	relativePath, _ := filepath.Rel(ads.projectDir, projectDir)
+	relativePath, _ := filepath.Rel(scanDir, projectDir)
+
+	// Handle the case where project is in the scan directory itself
+	if relativePath == "." {
+		relativePath = filepath.Base(projectDir)
+	}
+
+	log.Printf("[DEBUG] Gradle project analysis: scanDir=%s, projectDir=%s, relativePath=%s", scanDir, projectDir, relativePath)
 
 	// Read build.gradle
 	buildContent, err := ioutil.ReadFile(buildPath)
@@ -335,14 +354,23 @@ func (ads *AutoDiscoveryService) generateServiceName(artifactId, relativePath st
 }
 
 func (ads *AutoDiscoveryService) checkExistingServices(discoveredServices []DiscoveredService) {
-	existingServices := ads.manager.GetServices()
-
 	for i := range discoveredServices {
+		// Reset exists flag to ensure fresh check each time
+		discoveredServices[i].Exists = false
+
+		// Check for name conflicts
+		existingServices := ads.manager.GetServices()
 		for _, existing := range existingServices {
-			// Check if service already exists by name or path
-			if existing.Name == discoveredServices[i].Name || existing.Dir == discoveredServices[i].Path {
+			if existing.Name == discoveredServices[i].Name {
 				discoveredServices[i].Exists = true
 				break
+			}
+		}
+
+		// If not already flagged as existing, check for path conflicts using system-wide validation
+		if !discoveredServices[i].Exists {
+			if err := ads.manager.ValidateServiceUniqueness(discoveredServices[i].Name, discoveredServices[i].Path); err != nil {
+				discoveredServices[i].Exists = true
 			}
 		}
 	}
@@ -357,6 +385,7 @@ func (ads *AutoDiscoveryService) CreateServiceFromDiscovered(discovered Discover
 	nextOrder := ads.getNextServiceOrder()
 
 	service := &models.Service{
+		ID:           uuid.New().String(),
 		Name:         discovered.Name,
 		Dir:          discovered.Path,
 		Port:         discovered.Port,
