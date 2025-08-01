@@ -144,14 +144,14 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             Install Libraries - {serviceName}
           </h2>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+            className="text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 text-2xl font-bold"
           >
             ×
           </button>
@@ -161,12 +161,12 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">Analyzing libraries...</span>
+              <span className="ml-3 text-gray-600 dark:text-gray-300">Analyzing libraries...</span>
             </div>
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 mb-4">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -174,15 +174,15 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Error</h3>
-                  <p className="text-sm text-red-700 mt-1">{error}</p>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                  <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
                 </div>
               </div>
             </div>
           )}
 
           {installResult && (
-            <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-4 mb-4">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -190,11 +190,11 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-green-800">Success!</h3>
-                  <p className="text-sm text-green-700 mt-1">
+                  <h3 className="text-sm font-medium text-green-800 dark:text-green-200">Success!</h3>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
                     {installResult.message}
                   </p>
-                  <p className="text-sm text-green-600 mt-1">
+                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
                     Installed {installResult.librariesInstalled} libraries for {installResult.environments?.join(', ')} environments.
                   </p>
                 </div>
@@ -204,17 +204,17 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
 
           {preview && !preview.hasLibraries && (
             <div className="text-center py-8">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100">
-                <svg className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-700">
+                <svg className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No Custom Libraries</h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No Custom Libraries</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 This service has no custom libraries to install.
               </p>
               {preview.errorMessage && (
-                <p className="mt-2 text-xs text-gray-400">
+                <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
                   {preview.errorMessage}
                 </p>
               )}
@@ -243,8 +243,8 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
           {installing && (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">Installing Libraries...</h3>
-              <p className="mt-2 text-sm text-gray-600">
+              <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Installing Libraries...</h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                 Installing libraries for {selectedEnvironments.join(', ')} environments
               </p>
             </div>
@@ -266,16 +266,16 @@ const LibrarySelectionView: React.FC<{
   return (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-2">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
           Found {preview.totalLibraries} custom libraries across {preview.environments.length} environments
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
           Select which environments to install libraries for:
         </p>
         
         <div className="space-y-4">
           {preview.environments.map((env) => (
-            <div key={env.environment} className="border border-gray-200 rounded-lg p-4">
+            <div key={env.environment} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
               <div className="flex items-start">
                 <div className="flex items-center h-5">
                   <input
@@ -287,11 +287,11 @@ const LibrarySelectionView: React.FC<{
                   />
                 </div>
                 <div className="ml-3 flex-1">
-                  <label htmlFor={env.environment} className="font-medium text-gray-900 cursor-pointer">
+                  <label htmlFor={env.environment} className="font-medium text-gray-900 dark:text-gray-100 cursor-pointer">
                     {env.environment.toUpperCase()} Environment
                   </label>
-                  <p className="text-sm text-gray-500 mb-2">
-                    Job: <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">{env.jobName}</code>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                    Job: <code className="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-xs">{env.jobName}</code>
                     {env.branches.length > 0 && (
                       <span className="ml-2">
                         | Branches: {env.branches.join(', ')}
@@ -304,11 +304,11 @@ const LibrarySelectionView: React.FC<{
                   
                   <div className="space-y-1">
                     {env.libraries.map((lib, i) => (
-                      <div key={i} className="text-xs font-mono bg-gray-50 p-2 rounded border-l-2 border-blue-200">
-                        <span className="text-blue-600">{lib.group_id}</span>:
-                        <span className="text-green-600">{lib.artifact_id}</span>:
-                        <span className="text-purple-600">{lib.version}</span>
-                        <div className="text-gray-500 text-[10px] mt-1 truncate">
+                      <div key={i} className="text-xs font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded border-l-2 border-blue-200 dark:border-blue-400">
+                        <span className="text-blue-600 dark:text-blue-400">{lib.group_id}</span>:
+                        <span className="text-green-600 dark:text-green-400">{lib.artifact_id}</span>:
+                        <span className="text-purple-600 dark:text-purple-400">{lib.version}</span>
+                        <div className="text-gray-500 dark:text-gray-400 text-[10px] mt-1 truncate">
                           {lib.file}
                         </div>
                       </div>
@@ -321,10 +321,10 @@ const LibrarySelectionView: React.FC<{
         </div>
       </div>
       
-      <div className="flex justify-end space-x-3 pt-4 border-t">
+      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600">
         <button
           onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           Cancel
         </button>
@@ -356,11 +356,11 @@ const LibraryConfirmationView: React.FC<{
   return (
     <div>
       <div className="mb-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
           Confirm Library Installation
         </h3>
         
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
@@ -368,8 +368,8 @@ const LibraryConfirmationView: React.FC<{
               </svg>
             </div>
             <div className="ml-3">
-              <h4 className="text-sm font-medium text-blue-800">Installation Summary</h4>
-              <div className="text-sm text-blue-700 mt-1">
+              <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">Installation Summary</h4>
+              <div className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                 <p>Service: <strong>{preview.serviceName}</strong></p>
                 <p>Environments: <strong>{selectedEnvironments.join(', ')}</strong></p>
                 <p>Total Libraries: <strong>{totalLibraries}</strong></p>
@@ -380,16 +380,16 @@ const LibraryConfirmationView: React.FC<{
 
         <div className="space-y-3">
           {selectedEnvData.map((env) => (
-            <div key={env.environment} className="border border-gray-200 rounded-lg p-3">
-              <h4 className="font-medium text-gray-900 mb-2">
+            <div key={env.environment} className="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
                 {env.environment.toUpperCase()} Environment ({env.libraries.length} libraries)
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {env.libraries.map((lib, i) => (
-                  <div key={i} className="text-xs font-mono bg-gray-50 p-2 rounded">
-                    <span className="text-blue-600">{lib.group_id}</span>:
-                    <span className="text-green-600">{lib.artifact_id}</span>:
-                    <span className="text-purple-600">{lib.version}</span>
+                  <div key={i} className="text-xs font-mono bg-gray-50 dark:bg-gray-700 p-2 rounded">
+                    <span className="text-blue-600 dark:text-blue-400">{lib.group_id}</span>:
+                    <span className="text-green-600 dark:text-green-400">{lib.artifact_id}</span>:
+                    <span className="text-purple-600 dark:text-purple-400">{lib.version}</span>
                   </div>
                 ))}
               </div>
@@ -398,10 +398,10 @@ const LibraryConfirmationView: React.FC<{
         </div>
       </div>
       
-      <div className="flex justify-end space-x-3 pt-4 border-t">
+      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-600">
         <button
           onClick={onBack}
-          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           Back
         </button>
