@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ServiceProfile, UserProfile, CreateProfileRequest, UpdateProfileRequest, UserProfileUpdateRequest, ProfileContext as ProfileContextData } from '@/types';
 import { useAuth } from './AuthContext';
+import { useTheme } from './ThemeContext';
 
 interface ProfileContextType {
   // User Profile
@@ -52,6 +53,7 @@ interface ProfileProviderProps {
 
 export function ProfileProvider({ children }: ProfileProviderProps) {
   const { user, isAuthenticated } = useAuth();
+  const { syncWithUserProfile } = useTheme();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [serviceProfiles, setServiceProfiles] = useState<ServiceProfile[]>([]);
   const [activeProfile, setActiveProfileState] = useState<ServiceProfile | null>(null);
@@ -109,6 +111,11 @@ export function ProfileProvider({ children }: ProfileProviderProps) {
     try {
       const profile = await apiCall('/api/user/profile');
       setUserProfile(profile);
+      
+      // Sync theme with user profile preferences
+      if (profile?.preferences?.theme) {
+        syncWithUserProfile(profile.preferences.theme);
+      }
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
       throw error;
@@ -118,11 +125,20 @@ export function ProfileProvider({ children }: ProfileProviderProps) {
   const updateUserProfile = async (req: UserProfileUpdateRequest) => {
     try {
       setIsUpdating(true);
+      console.log('Updating user profile with request:', req);
+      
       const updatedProfile = await apiCall('/api/user/profile', {
         method: 'PUT',
         body: JSON.stringify(req),
       });
+      
+      console.log('User profile updated successfully:', updatedProfile);
       setUserProfile(updatedProfile);
+      
+      // Sync theme with updated profile preferences
+      if (updatedProfile?.preferences?.theme) {
+        syncWithUserProfile(updatedProfile.preferences.theme);
+      }
     } catch (error) {
       console.error('Failed to update user profile:', error);
       throw error;

@@ -6,6 +6,7 @@ interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
+  syncWithUserProfile: (profileTheme: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -73,10 +74,19 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     setTheme(newTheme);
   };
 
+  const syncWithUserProfile = (profileTheme: string) => {
+    if (profileTheme === 'light' || profileTheme === 'dark') {
+      setThemeState(profileTheme);
+      applyTheme(profileTheme);
+      // Don't save to localStorage when syncing from profile to avoid conflicts
+    }
+  };
+
   const value: ThemeContextType = {
     theme,
     toggleTheme,
     setTheme,
+    syncWithUserProfile,
   };
 
   return (
