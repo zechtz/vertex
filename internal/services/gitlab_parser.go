@@ -10,24 +10,30 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/google/uuid"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 // ParseGitLabCI parses .gitlab-ci.yml files in service directories to extract Maven library installations
-func (sm *Manager) ParseGitLabCI(serviceName string) (*models.GitLabCIConfig, error) {
+func (sm *Manager) ParseGitLabCI(serviceUUID string) (*models.GitLabCIConfig, error) {
+	// Validate UUID
+	if _, err := uuid.Parse(serviceUUID); err != nil {
+		return nil, fmt.Errorf("invalid service UUID: %s", serviceUUID)
+	}
+
 	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
+	service, exists := sm.services[serviceUUID]
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("service %s not found", serviceName)
+		return nil, fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
 	serviceDir := filepath.Join(sm.config.ProjectsDir, service.Dir)
 	gitlabCIPath := filepath.Join(serviceDir, ".gitlab-ci.yml")
 
 	config := &models.GitLabCIConfig{
-		ServiceName:  serviceName,
+		ServiceID:    serviceUUID,
 		Libraries:    []models.LibraryInstallation{},
 		HasLibraries: false,
 	}
@@ -47,7 +53,6 @@ func (sm *Manager) ParseGitLabCI(serviceName string) (*models.GitLabCIConfig, er
 	defer file.Close()
 
 	// Regular expression to match mvn install:install-file commands
-	// Example: mvn install:install-file -Dfile=./lib/nest-util-1.1.4.jar -DgroupId=tz.go.ppra.nest -DartifactId=nest-util -Dversion=1.1.4 -Dpackaging=jar
 	mvnInstallRegex := regexp.MustCompile(`mvn\s+install:install-file\s+(.+)`)
 	fileRegex := regexp.MustCompile(`-Dfile=([^\s]+)`)
 	groupIdRegex := regexp.MustCompile(`-DgroupId=([^\s]+)`)
@@ -58,7 +63,7 @@ func (sm *Manager) ParseGitLabCI(serviceName string) (*models.GitLabCIConfig, er
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -67,26 +72,26 @@ func (sm *Manager) ParseGitLabCI(serviceName string) (*models.GitLabCIConfig, er
 		// Look for mvn install:install-file commands
 		if matches := mvnInstallRegex.FindStringSubmatch(line); matches != nil {
 			fullCommand := strings.TrimSpace(matches[1])
-			
+
 			// Extract parameters
 			var file, groupId, artifactId, version, packaging string
-			
+
 			if fileMatch := fileRegex.FindStringSubmatch(fullCommand); fileMatch != nil {
 				file = fileMatch[1]
 			}
-			
+
 			if groupIdMatch := groupIdRegex.FindStringSubmatch(fullCommand); groupIdMatch != nil {
 				groupId = groupIdMatch[1]
 			}
-			
+
 			if artifactIdMatch := artifactIdRegex.FindStringSubmatch(fullCommand); artifactIdMatch != nil {
 				artifactId = artifactIdMatch[1]
 			}
-			
+
 			if versionMatch := versionRegex.FindStringSubmatch(fullCommand); versionMatch != nil {
 				version = versionMatch[1]
 			}
-			
+
 			if packagingMatch := packagingRegex.FindStringSubmatch(fullCommand); packagingMatch != nil {
 				packaging = packagingMatch[1]
 			} else {
@@ -103,11 +108,11 @@ func (sm *Manager) ParseGitLabCI(serviceName string) (*models.GitLabCIConfig, er
 					Packaging:  packaging,
 					Command:    "mvn install:install-file " + fullCommand,
 				}
-				
+
 				config.Libraries = append(config.Libraries, library)
 				config.HasLibraries = true
-				
-				log.Printf("[INFO] Found library installation for %s: %s:%s:%s", serviceName, groupId, artifactId, version)
+
+				log.Printf("[INFO] Found library installation for UUID %s: %s:%s:%s", serviceUUID, groupId, artifactId, version)
 			}
 		}
 	}
@@ -127,52 +132,63 @@ func (sm *Manager) ParseGitLabCI(serviceName string) (*models.GitLabCIConfig, er
 // GetAllGitLabCIConfigs returns GitLab CI configurations for all services
 func (sm *Manager) GetAllGitLabCIConfigs() map[string]*models.GitLabCIConfig {
 	configs := make(map[string]*models.GitLabCIConfig)
-	
+
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
-	
-	for serviceName := range sm.services {
-		if config, err := sm.ParseGitLabCI(serviceName); err == nil {
-			configs[serviceName] = config
+
+	for serviceUUID := range sm.services {
+		if config, err := sm.ParseGitLabCI(serviceUUID); err == nil {
+			configs[serviceUUID] = config
 		} else {
-			configs[serviceName] = &models.GitLabCIConfig{
-				ServiceName:  serviceName,
+			configs[serviceUUID] = &models.GitLabCIConfig{
+				ServiceID:    serviceUUID,
 				Libraries:    []models.LibraryInstallation{},
 				HasLibraries: false,
 				ErrorMessage: err.Error(),
 			}
 		}
 	}
-	
+
 	return configs
 }
 
 // InstallLibraries runs the Maven library installation commands for a specific service
-func (sm *Manager) InstallLibraries(serviceName string) error {
-	config, err := sm.ParseGitLabCI(serviceName)
-	if err != nil {
-		return fmt.Errorf("failed to parse GitLab CI config: %w", err)
-	}
-
-	if !config.HasLibraries {
-		return fmt.Errorf("no libraries found to install for service %s", serviceName)
+func (sm *Manager) InstallLibraries(serviceUUID string, libraries []models.LibraryInstallation) error {
+	// Validate UUID
+	if _, err := uuid.Parse(serviceUUID); err != nil {
+		return fmt.Errorf("invalid service UUID: %s", serviceUUID)
 	}
 
 	sm.mutex.RLock()
-	service, exists := sm.services[serviceName]
+	service, exists := sm.services[serviceUUID]
 	sm.mutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("service %s not found", serviceName)
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
 	serviceDir := filepath.Join(sm.config.ProjectsDir, service.Dir)
 
-	log.Printf("[INFO] Installing %d libraries for service %s", len(config.Libraries), serviceName)
+	// If libraries are provided, use them; otherwise, parse .gitlab-ci.yml
+	var libsToInstall []models.LibraryInstallation
+	if len(libraries) > 0 {
+		libsToInstall = libraries
+	} else {
+		config, err := sm.ParseGitLabCI(serviceUUID)
+		if err != nil {
+			return fmt.Errorf("failed to parse GitLab CI config: %w", err)
+		}
+		if !config.HasLibraries {
+			return fmt.Errorf("no libraries found to install for service UUID %s", serviceUUID)
+		}
+		libsToInstall = config.Libraries
+	}
 
-	for i, library := range config.Libraries {
-		log.Printf("[INFO] Installing library %d/%d: %s:%s:%s", 
-			i+1, len(config.Libraries), library.GroupID, library.ArtifactID, library.Version)
+	log.Printf("[INFO] Installing %d libraries for service UUID %s", len(libsToInstall), serviceUUID)
+
+	for i, library := range libsToInstall {
+		log.Printf("[INFO] Installing library %d/%d: %s:%s:%s",
+			i+1, len(libsToInstall), library.GroupID, library.ArtifactID, library.Version)
 
 		// Check if the library file exists
 		libPath := filepath.Join(serviceDir, library.File)
@@ -182,15 +198,15 @@ func (sm *Manager) InstallLibraries(serviceName string) error {
 
 		// Execute the Maven install command
 		if err := sm.executeMavenCommand(serviceDir, library.Command); err != nil {
-			return fmt.Errorf("failed to install library %s:%s:%s: %w", 
+			return fmt.Errorf("failed to install library %s:%s:%s: %w",
 				library.GroupID, library.ArtifactID, library.Version, err)
 		}
 
-		log.Printf("[INFO] Successfully installed library: %s:%s:%s", 
+		log.Printf("[INFO] Successfully installed library: %s:%s:%s",
 			library.GroupID, library.ArtifactID, library.Version)
 	}
 
-	log.Printf("[INFO] Successfully installed all %d libraries for service %s", len(config.Libraries), serviceName)
+	log.Printf("[INFO] Successfully installed all %d libraries for service UUID %s", len(libsToInstall), serviceUUID)
 	return nil
 }
 
@@ -209,7 +225,7 @@ func (sm *Manager) executeMavenCommand(workDir, command string) error {
 
 	// Use the existing Maven execution pattern from startService
 	cmd := fmt.Sprintf("cd %s && %s", workDir, fullCommand)
-	
+
 	// Get global environment variables for Maven execution
 	globalEnvVars, err := sm.GetGlobalEnvVars()
 	if err != nil {
@@ -224,7 +240,7 @@ func (sm *Manager) executeMavenCommand(workDir, command string) error {
 // executeCommand executes a bash command with environment variables
 func (sm *Manager) executeCommand(cmdStr string, envVars map[string]string) error {
 	cmd := exec.Command("bash", "-c", cmdStr)
-	
+
 	// Set environment variables for the process
 	cmd.Env = os.Environ() // Start with current environment
 
