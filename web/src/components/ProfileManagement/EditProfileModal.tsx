@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Server, Settings, Star, Save } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useProfile } from '@/contexts/ProfileContext';
-import { UpdateProfileRequest, Service, ServiceProfile } from '@/types';
-import { useToast, toast } from '@/components/ui/toast';
+import { useState, useEffect } from "react";
+import { X, Plus, Trash2, Server, Settings, Star, Save, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useProfile } from "@/contexts/ProfileContext";
+import { UpdateProfileRequest, Service, ServiceProfile } from "@/types";
+import { useToast, toast } from "@/components/ui/toast";
+import { BulkImportModal } from "@/components/EnvironmentVariables/BulkImportModal";
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -12,32 +13,41 @@ interface EditProfileModalProps {
   profile: ServiceProfile | null;
 }
 
-export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalProps) {
+export function EditProfileModal({
+  isOpen,
+  onClose,
+  profile,
+}: EditProfileModalProps) {
   const { updateProfile, isUpdating } = useProfile();
   const { addToast } = useToast();
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
   const [formData, setFormData] = useState<UpdateProfileRequest>({
-    name: '',
-    description: '',
+    name: "",
+    description: "",
     services: [],
     envVars: {},
-    projectsDir: '',
-    javaHomeOverride: '',
+    projectsDir: "",
+    javaHomeOverride: "",
     isDefault: false,
   });
-  const [envVarKey, setEnvVarKey] = useState('');
-  const [envVarValue, setEnvVarValue] = useState('');
+  const [envVarKey, setEnvVarKey] = useState("");
+  const [envVarValue, setEnvVarValue] = useState("");
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   // Initialize form data when profile changes
   useEffect(() => {
     if (profile && isOpen) {
+      // Extract service IDs from the enriched service objects
+      const serviceIds = profile.services.map(service => 
+        typeof service === 'string' ? service : service.id
+      );
       setFormData({
         name: profile.name,
         description: profile.description,
-        services: [...profile.services],
+        services: [...serviceIds],
         envVars: { ...profile.envVars },
-        projectsDir: profile.projectsDir || '',
-        javaHomeOverride: profile.javaHomeOverride || '',
+        projectsDir: profile.projectsDir || "",
+        javaHomeOverride: profile.javaHomeOverride || "",
         isDefault: profile.isDefault,
       });
       fetchServices();
@@ -45,85 +55,117 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
   }, [profile, isOpen]);
 
   const fetchServices = async () => {
+    if (!profile) return;
+
     try {
-      const response = await fetch('/api/services');
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // Include excludeProfile parameter to allow services from the current profile being edited
+      const response = await fetch(
+        `/api/services/available-for-profile?excludeProfile=${profile.id}`,
+        {
+          method: "GET",
+          headers,
+        },
+      );
+
       if (response.ok) {
         const services = await response.json();
         setAvailableServices(services || []);
+      } else if (response.status === 401) {
+        console.error(
+          "Authentication required for fetching available services",
+        );
+        addToast(
+          toast.error(
+            "Authentication Error",
+            "Please log in to view available services",
+          ),
+        );
       }
     } catch (error) {
-      console.error('Failed to fetch services:', error);
+      console.error("Failed to fetch services:", error);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!profile) return;
-    
+
     if (!formData.name.trim()) {
-      addToast(toast.error('Validation Error', 'Profile name is required'));
+      addToast(toast.error("Validation Error", "Profile name is required"));
       return;
     }
 
-    if (formData.services.length === 0) {
-      addToast(toast.error('Validation Error', 'Please select at least one service'));
-      return;
-    }
+    // Services are now optional - profiles can be created without services
 
     try {
       await updateProfile(profile.id, formData);
-      addToast(toast.success('Success', 'Profile updated successfully!'));
+      addToast(toast.success("Success", "Profile updated successfully!"));
       handleClose();
     } catch (error) {
-      console.error('Failed to update profile:', error);
-      addToast(toast.error('Error', 'Failed to update profile. Please try again.'));
+      console.error("Failed to update profile:", error);
+      addToast(
+        toast.error("Error", "Failed to update profile. Please try again."),
+      );
     }
   };
 
   const handleClose = () => {
-    setEnvVarKey('');
-    setEnvVarValue('');
+    setEnvVarKey("");
+    setEnvVarValue("");
     onClose();
   };
 
-  const handleServiceToggle = (serviceName: string) => {
-    setFormData(prev => ({
+  const handleServiceToggle = (serviceId: string) => {
+    setFormData((prev) => ({
       ...prev,
-      services: prev.services.includes(serviceName)
-        ? prev.services.filter(s => s !== serviceName)
-        : [...prev.services, serviceName]
+      services: prev.services.includes(serviceId)
+        ? prev.services.filter((s) => s !== serviceId)
+        : [...prev.services, serviceId],
     }));
   };
 
   const handleAddEnvVar = () => {
     if (envVarKey.trim() && envVarValue.trim()) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         envVars: {
           ...prev.envVars,
-          [envVarKey.trim()]: envVarValue.trim()
-        }
+          [envVarKey.trim()]: envVarValue.trim(),
+        },
       }));
-      setEnvVarKey('');
-      setEnvVarValue('');
+      setEnvVarKey("");
+      setEnvVarValue("");
     }
   };
 
   const handleRemoveEnvVar = (key: string) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const newEnvVars = { ...prev.envVars };
       delete newEnvVars[key];
       return {
         ...prev,
-        envVars: newEnvVars
+        envVars: newEnvVars,
       };
     });
   };
 
-  const handleEditEnvVar = (oldKey: string, newKey: string, newValue: string) => {
+  const handleEditEnvVar = (
+    oldKey: string,
+    newKey: string,
+    newValue: string,
+  ) => {
     if (newKey.trim() && newValue.trim()) {
-      setFormData(prev => {
+      setFormData((prev) => {
         const newEnvVars = { ...prev.envVars };
         if (oldKey !== newKey) {
           delete newEnvVars[oldKey];
@@ -131,10 +173,31 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
         newEnvVars[newKey.trim()] = newValue.trim();
         return {
           ...prev,
-          envVars: newEnvVars
+          envVars: newEnvVars,
         };
       });
     }
+  };
+
+  const handleBulkImport = (variables: Record<string, string>) => {
+    const existingKeys = new Set(Object.keys(formData.envVars));
+    const newVariables = Object.entries(variables)
+      .filter(([key]) => !existingKeys.has(key))
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+    
+    const duplicateCount = Object.keys(variables).length - Object.keys(newVariables).length;
+    
+    setFormData((prev) => ({
+      ...prev,
+      envVars: { ...prev.envVars, ...newVariables },
+    }));
+    
+    addToast(toast.success(
+      "Variables imported",
+      `Imported ${Object.keys(newVariables).length} new variables${duplicateCount > 0 ? `. ${duplicateCount} duplicates skipped.` : ""}`
+    ));
+    
+    setIsBulkImportOpen(false);
   };
 
   if (!isOpen || !profile) return null;
@@ -160,7 +223,7 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                 Basic Information
               </h3>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Profile Name *
@@ -168,8 +231,10 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
                 <Input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Nest Development, Production Environment"
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  placeholder="e.g., Development, Production Environment"
                   className="w-full"
                   required
                 />
@@ -181,7 +246,12 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
                 </label>
                 <textarea
                   value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
                   placeholder="Describe this profile and when to use it..."
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
                   rows={3}
@@ -196,11 +266,18 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
                   <Input
                     type="text"
                     value={formData.projectsDir}
-                    onChange={(e) => setFormData(prev => ({ ...prev, projectsDir: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        projectsDir: e.target.value,
+                      }))
+                    }
                     placeholder="/path/to/your/projects"
                     className="w-full"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Directory where your project files are located</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Directory where your project files are located
+                  </p>
                 </div>
 
                 <div>
@@ -210,11 +287,18 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
                   <Input
                     type="text"
                     value={formData.javaHomeOverride}
-                    onChange={(e) => setFormData(prev => ({ ...prev, javaHomeOverride: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        javaHomeOverride: e.target.value,
+                      }))
+                    }
                     placeholder="/path/to/java"
                     className="w-full"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Override default Java installation path</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Override default Java installation path
+                  </p>
                 </div>
               </div>
 
@@ -223,10 +307,18 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
                   type="checkbox"
                   id="isDefault"
                   checked={formData.isDefault}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isDefault: e.target.checked }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      isDefault: e.target.checked,
+                    }))
+                  }
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <label htmlFor="isDefault" className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label
+                  htmlFor="isDefault"
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   <Star className="h-4 w-4" />
                   Set as default profile
                 </label>
@@ -235,10 +327,15 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
 
             {/* Service Selection */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                Services ({formData.services.length} selected)
-              </h3>
-              
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  Services ({formData.services.length} selected)
+                </h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Optional - Services can be added later
+                </span>
+              </div>
+
               {availableServices.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <Server className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -250,15 +347,15 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
                     <label
                       key={service.name}
                       className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                        formData.services.includes(service.name)
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        formData.services.includes(service.id)
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                          : "border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                       }`}
                     >
                       <input
                         type="checkbox"
-                        checked={formData.services.includes(service.name)}
-                        onChange={() => handleServiceToggle(service.name)}
+                        checked={formData.services.includes(service.id)}
+                        onChange={() => handleServiceToggle(service.id)}
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                       <div className="flex-1">
@@ -282,10 +379,22 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
 
             {/* Environment Variables */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                Environment Variables
-              </h3>
-              
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  Environment Variables
+                </h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBulkImportOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Bulk Import
+                </Button>
+              </div>
+
               {/* Add Environment Variable */}
               <div className="flex gap-2">
                 <Input
@@ -337,7 +446,7 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
             </Button>
             <Button
               type="submit"
-              disabled={isUpdating || !formData.name.trim() || formData.services.length === 0}
+              disabled={isUpdating || !formData.name.trim()}
               className="flex items-center gap-2"
             >
               {isUpdating ? (
@@ -350,6 +459,13 @@ export function EditProfileModal({ isOpen, onClose, profile }: EditProfileModalP
           </div>
         </form>
       </div>
+      
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onImport={handleBulkImport}
+      />
     </div>
   );
 }
@@ -362,7 +478,12 @@ interface EditableEnvVarProps {
   onRemove: (key: string) => void;
 }
 
-function EditableEnvVar({ originalKey, originalValue, onUpdate, onRemove }: EditableEnvVarProps) {
+function EditableEnvVar({
+  originalKey,
+  originalValue,
+  onUpdate,
+  onRemove,
+}: EditableEnvVarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [key, setKey] = useState(originalKey);
   const [value, setValue] = useState(originalValue);
@@ -383,7 +504,7 @@ function EditableEnvVar({ originalKey, originalValue, onUpdate, onRemove }: Edit
   return (
     <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded border">
       <Settings className="h-4 w-4 text-gray-400" />
-      
+
       {isEditing ? (
         <>
           <Input

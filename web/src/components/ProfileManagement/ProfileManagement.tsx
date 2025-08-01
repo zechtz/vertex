@@ -1,26 +1,26 @@
-import { useState } from 'react';
-import { 
-  Plus, 
-  Settings, 
-  Play, 
-  Edit, 
-  Trash2, 
+import { useState } from "react";
+import {
+  Plus,
+  Settings,
+  Play,
+  Edit,
+  Trash2,
   Star,
   Users,
   Server,
   Clock,
   Zap,
-  Check
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useProfile } from '@/contexts/ProfileContext';
-import { useToast, toast } from '@/components/ui/toast';
-import { ServiceProfile } from '@/types';
-import { CreateProfileModal } from './CreateProfileModal';
-import { EditProfileModal } from './EditProfileModal';
-import { UserProfileModal } from './UserProfileModal';
-import { ProfileEnvManager } from '../ProfileEnvManager/ProfileEnvManager';
-import { ProfileServiceManager } from '../ProfileServiceManager/ProfileServiceManager';
+  Check,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useToast, toast } from "@/components/ui/toast";
+import { ServiceProfile } from "@/types";
+import { CreateProfileModal } from "./CreateProfileModal";
+import { EditProfileModal } from "./EditProfileModal";
+import { UserProfileModal } from "./UserProfileModal";
+import { ProfileEnvManager } from "../ProfileEnvManager/ProfileEnvManager";
+import { ProfileServiceManager } from "../ProfileServiceManager/ProfileServiceManager";
 
 interface ProfileManagementProps {
   isOpen: boolean;
@@ -28,7 +28,11 @@ interface ProfileManagementProps {
   onProfileUpdated?: () => void;
 }
 
-export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: ProfileManagementProps) {
+export function ProfileManagement({
+  isOpen,
+  onClose,
+  onProfileUpdated,
+}: ProfileManagementProps) {
   const {
     serviceProfiles,
     activeProfile,
@@ -45,9 +49,13 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showEnvManager, setShowEnvManager] = useState(false);
   const [showServiceManager, setShowServiceManager] = useState(false);
-  const [editingProfile, setEditingProfile] = useState<ServiceProfile | null>(null);
-  const [envManagerProfile, setEnvManagerProfile] = useState<ServiceProfile | null>(null);
-  const [serviceManagerProfile, setServiceManagerProfile] = useState<ServiceProfile | null>(null);
+  const [editingProfile, setEditingProfile] = useState<ServiceProfile | null>(
+    null,
+  );
+  const [envManagerProfile, setEnvManagerProfile] =
+    useState<ServiceProfile | null>(null);
+  const [serviceManagerProfile, setServiceManagerProfile] =
+    useState<ServiceProfile | null>(null);
   const [deletingProfile, setDeletingProfile] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
 
@@ -59,13 +67,17 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
   };
 
   const handleDeleteProfile = async (profileId: string) => {
-    if (window.confirm('Are you sure you want to delete this profile? This action cannot be undone.')) {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this profile? This action cannot be undone.",
+      )
+    ) {
       try {
         setDeletingProfile(profileId);
         await deleteProfile(profileId);
       } catch (error) {
-        console.error('Failed to delete profile:', error);
-        alert('Failed to delete profile. Please try again.');
+        console.error("Failed to delete profile:", error);
+        alert("Failed to delete profile. Please try again.");
       } finally {
         setDeletingProfile(null);
       }
@@ -75,10 +87,17 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
   const handleApplyProfile = async (profileId: string) => {
     try {
       await applyProfile(profileId);
-      addToast(toast.success('Success', 'Profile applied successfully! Services are being started.'));
+      addToast(
+        toast.success(
+          "Success",
+          "Profile applied successfully! Services are being started.",
+        ),
+      );
     } catch (error) {
-      console.error('Failed to apply profile:', error);
-      addToast(toast.error('Error', 'Failed to apply profile. Please try again.'));
+      console.error("Failed to apply profile:", error);
+      addToast(
+        toast.error("Error", "Failed to apply profile. Please try again."),
+      );
     }
   };
 
@@ -86,10 +105,12 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
     try {
       setActivatingId(profileId);
       await activateProfile(profileId);
-      addToast(toast.success('Success', 'Profile activated successfully!'));
+      addToast(toast.success("Success", "Profile activated successfully!"));
     } catch (error) {
-      console.error('Failed to activate profile:', error);
-      addToast(toast.error('Error', 'Failed to activate profile. Please try again.'));
+      console.error("Failed to activate profile:", error);
+      addToast(
+        toast.error("Error", "Failed to activate profile. Please try again."),
+      );
     } finally {
       setActivatingId(null);
     }
@@ -106,19 +127,21 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const getProfileStatusColor = (profile: ServiceProfile) => {
-    if (profile.isDefault) return 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700';
-    if (activeProfile?.id === profile.id) return 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700';
-    return 'text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700';
+    if (profile.isDefault)
+      return "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700";
+    if (activeProfile?.id === profile.id)
+      return "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700";
+    return "text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700";
   };
 
   return (
@@ -161,7 +184,9 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400">Loading profiles...</p>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Loading profiles...
+                </p>
               </div>
             </div>
           ) : serviceProfiles.length === 0 ? (
@@ -172,9 +197,13 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
                   No Profiles Yet
                 </h3>
                 <p className="text-gray-600 dark:text-gray-400 mb-4">
-                  Create your first service profile to get started with environment management.
+                  Create your first service profile to get started with
+                  environment management.
                 </p>
-                <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2">
+                <Button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-2"
+                >
                   <Plus className="h-4 w-4" />
                   Create Your First Profile
                 </Button>
@@ -193,12 +222,22 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
                   </div>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <p className="font-medium text-blue-800 dark:text-blue-200">{activeProfile.name}</p>
-                      <p className="text-sm text-blue-600 dark:text-blue-300">{activeProfile.description}</p>
+                      <p className="font-medium text-blue-800 dark:text-blue-200">
+                        {activeProfile.name}
+                      </p>
+                      <p className="text-sm text-blue-600 dark:text-blue-300">
+                        {activeProfile.description}
+                      </p>
                       <div className="flex items-center gap-4 mt-2 text-xs text-blue-600 dark:text-blue-400">
-                        <span>{activeProfile.services.length} services configured</span>
-                        {Object.keys(activeProfile.envVars || {}).length > 0 && (
-                          <span>{Object.keys(activeProfile.envVars).length} env variables</span>
+                        <span>
+                          {activeProfile.services.length} services configured
+                        </span>
+                        {Object.keys(activeProfile.envVars || {}).length >
+                          0 && (
+                          <span>
+                            {Object.keys(activeProfile.envVars).length} env
+                            variables
+                          </span>
                         )}
                         {activeProfile.projectsDir && (
                           <span>Projects: {activeProfile.projectsDir}</span>
@@ -262,7 +301,7 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
                           )}
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                          {profile.description || 'No description'}
+                          {profile.description || "No description"}
                         </p>
                       </div>
                     </div>
@@ -286,14 +325,16 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
                           Environment Variables:
                         </p>
                         <div className="flex flex-wrap gap-1">
-                          {Object.keys(profile.envVars).slice(0, 3).map((key) => (
-                            <span
-                              key={key}
-                              className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded text-gray-600 dark:text-gray-300"
-                            >
-                              {key}
-                            </span>
-                          ))}
+                          {Object.keys(profile.envVars)
+                            .slice(0, 3)
+                            .map((key) => (
+                              <span
+                                key={key}
+                                className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded text-gray-600 dark:text-gray-300"
+                              >
+                                {key}
+                              </span>
+                            ))}
                           {Object.keys(profile.envVars).length > 3 && (
                             <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-xs rounded text-gray-600 dark:text-gray-300">
                               +{Object.keys(profile.envVars).length - 3} more
@@ -305,14 +346,16 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
 
                     {/* Services List */}
                     <div className="mb-3">
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Services:</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        Services:
+                      </p>
                       <div className="flex flex-wrap gap-1">
-                        {profile.services.slice(0, 3).map((serviceName) => (
+                        {profile.services.slice(0, 3).map((service: any) => (
                           <span
-                            key={serviceName}
+                            key={service.id}
                             className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-xs rounded text-blue-600 dark:text-blue-300"
                           >
-                            {serviceName}
+                            {service.name}
                           </span>
                         ))}
                         {profile.services.length > 3 && (
@@ -347,7 +390,7 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
                           size="sm"
                           onClick={() => handleApplyProfile(profile.id)}
                           disabled={isApplying}
-                          className={`${!profile.isActive ? 'flex-1' : 'flex-1'} flex items-center gap-1`}
+                          className={`${!profile.isActive ? "flex-1" : "flex-1"} flex items-center gap-1`}
                         >
                           {isApplying ? (
                             <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -357,7 +400,7 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
                           Apply & Start
                         </Button>
                       </div>
-                      
+
                       {/* Secondary Actions Row */}
                       <div className="flex items-center gap-2">
                         <Button
@@ -411,7 +454,8 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-b-lg">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              {serviceProfiles.length} profile{serviceProfiles.length !== 1 ? 's' : ''} total
+              {serviceProfiles.length} profile
+              {serviceProfiles.length !== 1 ? "s" : ""} total
               {activeProfile && (
                 <span className="ml-2">• Active: {activeProfile.name}</span>
               )}
@@ -430,7 +474,7 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
       />
-      
+
       <EditProfileModal
         isOpen={showEditModal}
         onClose={() => {
@@ -439,12 +483,12 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
         }}
         profile={editingProfile}
       />
-      
+
       <UserProfileModal
         isOpen={showUserProfileModal}
         onClose={() => setShowUserProfileModal(false)}
       />
-      
+
       <ProfileEnvManager
         isOpen={showEnvManager}
         onClose={() => {
@@ -453,7 +497,7 @@ export function ProfileManagement({ isOpen, onClose, onProfileUpdated }: Profile
         }}
         profile={envManagerProfile}
       />
-      
+
       <ProfileServiceManager
         isOpen={showServiceManager}
         onClose={() => {
