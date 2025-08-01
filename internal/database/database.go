@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -13,9 +15,37 @@ type Database struct {
 }
 
 func NewDatabase() (*Database, error) {
-	db, err := sql.Open("sqlite3", "nest_manager.db")
+	return NewDatabaseWithPath("")
+}
+
+func NewDatabaseWithPath(dbPath string) (*Database, error) {
+	// Determine database path
+	var finalPath string
+	if dbPath != "" {
+		finalPath = dbPath
+	} else {
+		// Check for VERTEX_DATA_DIR environment variable
+		if dataDir := os.Getenv("VERTEX_DATA_DIR"); dataDir != "" {
+			if err := os.MkdirAll(dataDir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create data directory %s: %w", dataDir, err)
+			}
+			finalPath = filepath.Join(dataDir, "vertex.db")
+		} else {
+			// Default to current directory for backward compatibility
+			finalPath = "vertex.db"
+		}
+	}
+
+	// Ensure the directory exists
+	if dir := filepath.Dir(finalPath); dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
+		}
+	}
+
+	db, err := sql.Open("sqlite3", finalPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to open database at %s: %w", finalPath, err)
 	}
 
 	database := &Database{DB: db}
