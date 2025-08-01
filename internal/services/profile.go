@@ -5,18 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zechtz/nest-up/internal/database"
-	"github.com/zechtz/nest-up/internal/models"
+	"github.com/zechtz/vertex/internal/database"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 type ProfileService struct {
-	db     *database.Database
-	sm     *Manager // Access to service manager for service operations
-	mutex  sync.RWMutex
+	db    *database.Database
+	sm    *Manager // Access to service manager for service operations
+	mutex sync.RWMutex
 }
 
 func NewProfileService(db *database.Database, sm *Manager) *ProfileService {
@@ -51,7 +52,6 @@ func (ps *ProfileService) GetUserProfile(userID string) (*models.UserProfile, er
 		&profile.CreatedAt,
 		&profile.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Create default profile
@@ -87,7 +87,40 @@ func (ps *ProfileService) UpdateUserProfile(userID string, req *models.UserProfi
 		return nil, fmt.Errorf("failed to update user profile: %w", err)
 	}
 
-	return ps.GetUserProfile(userID)
+	// Use internal method to avoid deadlock (we already hold the lock)
+	return ps.getUserProfileInternal(userID)
+}
+
+// getUserProfileInternal retrieves a user profile without acquiring locks (for internal use)
+func (ps *ProfileService) getUserProfileInternal(userID string) (*models.UserProfile, error) {
+	var profile models.UserProfile
+	var preferencesJSON string
+
+	query := `SELECT user_id, display_name, avatar, preferences_json, created_at, updated_at 
+			  FROM user_profiles WHERE user_id = ?`
+
+	err := ps.db.QueryRow(query, userID).Scan(
+		&profile.UserID,
+		&profile.DisplayName,
+		&profile.Avatar,
+		&preferencesJSON,
+		&profile.CreatedAt,
+		&profile.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Create default profile (but we need to release lock first)
+			return nil, fmt.Errorf("user profile not found")
+		}
+		return nil, fmt.Errorf("failed to get user profile: %w", err)
+	}
+
+	// Parse preferences JSON
+	if err := json.Unmarshal([]byte(preferencesJSON), &profile.Preferences); err != nil {
+		return nil, fmt.Errorf("failed to parse preferences: %w", err)
+	}
+
+	return &profile, nil
 }
 
 // GetServiceProfiles retrieves all service profiles for a user
@@ -171,7 +204,6 @@ func (ps *ProfileService) getServiceProfileInternal(profileID, userID string) (*
 		&profile.CreatedAt,
 		&profile.UpdatedAt,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("service profile not found")
@@ -285,12 +317,14 @@ func (ps *ProfileService) UpdateServiceProfile(profileID, userID string, req *mo
 	if envVars == nil {
 		envVars = make(map[string]string)
 	}
+
 	log.Printf("[DEBUG] Marshaling env vars JSON...")
 	envVarsJSON, err := json.Marshal(envVars)
 	if err != nil {
 		log.Printf("[ERROR] Failed to marshal env vars: %v", err)
 		return nil, fmt.Errorf("failed to marshal env vars: %w", err)
 	}
+
 	log.Printf("[DEBUG] EnvVars JSON: %s", string(envVarsJSON))
 
 	query := `UPDATE service_profiles 
@@ -298,6 +332,7 @@ func (ps *ProfileService) UpdateServiceProfile(profileID, userID string, req *mo
 			  WHERE id = ? AND user_id = ?`
 
 	log.Printf("[DEBUG] Executing database update...")
+
 	_, err = ps.db.Exec(query, req.Name, req.Description, string(servicesJSON), string(envVarsJSON), req.ProjectsDir, req.JavaHomeOverride, req.IsDefault, profileID, userID)
 	if err != nil {
 		log.Printf("[ERROR] Database update failed: %v", err)
@@ -404,7 +439,7 @@ func (ps *ProfileService) ApplyProfile(profileID, userID string) error {
 	// Start services specified in profile with dependency ordering
 	if ps.sm != nil && len(profile.Services) > 0 {
 		log.Printf("[INFO] Starting %d services from profile", len(profile.Services))
-		
+
 		// Use dependency-aware startup for better reliability
 		if err := ps.startServicesWithDependencies(profile.Services); err != nil {
 			log.Printf("[ERROR] Failed to start services: %v", err)
@@ -550,44 +585,47 @@ func (ps *ProfileService) DeleteProfileEnvVar(userID, profileID, name string) er
 	return ps.db.DeleteProfileEnvVar(profileID, name)
 }
 
-// RemoveServiceFromProfile removes a service from a profile (doesn't delete the service globally)
 // AddServiceToProfile adds a service to a profile's services list
-func (ps *ProfileService) AddServiceToProfile(userID, profileID, serviceName string) error {
+func (ps *ProfileService) AddServiceToProfile(userID, profileID, serviceUUID string) error {
 	ps.mutex.Lock()
-	defer ps.mutex.Unlock()
 
 	// Get the current profile
 	profile, err := ps.getServiceProfileInternal(profileID, userID)
 	if err != nil {
+		ps.mutex.Unlock()
 		return fmt.Errorf("profile validation failed: %w", err)
 	}
 
 	// Check if service is already in the profile
-	for _, service := range profile.Services {
-		if service == serviceName {
-			return fmt.Errorf("service '%s' already exists in profile '%s'", serviceName, profile.Name)
-		}
+	if slices.Contains(profile.Services, serviceUUID) {
+		ps.mutex.Unlock()
+		return fmt.Errorf("service '%s' already exists in profile '%s'", serviceUUID, profile.Name)
 	}
 
 	// Verify that the service exists globally
-	if _, exists := ps.sm.GetService(serviceName); !exists {
-		return fmt.Errorf("service '%s' does not exist", serviceName)
+	if _, exists := ps.sm.GetServiceByUUID(serviceUUID); !exists {
+		ps.mutex.Unlock()
+		return fmt.Errorf("service '%s' does not exist", serviceUUID)
 	}
 
 	// Add the service to the profile's services list
-	updatedServices := append(profile.Services, serviceName)
+	updatedServices := append(profile.Services, serviceUUID)
 
-	// Update the profile with the new services list
+	// Create update request
 	updateReq := &models.UpdateProfileRequest{
-		Name:              profile.Name,
-		Description:       profile.Description,
-		ProjectsDir:       profile.ProjectsDir,
-		JavaHomeOverride:  profile.JavaHomeOverride,
-		Services:          updatedServices,
-		EnvVars:           profile.EnvVars,
-		IsDefault:         profile.IsDefault,
+		Name:             profile.Name,
+		Description:      profile.Description,
+		ProjectsDir:      profile.ProjectsDir,
+		JavaHomeOverride: profile.JavaHomeOverride,
+		Services:         updatedServices,
+		EnvVars:          profile.EnvVars,
+		IsDefault:        profile.IsDefault,
 	}
 
+	// Release the mutex before calling UpdateServiceProfile to avoid deadlock
+	ps.mutex.Unlock()
+
+	// Update the profile with the new services list
 	_, err = ps.UpdateServiceProfile(profileID, userID, updateReq)
 	return err
 }
@@ -622,13 +660,13 @@ func (ps *ProfileService) RemoveServiceFromProfile(userID, profileID, serviceNam
 
 	// Update the profile with the new services list
 	updateReq := &models.UpdateProfileRequest{
-		Name:              profile.Name,
-		Description:       profile.Description,
-		Services:          updatedServices,
-		EnvVars:           profile.EnvVars,
-		ProjectsDir:       profile.ProjectsDir,
-		JavaHomeOverride:  profile.JavaHomeOverride,
-		IsDefault:         profile.IsDefault,
+		Name:             profile.Name,
+		Description:      profile.Description,
+		Services:         updatedServices,
+		EnvVars:          profile.EnvVars,
+		ProjectsDir:      profile.ProjectsDir,
+		JavaHomeOverride: profile.JavaHomeOverride,
+		IsDefault:        profile.IsDefault,
 	}
 
 	// Update the profile - we already have the lock, so unlock temporarily
@@ -647,12 +685,12 @@ func (ps *ProfileService) RemoveServiceFromProfile(userID, profileID, serviceNam
 
 func (ps *ProfileService) createDefaultUserProfile(userID string) (*models.UserProfile, error) {
 	defaultPreferences := models.UserPreferences{
-		Theme:                "light",
-		Language:             "en",
+		Theme:    "light",
+		Language: "en",
 		NotificationSettings: map[string]bool{
 			"serviceStatus": true,
-			"errors":       true,
-			"deployments":  true,
+			"errors":        true,
+			"deployments":   true,
 		},
 		DashboardLayout: "grid",
 		AutoRefresh:     true,
@@ -816,7 +854,7 @@ func (ps *ProfileService) startServicesWithDependencies(serviceNames []string) e
 	// For more sophisticated dependency management, we'd use the dependency graph
 	sortedServices := make([]*models.Service, len(servicesToStart))
 	copy(sortedServices, servicesToStart)
-	
+
 	// Simple bubble sort by order field
 	for i := 0; i < len(sortedServices)-1; i++ {
 		for j := 0; j < len(sortedServices)-i-1; j++ {
@@ -829,13 +867,13 @@ func (ps *ProfileService) startServicesWithDependencies(serviceNames []string) e
 	// Start services in dependency order
 	for _, service := range sortedServices {
 		log.Printf("[INFO] Starting service: %s (order: %d)", service.Name, service.Order)
-		
+
 		if err := ps.sm.StartService(service.Name); err != nil {
 			log.Printf("[ERROR] Failed to start service %s: %v", service.Name, err)
 			// Continue starting other services rather than failing completely
 			continue
 		}
-		
+
 		// Brief delay between service starts to allow proper initialization
 		time.Sleep(2 * time.Second)
 	}
