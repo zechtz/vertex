@@ -1,7 +1,7 @@
-import { X, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Service } from '@/types';
-import LogSearch from '@/components/LogSearch/LogSearch';
+import { X, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Service } from "@/types";
+import LogSearch from "@/components/LogSearch/LogSearch";
 
 interface LogAggregationModalProps {
   isOpen: boolean;
@@ -9,18 +9,19 @@ interface LogAggregationModalProps {
   services: Service[];
 }
 
-export function LogAggregationModal({ isOpen, onClose, services = [] }: LogAggregationModalProps) {
+export function LogAggregationModal({
+  isOpen,
+  onClose,
+  services = [],
+}: LogAggregationModalProps) {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-center justify-center p-4">
         {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-black/50" 
-          onClick={onClose}
-        />
-        
+        <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+
         {/* Modal */}
         <div className="relative w-full max-w-7xl max-h-[90vh] overflow-y-auto">
           <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl">
