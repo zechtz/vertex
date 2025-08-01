@@ -74,15 +74,15 @@ build-frontend:
         BINARY_NAME="${BINARY_NAME}.exe"
         export CC=x86_64-w64-mingw32-gcc
       fi
-      
+
       # Build binary with version info
       CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build \
         -ldflags="-s -w -X main.version=$CI_COMMIT_TAG" \
         -o "$BINARY_NAME"
-      
+
       # Create checksum
       sha256sum "$BINARY_NAME" > "${BINARY_NAME}.sha256"
-      
+
       # Store in artifacts
       mkdir -p binaries
       mv "$BINARY_NAME" "$BINARY_NAME.sha256" binaries/
@@ -140,20 +140,20 @@ release:
       find binaries/ -type f -name "nest-up-*" | while read file; do
         echo "Found binary: $file"
       done
-      
+
       # Generate release description
       cat > release_description.md << EOF
       # NeST Service Manager $CI_COMMIT_TAG
-      
+
       ## 🚀 Features
       - Complete service management for NeST microservices
       - Embedded React web interface (no external dependencies)
       - Automatic environment variable setup
       - Lombok compatibility fixing
       - Real-time service monitoring and logs
-      
+
       ## 📦 Downloads
-      
+
       | Platform | Architecture | Download |
       |----------|--------------|----------|
       | Linux | x64 | \`nest-up-linux-amd64\` |
@@ -161,21 +161,21 @@ release:
       | macOS | x64 | \`nest-up-darwin-amd64\` |
       | macOS | ARM64 (M1/M2) | \`nest-up-darwin-arm64\` |
       | Windows | x64 | \`nest-up-windows-amd64.exe\` |
-      
+
       ## 🔧 Quick Installation
-      
+
       \`\`\`bash
       # Linux/macOS
       wget https://gitlab.com/$CI_PROJECT_PATH/-/releases/$CI_COMMIT_TAG/downloads/nest-up-linux-amd64
       chmod +x nest-up-linux-amd64
       ./nest-up-linux-amd64
-      
+
       # Add to PATH (optional)
       sudo mv nest-up-linux-amd64 /usr/local/bin/nest-up
       \`\`\`
-      
+
       ## 📋 Checksums
-      
+
       SHA256 checksums are provided for all binaries to verify integrity.
       EOF
   release:
@@ -204,35 +204,3 @@ release:
           filepath: "/checksums/"
   only:
     - tags
-
-# Docker build and push (optional)
-docker:
-  stage: release
-  image: docker:latest
-  services:
-    - docker:dind
-  dependencies:
-    - build-linux-amd64
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    - |
-      # Create simple Dockerfile
-      cat > Dockerfile << EOF
-      FROM alpine:latest
-      RUN apk --no-cache add ca-certificates
-      WORKDIR /app
-      COPY binaries/nest-up-linux-amd64 /app/nest-up
-      RUN chmod +x /app/nest-up
-      EXPOSE 8080
-      CMD ["./nest-up"]
-      EOF
-      
-      # Build and push Docker image
-      docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG .
-      docker build -t $CI_REGISTRY_IMAGE:latest .
-      docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
-      docker push $CI_REGISTRY_IMAGE:latest
-  only:
-    - tags
-  when: manual  # Make Docker build optional
