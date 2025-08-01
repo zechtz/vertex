@@ -333,6 +333,14 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
 
+	// Ensure Maven wrapper exists for Maven projects
+	if effectiveBuildSystem == BuildSystemMaven {
+		if err := EnsureMavenWrapper(serviceDir); err != nil {
+			log.Printf("[WARN] Failed to ensure Maven wrapper for service %s: %v", service.Name, err)
+			// Continue with startup - this is not a critical failure
+		}
+	}
+
 	// Get start command
 	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
 	if err != nil {
@@ -492,6 +500,14 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Auto-detect build system if needed and get appropriate command
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
+
+	// Ensure Maven wrapper exists for Maven projects
+	if effectiveBuildSystem == BuildSystemMaven {
+		if err := EnsureMavenWrapper(serviceDir); err != nil {
+			log.Printf("[WARN] Failed to ensure Maven wrapper for service %s: %v", service.Name, err)
+			// Continue with startup - this is not a critical failure
+		}
+	}
 
 	// Get the start command for the detected build system
 	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)

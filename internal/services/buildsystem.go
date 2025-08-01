@@ -1,9 +1,13 @@
 package services
 
 import (
+	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // BuildSystemType represents the type of build system
@@ -163,4 +167,39 @@ func ValidateBuildSystem(serviceDir string, buildSystem BuildSystemType) bool {
 		}
 	}
 	return false
+}
+
+// EnsureMavenWrapper creates or updates Maven wrapper files if they don't exist or are outdated
+func EnsureMavenWrapper(serviceDir string) error {
+	// Check if Maven wrapper already exists and is recent
+	mvnwPath := filepath.Join(serviceDir, "mvnw")
+	
+	// If wrapper exists and is less than 30 days old, skip creation
+	if info, err := os.Stat(mvnwPath); err == nil {
+		if time.Since(info.ModTime()) < 30*24*time.Hour {
+			return nil // Wrapper is recent enough
+		}
+	}
+	
+	// Create Maven wrapper using maven wrapper plugin
+	log.Printf("[INFO] Creating/updating Maven wrapper in %s", serviceDir)
+	
+	// Use mvn wrapper:wrapper command to generate wrapper files
+	cmd := exec.Command("mvn", "wrapper:wrapper", "-Dmaven=3.9.6")
+	cmd.Dir = serviceDir
+	
+	// Capture output for debugging
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[WARN] Failed to create Maven wrapper: %v - output: %s", err, string(output))
+		return fmt.Errorf("failed to create Maven wrapper: %w", err)
+	}
+	
+	// Make mvnw executable
+	if err := os.Chmod(mvnwPath, 0755); err != nil {
+		log.Printf("[WARN] Failed to make mvnw executable: %v", err)
+	}
+	
+	log.Printf("[INFO] Successfully created/updated Maven wrapper in %s", serviceDir)
+	return nil
 }
