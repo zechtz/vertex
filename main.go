@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/zechtz/nest-up/internal/config"
-	"github.com/zechtz/nest-up/internal/database"
-	"github.com/zechtz/nest-up/internal/handlers"
-	"github.com/zechtz/nest-up/internal/services"
-	"github.com/zechtz/nest-up/web"
+	"github.com/zechtz/vertex/internal/config"
+	"github.com/zechtz/vertex/internal/database"
+	"github.com/zechtz/vertex/internal/handlers"
+	"github.com/zechtz/vertex/internal/services"
+	"github.com/zechtz/vertex/web"
 )
 
 // Version information (set by build flags)
@@ -29,20 +29,22 @@ var (
 )
 
 func main() {
-	// Handle version flag
+	// Handle command line flags
 	var showVersion bool
+	var port string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.StringVar(&port, "port", "8080", "Port to run the server on (default: 8080)")
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("NeST Service Manager %s\n", version)
+		fmt.Printf("Vertex %s\n", version)
 		fmt.Printf("Commit: %s\n", commit)
 		fmt.Printf("Built: %s\n", date)
 		os.Exit(0)
 	}
 
 	// Display startup information
-	logMessage(fmt.Sprintf("Starting NeST Service Manager %s", version))
+	logMessage(fmt.Sprintf("Starting Vertex %s", version))
 
 	// Initialize database first
 	db, err := database.NewDatabase()
@@ -83,8 +85,9 @@ func main() {
 	r.PathPrefix("/").Handler(http.FileServer(http.FS(uiFS)))
 
 	// Create HTTP server
+	serverAddr := ":" + port
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    serverAddr,
 		Handler: r,
 	}
 
@@ -93,7 +96,7 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		logMessage("Starting NeST Service Manager on :8080")
+		logMessage(fmt.Sprintf("Starting Vertex on %s", serverAddr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Server failed to start:", err)
 		}
