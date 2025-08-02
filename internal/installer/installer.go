@@ -165,7 +165,7 @@ func (si *ServiceInstaller) installMacOSService() error {
     <key>ProgramArguments</key>
     <array>
         <string>%s</string>
-        <string>-port</string>
+        <string>--port</string>
         <string>%s</string>
     </array>
     <key>EnvironmentVariables</key>
