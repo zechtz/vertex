@@ -131,16 +131,12 @@ func (si *ServiceInstaller) copyFile(src, dst string) error {
 	defer destFile.Close()
 	
 	// Copy content
-	if _, err := destFile.ReadFrom(sourceFile); err != nil {
+	if _, err := io.Copy(destFile, sourceFile); err != nil {
 		return err
 	}
 	
 	// Copy permissions
-	sourceInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	return os.Chmod(dst, sourceInfo.Mode())
+	return os.Chmod(dst, srcInfo.Mode())
 }
 
 // installMacOSService creates and loads a LaunchAgent
