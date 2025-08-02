@@ -17,6 +17,7 @@ import (
 	"github.com/zechtz/vertex/internal/config"
 	"github.com/zechtz/vertex/internal/database"
 	"github.com/zechtz/vertex/internal/handlers"
+	"github.com/zechtz/vertex/internal/installer"
 	"github.com/zechtz/vertex/internal/services"
 	"github.com/zechtz/vertex/web"
 )
@@ -31,9 +32,13 @@ var (
 func main() {
 	// Handle command line flags
 	var showVersion bool
+	var install bool
+	var uninstall bool
 	var port string
 	var dataDir string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
+	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
 	flag.StringVar(&port, "port", "8080", "Port to run the server on (default: 8080)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
 	flag.Parse()
@@ -42,6 +47,25 @@ func main() {
 		fmt.Printf("Vertex %s\n", version)
 		fmt.Printf("Commit: %s\n", commit)
 		fmt.Printf("Built: %s\n", date)
+		os.Exit(0)
+	}
+
+	if install {
+		if err := installService(); err != nil {
+			log.Fatalf("Installation failed: %v", err)
+		}
+		fmt.Println("✅ Vertex installed successfully as a user service!")
+		fmt.Println("🚀 The service will start automatically.")
+		fmt.Println("🌐 Access the web interface at: http://localhost:8080")
+		os.Exit(0)
+	}
+
+	if uninstall {
+		if err := uninstallService(); err != nil {
+			log.Fatalf("Uninstallation failed: %v", err)
+		}
+		fmt.Println("✅ Vertex service uninstalled successfully!")
+		fmt.Println("🗑️ All service files and data have been removed.")
 		os.Exit(0)
 	}
 
@@ -187,4 +211,16 @@ func checkAndSetupEnvironment(db *database.Database) {
 	} else {
 		logMessage("Environment already configured")
 	}
+}
+
+// installService handles the --install flag
+func installService() error {
+	installer := installer.NewServiceInstaller()
+	return installer.Install()
+}
+
+// uninstallService handles the --uninstall flag
+func uninstallService() error {
+	installer := installer.NewServiceInstaller()
+	return installer.Uninstall()
 }
