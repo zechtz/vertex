@@ -347,9 +347,16 @@ func (si *ServiceInstaller) uninstallMacOSService() error {
 	exec.Command("launchctl", "unload", plistFile).Run()
 	
 	// Remove files
-	os.Remove(plistFile)
-	os.Remove(filepath.Join(homeDir, ".local", "bin", "vertex"))
-	os.RemoveAll(si.DataDir)
+	if err := os.Remove(plistFile); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", plistFile, err)
+	}
+	vertexPath := filepath.Join(homeDir, ".local", "bin", "vertex")
+	if err := os.Remove(vertexPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", vertexPath, err)
+	}
+	if err := os.RemoveAll(si.DataDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove data directory %s: %v\n", si.DataDir, err)
+	}
 	
 	return nil
 }
