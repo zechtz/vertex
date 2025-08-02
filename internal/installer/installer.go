@@ -375,9 +375,16 @@ func (si *ServiceInstaller) uninstallLinuxService() error {
 	exec.Command("systemctl", "--user", "daemon-reload").Run()
 	
 	// Remove files
-	os.Remove(serviceFile)
-	os.Remove(filepath.Join(homeDir, ".local", "bin", "vertex"))
-	os.RemoveAll(si.DataDir)
+	if err := os.Remove(serviceFile); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", serviceFile, err)
+	}
+	vertexPath := filepath.Join(homeDir, ".local", "bin", "vertex")
+	if err := os.Remove(vertexPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", vertexPath, err)
+	}
+	if err := os.RemoveAll(si.DataDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove data directory %s: %v\n", si.DataDir, err)
+	}
 	
 	return nil
 }
