@@ -1,16 +1,9 @@
-import { useState } from 'react';
-import { 
-  Lock, 
-  Mail, 
-  Eye, 
-  EyeOff, 
-  LogIn,
-  Activity 
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useState } from "react";
+import { Lock, Mail, Eye, EyeOff, LogIn, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface LoginFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -19,14 +12,14 @@ interface LoginFormProps {
   error: string | null;
 }
 
-export function LoginForm({ 
-  onLogin, 
-  onSwitchToRegister, 
-  isLoading, 
-  error 
+export function LoginForm({
+  onLogin,
+  onSwitchToRegister,
+  isLoading,
+  error,
 }: LoginFormProps) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,11 +41,9 @@ export function LoginForm({
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Welcome Back
           </CardTitle>
-          <p className="text-gray-600 text-sm">
-            Sign in to NeST Manager
-          </p>
+          <p className="text-gray-600 text-sm">Sign in to Vertex</p>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
@@ -60,9 +51,12 @@ export function LoginForm({
                 <p className="text-red-700 text-sm">{error}</p>
               </div>
             )}
-            
+
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-gray-700"
+              >
                 Email Address
               </Label>
               <div className="relative">
@@ -79,16 +73,19 @@ export function LoginForm({
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+              <Label
+                htmlFor="password"
+                className="text-sm font-medium text-gray-700"
+              >
                 Password
               </Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -110,7 +107,7 @@ export function LoginForm({
                 </button>
               </div>
             </div>
-            
+
             <Button
               type="submit"
               disabled={isLoading || !email || !password}
@@ -129,10 +126,10 @@ export function LoginForm({
               )}
             </Button>
           </form>
-          
+
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
+              Don't have an account?{" "}
               <button
                 onClick={onSwitchToRegister}
                 disabled={isLoading}

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -22,8 +21,6 @@ func registerTopologyRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/dependencies/graph", h.getDependencyGraphHandler).Methods("GET")
 	r.HandleFunc("/api/dependencies/validate", h.validateDependenciesHandler).Methods("GET")
 	r.HandleFunc("/api/dependencies/startup-order", h.getStartupOrderHandler).Methods("POST")
-	r.HandleFunc("/api/eureka/services", h.getEurekaServicesHandler).Methods("GET")
-	r.HandleFunc("/api/eureka/debug", h.debugEurekaHandler).Methods("GET")
 }
 
 // getTopologyHandler returns the service topology visualization data
@@ -363,119 +360,3 @@ func (h *Handler) getStartupOrderHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// getEurekaServicesHandler returns the status of services from Eureka registry
-func (h *Handler) getEurekaServicesHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	// Get service status from Eureka
-	// We need to add a method to access the service manager's Eureka functionality
-	services := h.serviceManager.GetServices()
-	result := make(map[string]interface{})
-
-	// For each service, check its registration status with Eureka
-	for _, service := range services {
-		// Skip Eureka itself
-		serviceName := strings.ToUpper(service.Name)
-		if serviceName == "EUREKA" || serviceName == "NEST-REGISTRY-SERVER" {
-			result[service.Name] = map[string]interface{}{
-				"status":      service.HealthStatus,
-				"source":      "direct",
-				"port":        service.Port,
-				"description": "Registry server (not self-registered)",
-			}
-			continue
-		}
-
-		// For other services, we'll show their current health status
-		// In a future implementation, this could query Eureka directly
-		result[service.Name] = map[string]interface{}{
-			"status":      service.HealthStatus,
-			"source":      "eureka-aware",
-			"port":        service.Port,
-			"description": "Health checked via Eureka registry",
-		}
-	}
-
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		log.Printf("Failed to encode Eureka services: %v", err)
-		http.Error(w, "Failed to encode Eureka services", http.StatusInternalServerError)
-		return
-	}
-}
-
-// debugEurekaHandler provides debug information about Eureka integration
-func (h *Handler) debugEurekaHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	// Try to fetch raw Eureka data
-	eurekaURL := "http://localhost:8800/eureka/apps"
-	client := &http.Client{Timeout: 10 * time.Second}
-
-	req, err := http.NewRequest("GET", eurekaURL, nil)
-	if err != nil {
-		result := map[string]interface{}{
-			"error":   "Failed to create Eureka request",
-			"details": err.Error(),
-		}
-		json.NewEncoder(w).Encode(result)
-		return
-	}
-
-	req.Header.Set("Accept", "application/xml") // Request XML since that's what your Eureka returns
-	resp, err := client.Do(req)
-	if err != nil {
-		result := map[string]interface{}{
-			"error":      "Failed to query Eureka",
-			"details":    err.Error(),
-			"eureka_url": eurekaURL,
-		}
-		json.NewEncoder(w).Encode(result)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		result := map[string]interface{}{
-			"error":       "Eureka returned non-200 status",
-			"status_code": resp.StatusCode,
-			"eureka_url":  eurekaURL,
-		}
-		json.NewEncoder(w).Encode(result)
-		return
-	}
-
-	// Parse the response
-	var eurekaData interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&eurekaData); err != nil {
-		result := map[string]interface{}{
-			"error":   "Failed to decode Eureka response",
-			"details": err.Error(),
-		}
-		json.NewEncoder(w).Encode(result)
-		return
-	}
-
-	// Get our services for comparison
-	services := h.serviceManager.GetServices()
-	serviceNames := make([]string, len(services))
-	for i, service := range services {
-		serviceNames[i] = service.Name
-	}
-
-	result := map[string]interface{}{
-		"success":        true,
-		"eureka_url":     eurekaURL,
-		"eureka_status":  resp.StatusCode,
-		"eureka_data":    eurekaData,
-		"local_services": serviceNames,
-		"message":        "Raw Eureka data and local services for debugging",
-	}
-
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		log.Printf("Failed to encode debug response: %v", err)
-		http.Error(w, "Failed to encode debug response", http.StatusInternalServerError)
-		return
-	}
-}
