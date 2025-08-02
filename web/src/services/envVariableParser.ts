@@ -6,6 +6,7 @@ export type EnvFormat =
   | 'fish' 
   | 'batch' 
   | 'properties'
+  | 'semicolon'
   | 'auto';
 
 export interface ParseResult {
@@ -41,6 +42,8 @@ export class EnvVariableParser {
         return this.parseBatch(trimmedText);
       case 'properties':
         return this.parseProperties(trimmedText);
+      case 'semicolon':
+        return this.parseSemicolon(trimmedText);
       case 'dotenv':
       default:
         return this.parseDotEnv(trimmedText);
@@ -83,6 +86,11 @@ export class EnvVariableParser {
     // Properties detection (contains dots in keys)
     if (/^[a-zA-Z][a-zA-Z0-9._]*=/.test(trimmed) && trimmed.includes('.')) {
       return 'properties';
+    }
+    
+    // Semicolon-separated detection (single line with semicolons)
+    if (!trimmed.includes('\n') && trimmed.includes(';') && trimmed.includes('=')) {
+      return 'semicolon';
     }
     
     // Default to dotenv
@@ -313,6 +321,37 @@ export class EnvVariableParser {
   }
 
   /**
+   * Parse semicolon-separated format (key1=value1;key2=value2;key3=value3)
+   */
+  private static parseSemicolon(text: string): ParseResult {
+    const variables: Record<string, string> = {};
+    const errors: string[] = [];
+    
+    // Split by semicolon and process each pair
+    const pairs = text.split(';').map(pair => pair.trim()).filter(pair => pair);
+    
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i];
+      const pairNum = i + 1;
+      
+      // Skip empty pairs
+      if (!pair) {
+        continue;
+      }
+      
+      const match = pair.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (match) {
+        const [, key, value] = match;
+        variables[key] = this.unquoteValue(value);
+      } else {
+        errors.push(`Pair ${pairNum}: Invalid format - "${pair}"`);
+      }
+    }
+
+    return { variables, errors, format: 'semicolon' };
+  }
+
+  /**
    * Remove quotes from values and handle escape sequences
    */
   private static unquoteValue(value: string): string {
@@ -347,6 +386,7 @@ export class EnvVariableParser {
       case 'fish': return 'Fish Shell';
       case 'batch': return 'Windows Batch';
       case 'properties': return 'Java Properties';
+      case 'semicolon': return 'Semicolon Separated';
       case 'auto': return 'Auto-detect';
       default: return format;
     }
@@ -399,6 +439,9 @@ set DEBUG=true`;
 database.url=postgres://localhost:5432/db
 api.key=your-api-key
 debug=true`;
+
+      case 'semicolon':
+        return `DATABASE_URL=postgres://localhost:5432/db;API_KEY=your-api-key;DEBUG=true;REDIS_HOST=localhost;REDIS_PORT=6379`;
 
       default:
         return '';
