@@ -32,7 +32,7 @@ func NewAuthService(db *database.Database) *AuthService {
 	} else {
 		// Use a consistent fallback secret for development
 		// In production, you should always set JWT_SECRET environment variable
-		const fallbackSecret = "nest-manager-development-secret-change-in-production"
+		const fallbackSecret = "vertex-manager-development-secret-change-in-production"
 		secret = []byte(fallbackSecret)
 		log.Printf("[WARN] Using fallback JWT secret. Set JWT_SECRET environment variable for production")
 	}
@@ -233,7 +233,7 @@ func (as *AuthService) generateJWT(user *models.User) (string, error) {
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // 24 hours
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "nest-manager",
+			Issuer:    "vertex-manager",
 			Subject:   user.ID,
 		},
 	}
