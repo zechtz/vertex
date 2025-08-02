@@ -230,7 +230,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%s -port %s
+ExecStart=%s --port %s
 Environment=VERTEX_DATA_DIR=%s
 Restart=always
 RestartSec=5
