@@ -408,9 +408,17 @@ func (si *ServiceInstaller) uninstallWindowsService() error {
 	
 	// Remove files
 	localBinDir := filepath.Join(homeDir, ".local", "bin")
-	os.Remove(filepath.Join(localBinDir, "vertex.exe"))
-	os.Remove(filepath.Join(localBinDir, "vertex-service.bat"))
-	os.RemoveAll(si.DataDir)
+	vertexExePath := filepath.Join(localBinDir, "vertex.exe")
+	if err := os.Remove(vertexExePath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", vertexExePath, err)
+	}
+	vertexBatPath := filepath.Join(localBinDir, "vertex-service.bat")
+	if err := os.Remove(vertexBatPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", vertexBatPath, err)
+	}
+	if err := os.RemoveAll(si.DataDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove data directory %s: %v\n", si.DataDir, err)
+	}
 	
 	return nil
 }
