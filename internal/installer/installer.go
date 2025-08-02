@@ -304,7 +304,9 @@ set VERTEX_DATA_DIR=%s
 	taskName := "VertexServiceManager"
 	
 	// Remove existing task if it exists
-	exec.Command("schtasks", "/delete", "/tn", taskName, "/f").Run()
+	if err := exec.Command("schtasks", "/delete", "/tn", taskName, "/f").Run(); err != nil {
+		fmt.Printf("⚠️  Warning: failed to delete existing scheduled task %s: %v\n", taskName, err)
+	}
 	
 	// Create new task
 	cmd := exec.Command("schtasks", "/create", "/tn", taskName, "/tr", batchFile, "/sc", "onlogon", "/rl", "limited")
