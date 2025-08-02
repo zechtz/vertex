@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Plus, Trash2, RefreshCw, Upload } from "lucide-react";
+import { X, Plus, Trash2, RefreshCw, Upload, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -195,6 +195,44 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
     }
   };
 
+  const exportToText = async () => {
+    const validVars = envVars.filter((v) => v.name.trim());
+    const exportText = validVars.map((v) => `${v.name}=${v.value}`).join(";");
+
+    try {
+      await navigator.clipboard.writeText(exportText);
+      addToast(
+        toast.success(
+          "Variables exported",
+          `Copied ${validVars.length} global environment variables to clipboard`,
+        ),
+      );
+    } catch (error) {
+      // Fallback for older browsers
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = exportText;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        addToast(
+          toast.success(
+            "Variables exported",
+            `Copied ${validVars.length} global environment variables to clipboard`,
+          ),
+        );
+      } catch (fallbackError) {
+        addToast(
+          toast.error(
+            "Export failed",
+            "Unable to copy to clipboard. Please try again or copy manually.",
+          ),
+        );
+      }
+    }
+  };
+
   // Filter variables based on search and category
   const filteredEnvVars = envVars.filter(envVar => {
     const matchesSearch = envVar.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -255,6 +293,15 @@ export function GlobalEnvModal({ isOpen, onClose }: GlobalEnvModalProps) {
               >
                 <Upload className="h-4 w-4 mr-1" />
                 Bulk Import
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportToText}
+                disabled={envVars.length === 0}
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                Export
               </Button>
               <Button variant="outline" size="sm" onClick={addEnvVar}>
                 <Plus className="h-4 w-4 mr-1" />

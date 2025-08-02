@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -841,4 +842,21 @@ func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
 	}
 
 	return results
+}
+
+// isPortEnvironmentVariable checks if an environment variable name represents a port configuration
+func isPortEnvironmentVariable(key string) bool {
+	portVarNames := []string{
+		"ACTIVE_PORT", "SERVER_PORT", "PORT", "SERVICE_PORT", "APP_PORT",
+		"HTTP_PORT", "HTTPS_PORT", "WEB_PORT", "API_PORT", "TOMCAT_PORT",
+		"SPRING_SERVER_PORT", "MICROSERVICE_PORT", "APPLICATION_PORT",
+	}
+	
+	keyUpper := strings.ToUpper(key)
+	for _, portVar := range portVarNames {
+		if keyUpper == portVar || strings.HasSuffix(keyUpper, "_"+portVar) {
+			return true
+		}
+	}
+	return false
 }
