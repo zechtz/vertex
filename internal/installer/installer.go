@@ -378,9 +378,15 @@ func (si *ServiceInstaller) uninstallLinuxService() error {
 	serviceFile := filepath.Join(homeDir, ".config", "systemd", "user", "vertex.service")
 	
 	// Stop and disable service
-	exec.Command("systemctl", "--user", "stop", "vertex").Run()
-	exec.Command("systemctl", "--user", "disable", "vertex").Run()
-	exec.Command("systemctl", "--user", "daemon-reload").Run()
+	if err := exec.Command("systemctl", "--user", "stop", "vertex").Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop vertex service: %v\n", err)
+	}
+	if err := exec.Command("systemctl", "--user", "disable", "vertex").Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable vertex service: %v\n", err)
+	}
+	if err := exec.Command("systemctl", "--user", "daemon-reload").Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to reload systemd daemon: %v\n", err)
+	}
 	
 	// Remove files
 	if err := os.Remove(serviceFile); err != nil && !os.IsNotExist(err) {
