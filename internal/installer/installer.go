@@ -412,7 +412,7 @@ func (si *ServiceInstaller) uninstallWindowsService() error {
 	}
 	
 	// Remove scheduled task
-	exec.Command("schtasks", "/delete", "/tn", "VertexServiceManager", "/f").Run()
+	exec.Command("schtasks", "/delete", "/tn", windowsTaskName, "/f").Run()
 	
 	// Remove files
 	localBinDir := filepath.Join(homeDir, ".local", "bin")
