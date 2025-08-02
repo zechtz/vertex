@@ -25,6 +25,8 @@ if [[ "$OS" == "Linux" ]]; then
 	if ! id "$USER" &>/dev/null; then
 		echo "👤 Creating system user: $USER"
 		useradd --system --home "$DATA_DIR" --shell /bin/false "$USER"
+	else
+		echo "✅ System user '$USER' already exists"
 	fi
 elif [[ "$OS" == "Darwin" ]]; then
 	echo "🍎 macOS detected: running as root user"
@@ -36,14 +38,36 @@ else
 fi
 
 # Create data directory
-echo "📁 Creating data directory: $DATA_DIR"
-mkdir -p "$DATA_DIR"
+if [[ ! -d "$DATA_DIR" ]]; then
+	echo "📁 Creating data directory: $DATA_DIR"
+	mkdir -p "$DATA_DIR"
+else
+	echo "✅ Data directory already exists: $DATA_DIR"
+fi
 chown "$USER:$GROUP" "$DATA_DIR"
 chmod 755 "$DATA_DIR"
 
+# Check for existing installation and stop service if running
+if [[ "$OS" == "Linux" ]]; then
+	if systemctl is-active --quiet vertex; then
+		echo "🛑 Stopping existing vertex service"
+		systemctl stop vertex
+	fi
+elif [[ "$OS" == "Darwin" ]]; then
+	if launchctl list | grep -q "com.vertex.manager"; then
+		echo "🛑 Stopping existing vertex service"
+		launchctl stop com.vertex.manager &>/dev/null || true
+		launchctl unload "$PLIST_FILE" &>/dev/null || true
+	fi
+fi
+
 # Copy binary
 if [[ -f "./$BINARY_NAME" ]]; then
-	echo "📦 Installing binary to $INSTALL_DIR/$BINARY_NAME"
+	if [[ -f "$INSTALL_DIR/$BINARY_NAME" ]]; then
+		echo "📦 Updating binary at $INSTALL_DIR/$BINARY_NAME"
+	else
+		echo "📦 Installing binary to $INSTALL_DIR/$BINARY_NAME"
+	fi
 	cp "./$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
 	chmod 755 "$INSTALL_DIR/$BINARY_NAME"
 else
@@ -55,8 +79,9 @@ fi
 if [[ "$OS" == "Linux" ]]; then
 	# Create systemd service file
 	SERVICE_FILE="/etc/systemd/system/vertex.service"
-	echo "🔧 Creating systemd service file"
-	cat >"$SERVICE_FILE" <<EOF
+	if [[ ! -f "$SERVICE_FILE" ]]; then
+		echo "🔧 Creating systemd service file"
+		cat >"$SERVICE_FILE" <<EOF
 [Unit]
 Description=Vertex Service Manager
 Documentation=https://github.com/zechtz/vertex
@@ -86,11 +111,15 @@ ReadWritePaths=$DATA_DIR
 [Install]
 WantedBy=multi-user.target
 EOF
-
-	chmod 644 "$SERVICE_FILE"
-	echo "🔄 Reloading systemd and enabling vertex service"
-	systemctl daemon-reload
-	systemctl enable vertex
+		chmod 644 "$SERVICE_FILE"
+		echo "🔄 Reloading systemd and enabling vertex service"
+		systemctl daemon-reload
+		systemctl enable vertex
+	else
+		echo "✅ Systemd service file already exists"
+		echo "🔄 Reloading systemd daemon"
+		systemctl daemon-reload
+	fi
 
 	echo "✅ Installation completed successfully on Linux!"
 	echo ""
@@ -100,8 +129,9 @@ EOF
 	echo "   • View logs: sudo journalctl -u vertex -f"
 
 elif [[ "$OS" == "Darwin" ]]; then
-	echo "📝 Creating launchd plist: $PLIST_FILE"
-	cat >"$PLIST_FILE" <<EOF
+	if [[ ! -f "$PLIST_FILE" ]]; then
+		echo "📝 Creating launchd plist: $PLIST_FILE"
+		cat >"$PLIST_FILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -133,14 +163,15 @@ elif [[ "$OS" == "Darwin" ]]; then
 </dict>
 </plist>
 EOF
-
-	echo "🧪 Setting permissions for plist"
-	chown root:wheel "$PLIST_FILE"
-	chmod 644 "$PLIST_FILE"
+		echo "🧪 Setting permissions for plist"
+		chown root:wheel "$PLIST_FILE"
+		chmod 644 "$PLIST_FILE"
+	else
+		echo "✅ Launchd plist already exists"
+	fi
 
 	echo "🚀 Loading Vertex launch agent"
-	launchctl unload "$PLIST_FILE" &>/dev/null || true
-	launchctl load "$PLIST_FILE"
+	launchctl load "$PLIST_FILE" &>/dev/null || true
 	launchctl start com.vertex.manager
 
 	echo "✅ Installation completed successfully on macOS!"
