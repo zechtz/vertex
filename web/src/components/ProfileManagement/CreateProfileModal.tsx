@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Server, Settings, Star, Search, Upload } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Server,
+  Settings,
+  Star,
+  Search,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProfile } from "@/contexts/ProfileContext";
@@ -151,19 +159,22 @@ export function CreateProfileModal({
     const newVariables = Object.entries(variables)
       .filter(([key]) => !existingKeys.has(key))
       .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
-    
-    const duplicateCount = Object.keys(variables).length - Object.keys(newVariables).length;
-    
+
+    const duplicateCount =
+      Object.keys(variables).length - Object.keys(newVariables).length;
+
     setFormData((prev) => ({
       ...prev,
       envVars: { ...prev.envVars, ...newVariables },
     }));
-    
-    addToast(toast.success(
-      "Variables imported",
-      `Imported ${Object.keys(newVariables).length} new variables${duplicateCount > 0 ? `. ${duplicateCount} duplicates skipped.` : ""}`
-    ));
-    
+
+    addToast(
+      toast.success(
+        "Variables imported",
+        `Imported ${Object.keys(newVariables).length} new variables${duplicateCount > 0 ? `. ${duplicateCount} duplicates skipped.` : ""}`,
+      ),
+    );
+
     setIsBulkImportOpen(false);
   };
 
@@ -317,7 +328,7 @@ export function CreateProfileModal({
                         • Use Auto-Discovery to find Maven/Gradle projects in
                         your workspace
                       </li>
-                      <li>• Create custom services for non-NeST projects</li>
+                      <li>• Create custom services</li>
                       <li>
                         • Mix default microservices with your own custom
                         services
@@ -497,7 +508,7 @@ export function CreateProfileModal({
           </Button>
         </div>
       </form>
-      
+
       {/* Bulk Import Modal */}
       <BulkImportModal
         isOpen={isBulkImportOpen}

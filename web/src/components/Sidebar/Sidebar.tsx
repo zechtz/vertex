@@ -156,7 +156,7 @@ export function Sidebar({
         {!isCollapsed && (
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
             <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              <div className="font-medium">NeST Service Manager</div>
+              <div className="font-medium">Vertex Service Manager</div>
               <div>v2.0.0</div>
             </div>
           </div>
