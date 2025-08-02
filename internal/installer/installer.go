@@ -347,8 +347,12 @@ func (si *ServiceInstaller) uninstallMacOSService() error {
 	plistFile := filepath.Join(homeDir, "Library", "LaunchAgents", "com.vertex.manager.plist")
 	
 	// Stop and unload service
-	exec.Command("launchctl", "stop", "com.vertex.manager").Run()
-	exec.Command("launchctl", "unload", plistFile).Run()
+	if err := exec.Command("launchctl", "stop", "com.vertex.manager").Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop service: %v\n", err)
+	}
+	if err := exec.Command("launchctl", "unload", plistFile).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to unload service: %v\n", err)
+	}
 	
 	// Remove files
 	if err := os.Remove(plistFile); err != nil && !os.IsNotExist(err) {
