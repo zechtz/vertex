@@ -22,6 +22,31 @@ A powerful service management platform that provides a web-based interface for m
 
 ### Quick Install
 
+#### Option 1: Download Pre-built Binary
+
+1. **Download the binary for your platform:**
+   - Download from [GitHub Releases](https://github.com/zechtz/vertex/releases)
+   - Choose the appropriate binary for your system:
+     - `vertex-linux-amd64` (Linux 64-bit)
+     - `vertex-darwin-amd64` (macOS Intel)
+     - `vertex-darwin-arm64` (macOS Apple Silicon)
+     - `vertex-windows-amd64.exe` (Windows 64-bit)
+
+2. **Make it executable (Linux/macOS only):**
+   ```bash
+   chmod +x vertex-*
+   ```
+
+3. **Install as a user service:**
+   ```bash
+   # Self-installing - handles renaming automatically!
+   ./vertex-linux-amd64 --install      # Linux example
+   ./vertex-darwin-arm64 --install     # macOS example
+   # vertex-windows-amd64.exe --install   (Windows example)
+   ```
+
+#### Option 2: Build from Source
+
 1. **Build the application:**
    ```bash
    go build -o vertex
@@ -29,8 +54,8 @@ A powerful service management platform that provides a web-based interface for m
 
 2. **Install as a user service:**
    ```bash
-   # No sudo required - installs as current user
-   ./install.sh
+   # Self-installing - no external scripts needed!
+   ./vertex --install
    ```
 
 3. **Access the web interface:**
@@ -258,6 +283,13 @@ To update Vertex:
 
 To completely remove Vertex:
 
+```bash
+# Self-uninstalling - works on all platforms!
+./vertex --uninstall
+```
+
+Or manually:
+
 **macOS:**
 ```bash
 launchctl stop com.vertex.manager
@@ -274,6 +306,14 @@ systemctl --user disable vertex
 rm ~/.config/systemd/user/vertex.service
 systemctl --user daemon-reload
 rm ~/.local/bin/vertex
+rm -rf ~/.vertex
+```
+
+**Windows:**
+```bash
+schtasks /delete /tn "VertexServiceManager" /f
+rm ~/.local/bin/vertex.exe
+rm ~/.local/bin/vertex-service.bat
 rm -rf ~/.vertex
 ```
 
