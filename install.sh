@@ -6,22 +6,33 @@ set -e
 BINARY_NAME="vertex"
 INSTALL_DIR="/usr/local/bin"
 DATA_DIR="/var/lib/vertex"
-SERVICE_FILE="/etc/systemd/system/vertex.service"
 USER="vertex"
 GROUP="vertex"
+PLIST_FILE="/Library/LaunchDaemons/com.vertex.manager.plist"
 
 echo "🚀 Installing Vertex Service Manager..."
 
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
-   echo "❌ This script must be run as root (use sudo)"
-   exit 1
+	echo "❌ This script must be run as root (use sudo)"
+	exit 1
 fi
 
-# Create system user if it doesn't exist
-if ! id "$USER" &>/dev/null; then
-    echo "👤 Creating system user: $USER"
-    useradd --system --home "$DATA_DIR" --shell /bin/false "$USER"
+OS="$(uname)"
+
+if [[ "$OS" == "Linux" ]]; then
+	# Create system user if it doesn't exist
+	if ! id "$USER" &>/dev/null; then
+		echo "👤 Creating system user: $USER"
+		useradd --system --home "$DATA_DIR" --shell /bin/false "$USER"
+	fi
+elif [[ "$OS" == "Darwin" ]]; then
+	echo "🍎 macOS detected: running as root user"
+	USER="root"
+	GROUP="wheel"
+else
+	echo "❌ Unsupported OS: $OS"
+	exit 1
 fi
 
 # Create data directory
@@ -32,18 +43,20 @@ chmod 755 "$DATA_DIR"
 
 # Copy binary
 if [[ -f "./$BINARY_NAME" ]]; then
-    echo "📦 Installing binary to $INSTALL_DIR/$BINARY_NAME"
-    cp "./$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-    chmod 755 "$INSTALL_DIR/$BINARY_NAME"
+	echo "📦 Installing binary to $INSTALL_DIR/$BINARY_NAME"
+	cp "./$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+	chmod 755 "$INSTALL_DIR/$BINARY_NAME"
 else
-    echo "❌ Binary $BINARY_NAME not found in current directory"
-    echo "Please build the application first with: go build -o $BINARY_NAME"
-    exit 1
+	echo "❌ Binary $BINARY_NAME not found in current directory"
+	echo "Please build the application first with: go build -o $BINARY_NAME"
+	exit 1
 fi
 
-# Create systemd service file
-echo "🔧 Creating systemd service file"
-cat > "$SERVICE_FILE" << EOF
+if [[ "$OS" == "Linux" ]]; then
+	# Create systemd service file
+	SERVICE_FILE="/etc/systemd/system/vertex.service"
+	echo "🔧 Creating systemd service file"
+	cat >"$SERVICE_FILE" <<EOF
 [Unit]
 Description=Vertex Service Manager
 Documentation=https://github.com/zechtz/vertex
@@ -74,21 +87,70 @@ ReadWritePaths=$DATA_DIR
 WantedBy=multi-user.target
 EOF
 
-# Set permissions for service file
-chmod 644 "$SERVICE_FILE"
+	chmod 644 "$SERVICE_FILE"
+	echo "🔄 Reloading systemd and enabling vertex service"
+	systemctl daemon-reload
+	systemctl enable vertex
 
-# Reload systemd and enable service
-echo "🔄 Reloading systemd and enabling vertex service"
-systemctl daemon-reload
-systemctl enable vertex
+	echo "✅ Installation completed successfully on Linux!"
+	echo ""
+	echo "📋 Next steps:"
+	echo "   • Start the service: sudo systemctl start vertex"
+	echo "   • Check status: sudo systemctl status vertex"
+	echo "   • View logs: sudo journalctl -u vertex -f"
 
-echo "✅ Installation completed successfully!"
-echo ""
-echo "📋 Next steps:"
-echo "   • Start the service: sudo systemctl start vertex"
-echo "   • Check status: sudo systemctl status vertex"
-echo "   • View logs: sudo journalctl -u vertex -f"
-echo "   • Access web interface: http://localhost:8080"
+elif [[ "$OS" == "Darwin" ]]; then
+	echo "📝 Creating launchd plist: $PLIST_FILE"
+	cat >"$PLIST_FILE" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vertex.manager</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$INSTALL_DIR/$BINARY_NAME</string>
+        <string>-port</string>
+        <string>8080</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/vertex.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/vertex.stderr.log</string>
+    <key>WorkingDirectory</key>
+    <string>$DATA_DIR</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>VERTEX_DATA_DIR</key>
+        <string>$DATA_DIR</string>
+    </dict>
+</dict>
+</plist>
+EOF
+
+	echo "🧪 Setting permissions for plist"
+	chown root:wheel "$PLIST_FILE"
+	chmod 644 "$PLIST_FILE"
+
+	echo "🚀 Loading Vertex launch agent"
+	launchctl unload "$PLIST_FILE" &>/dev/null || true
+	launchctl load "$PLIST_FILE"
+	launchctl start com.vertex.manager
+
+	echo "✅ Installation completed successfully on macOS!"
+	echo ""
+	echo "📋 Next steps:"
+	echo "   • Check logs: tail -f /var/log/vertex.stdout.log"
+	echo "   • Stop service: sudo launchctl stop com.vertex.manager"
+	echo "   • Unload service: sudo launchctl unload $PLIST_FILE"
+fi
+
 echo ""
 echo "📂 Data directory: $DATA_DIR"
 echo "🗄️  Database location: $DATA_DIR/vertex.db"

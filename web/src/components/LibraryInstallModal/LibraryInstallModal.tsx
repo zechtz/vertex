@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface LibraryInstallation {
   file: string;
@@ -143,112 +145,127 @@ const LibraryInstallModal: React.FC<LibraryInstallModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Install Libraries - {serviceName}
-          </h2>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-100 text-2xl font-bold"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600 dark:text-gray-300">Analyzing libraries...</span>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4">
+        {/* Backdrop */}
+        <div 
+          className="fixed inset-0 bg-black/50 z-40" 
+          onClick={handleClose}
+        />
+        
+        {/* Modal */}
+        <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto z-50">
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                Install Libraries - {serviceName}
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClose}
+                className="hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-          )}
 
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
+            {/* Content */}
+            <div className="p-6">
+              {loading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600 dark:text-gray-300">Analyzing libraries...</span>
                 </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-                  <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {installResult && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                      <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-green-800 dark:text-green-200">Success!</h3>
-                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                    {installResult.message}
+              )}
+
+              {installResult && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-green-800 dark:text-green-200">Success!</h3>
+                      <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                        {installResult.message}
+                      </p>
+                      <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                        Installed {installResult.librariesInstalled} libraries for {installResult.environments?.join(', ')} environments.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {preview && !preview.hasLibraries && (
+                <div className="text-center py-8">
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-700">
+                    <svg className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No Custom Libraries</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    This service has no custom libraries to install.
                   </p>
-                  <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                    Installed {installResult.librariesInstalled} libraries for {installResult.environments?.join(', ')} environments.
+                  {preview.errorMessage && (
+                    <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                      {preview.errorMessage}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {preview && preview.hasLibraries && !showConfirmation && !installing && (
+                <LibrarySelectionView
+                  preview={preview}
+                  selectedEnvironments={selectedEnvironments}
+                  onEnvironmentChange={handleEnvironmentChange}
+                  onConfirm={handleConfirm}
+                  onCancel={handleClose}
+                />
+              )}
+
+              {showConfirmation && !installing && (
+                <LibraryConfirmationView
+                  preview={preview!}
+                  selectedEnvironments={selectedEnvironments}
+                  onBack={() => setShowConfirmation(false)}
+                  onInstall={handleInstall}
+                />
+              )}
+
+              {installing && (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Installing Libraries...</h3>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    Installing libraries for {selectedEnvironments.join(', ')} environments
                   </p>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {preview && !preview.hasLibraries && (
-            <div className="text-center py-8">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-700">
-                <svg className="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No Custom Libraries</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                This service has no custom libraries to install.
-              </p>
-              {preview.errorMessage && (
-                <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                  {preview.errorMessage}
-                </p>
               )}
             </div>
-          )}
-
-          {preview && preview.hasLibraries && !showConfirmation && !installing && (
-            <LibrarySelectionView
-              preview={preview}
-              selectedEnvironments={selectedEnvironments}
-              onEnvironmentChange={handleEnvironmentChange}
-              onConfirm={handleConfirm}
-              onCancel={handleClose}
-            />
-          )}
-
-          {showConfirmation && !installing && (
-            <LibraryConfirmationView
-              preview={preview!}
-              selectedEnvironments={selectedEnvironments}
-              onBack={() => setShowConfirmation(false)}
-              onInstall={handleInstall}
-            />
-          )}
-
-          {installing && (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Installing Libraries...</h3>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                Installing libraries for {selectedEnvironments.join(', ')} environments
-              </p>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

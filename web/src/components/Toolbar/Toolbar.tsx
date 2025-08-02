@@ -101,7 +101,7 @@ export function Toolbar({
             {!isSidebarCollapsed && (
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  MicroService Manager
+                  vertex
                 </h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Service Management Platform

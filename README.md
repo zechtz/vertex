@@ -18,7 +18,7 @@ A comprehensive Spring Boot microservice management platform providing automated
 
 3. **Access the web interface:** http://localhost:8080
 
-### Linux/macOS
+### Linux
 
 1. **Build the application:**
    ```bash
@@ -32,6 +32,36 @@ A comprehensive Spring Boot microservice management platform providing automated
    ```
 
 3. **Access the web interface:** http://localhost:8080
+
+### macOS
+
+1. **Build the application:**
+   ```bash
+   go build -o vertex
+   ```
+
+2. **Install as launchd daemon:**
+   ```bash
+   sudo ./install.sh
+   ```
+
+3. **The service starts automatically. To manage it:**
+   ```bash
+   # Check status
+   sudo launchctl list | grep vertex
+   
+   # Stop service (if needed)
+   sudo launchctl stop com.vertex.manager
+   
+   # Start service manually (if needed)
+   sudo launchctl start com.vertex.manager
+   
+   # View logs
+   tail -f /var/log/vertex.stdout.log
+   tail -f /var/log/vertex.stderr.log
+   ```
+
+4. **Access the web interface:** http://localhost:8080
 
 ### Cross-Platform Development
 
@@ -52,8 +82,10 @@ Vertex automatically stores data in platform-appropriate locations:
 | Platform | Default Location | Example Path |
 |----------|------------------|--------------|
 | **Windows** | `%APPDATA%\Vertex` | `C:\Users\Username\AppData\Roaming\Vertex\vertex.db` |
-| **macOS** | `~/Library/Application Support/Vertex` | `/Users/Username/Library/Application Support/Vertex/vertex.db` |
-| **Linux** | `~/.local/share/vertex` | `/home/username/.local/share/vertex/vertex.db` |
+| **macOS** | `/var/lib/vertex` (service) | `/var/lib/vertex/vertex.db` |
+| **Linux** | `/var/lib/vertex` (service) | `/var/lib/vertex/vertex.db` |
+
+> **Note**: When running as a system service, data is stored in `/var/lib/vertex` for both macOS and Linux. When running in development mode (`go run main.go`), platform-specific user directories are used.
 
 ### Custom Data Directory
 
@@ -484,7 +516,7 @@ Get-EventLog -LogName Application -Source "Vertex" -Newest 20
 powershell -ExecutionPolicy Bypass -File uninstall.ps1
 ```
 
-### Linux/macOS Service Commands
+### Linux Service Commands
 
 ```bash
 # Start service
@@ -501,6 +533,30 @@ sudo journalctl -u vertex -f
 
 # Enable on boot
 sudo systemctl enable vertex
+```
+
+### macOS Service Commands
+
+```bash
+# Check service status
+sudo launchctl list | grep vertex
+
+# Start service
+sudo launchctl start com.vertex.manager
+
+# Stop service
+sudo launchctl stop com.vertex.manager
+
+# View logs
+tail -f /var/log/vertex.stdout.log
+tail -f /var/log/vertex.stderr.log
+
+# Restart service
+sudo launchctl stop com.vertex.manager
+sudo launchctl start com.vertex.manager
+
+# Unload service (to uninstall)
+sudo launchctl unload /Library/LaunchDaemons/com.vertex.manager.plist
 ```
 
 ## 📊 API Endpoints
