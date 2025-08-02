@@ -136,6 +136,10 @@ func (si *ServiceInstaller) copyFile(src, dst string) error {
 	}
 	
 	// Copy permissions
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
 	return os.Chmod(dst, srcInfo.Mode())
 }
 
