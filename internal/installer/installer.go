@@ -288,7 +288,7 @@ func (si *ServiceInstaller) installWindowsService() error {
 	batchFile := filepath.Join(localBinDir, "vertex-service.bat")
 	batchContent := fmt.Sprintf(`@echo off
 set VERTEX_DATA_DIR=%s
-"%s" -port %s`, si.DataDir, binaryPath, si.Port)
+"%s" --port %s`, si.DataDir, binaryPath, si.Port)
 	
 	if err := os.WriteFile(batchFile, []byte(batchContent), 0644); err != nil {
 		return err
