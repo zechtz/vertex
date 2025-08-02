@@ -1,66 +1,74 @@
 # Vertex
 
-A comprehensive Spring Boot microservice management platform providing automated service startup, environment management, monitoring, and build compatibility fixes.
+A comprehensive Spring Boot microservice management platform providing automated service startup, environment management, monitoring, and build compatibility fixes with cross-platform support.
 
-## 📦 Installation
+## 🚀 Quick Installation
 
-### Option 1: Download Binary (Recommended)
+### Windows
 
-1. **Download the latest binary** from the [Releases](https://github.com/zechtz/service-manager/releases) page
-2. **Make it executable**:
-   ```bash
-   chmod +x vertex
-   ```
-3. **Add to PATH** (optional but recommended):
-
-   ```bash
-   # Move to a directory in your PATH
-   sudo mv vertex /usr/local/bin/
-
-   # Or create a symlink
-   sudo ln -s /path/to/vertex /usr/local/bin/vertex
+1. **Build the application:**
+   ```cmd
+   go build -o vertex.exe
    ```
 
-4. **Verify installation**:
-   ```bash
-   vertex --version
+2. **Install as Windows service (Run as Administrator):**
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File install.ps1
    ```
 
-### Option 2: Build from Source
+3. **Access the web interface:** http://localhost:8080
+
+### Linux/macOS
+
+1. **Build the application:**
+   ```bash
+   go build -o vertex
+   ```
+
+2. **Install as system service:**
+   ```bash
+   sudo ./install.sh
+   sudo systemctl start vertex
+   ```
+
+3. **Access the web interface:** http://localhost:8080
+
+### Cross-Platform Development
+
+For development or testing on any platform:
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/vertex.git
-cd vertex
+# Build and run directly
+go run main.go
 
-# Build the backend
-go build -o vertex
-
-# Build the frontend
-cd web
-npm install
-npm run build
-cd ..
+# Or with custom settings
+go run main.go -port 9090 -data-dir ./data
 ```
 
-## 🚀 Quick Start
+## 📦 Platform-Specific Data Locations
 
-1. **Start the service manager** (automatic setup):
+Vertex automatically stores data in platform-appropriate locations:
 
-   ```bash
-   # If installed to PATH
-   vertex
+| Platform | Default Location | Example Path |
+|----------|------------------|--------------|
+| **Windows** | `%APPDATA%\Vertex` | `C:\Users\Username\AppData\Roaming\Vertex\vertex.db` |
+| **macOS** | `~/Library/Application Support/Vertex` | `/Users/Username/Library/Application Support/Vertex/vertex.db` |
+| **Linux** | `~/.local/share/vertex` | `/home/username/.local/share/vertex/vertex.db` |
 
-   # Or run directly
-   ./vertex
+### Custom Data Directory
 
-   # Optionally you can specify a port
-   ./vertex --port 3000
-   ```
+Override the default location:
 
-2. **Access the web interface**: Open `http://localhost:8080` in your browser
+```bash
+# Command line flag
+vertex -data-dir /custom/path
 
-> **Note**: Environment setup is now automatic! The service manager will automatically detect and configure missing environment variables when started. No manual setup script is needed when using the binary.
+# Environment variable  
+export VERTEX_DATA_DIR=/custom/path
+vertex
+```
+
+> 📖 **For detailed installation instructions, troubleshooting, and platform-specific guides, see [INSTALLATION.md](INSTALLATION.md)**
 
 ## 📋 Features
 
@@ -69,9 +77,51 @@ cd ..
 - **Log Management**: View, filter, and export service logs
 - **Environment Configuration**: Manage global and service-specific environment variables
 - **Configuration Profiles**: Save and apply different service configurations
+- **Library Installation**: Environment-aware Maven library installation with UI preview
+- **Maven Wrapper Management**: Automatic creation/updating of Maven wrappers during service startup
 - **Automated Build Fixes**: Automatic Lombok compatibility checking and fixing
-- **Automatic Environment Setup**: Built-in environment variable detection and configuration
+- **Cross-Platform Support**: Native Windows, macOS, and Linux installation with proper data directories
+- **Dark Mode**: Full dark theme support across all UI components
 - **File Management**: Edit service configuration files directly from the web interface
+
+## 📚 Environment-Aware Library Installation
+
+### Smart GitLab CI Library Management
+
+Vertex includes an intelligent library installation system that parses `.gitlab-ci.yml` files and provides environment-specific Maven library installation:
+
+#### **Key Features**
+
+- ✅ **GitLab CI Parsing**: Automatically detects Maven install commands in CI files
+- ✅ **Environment Detection**: Groups libraries by environment (dev, staging, production, etc.)
+- ✅ **Interactive UI**: Preview libraries before installation with checkbox selection
+- ✅ **Confirmation Dialog**: Review installation details before proceeding
+- ✅ **Progress Tracking**: Real-time installation progress with detailed logging
+- ✅ **Error Handling**: Graceful error reporting and recovery
+- ✅ **Dark Mode Support**: Consistent theming across all modal views
+
+#### **How It Works**
+
+1. **Library Detection**: Click "Install Libraries" on any service card
+2. **Environment Preview**: View libraries grouped by environment with metadata
+3. **Selective Installation**: Choose which environments to install libraries for
+4. **Confirmation**: Review installation summary before proceeding
+5. **Progress Monitoring**: Watch real-time installation with Maven output
+
+#### **Supported CI Patterns**
+
+The system recognizes common GitLab CI job patterns:
+- `maven-build-dev`, `maven-build-staging`, `maven-build-prod`
+- Jobs ending with `-dev`, `-staging`, `-live`, `-prod`, `-training`
+- Custom environment detection from job names and branch configurations
+
+### Maven Wrapper Auto-Management
+
+- ✅ **Automatic Creation**: Creates Maven wrappers (`mvnw`) for services that don't have them
+- ✅ **Version Management**: Uses Maven 3.9.6 for new wrapper generation
+- ✅ **Smart Updates**: Only updates wrappers older than 30 days
+- ✅ **Startup Integration**: Wrapper creation happens during service startup
+- ✅ **Non-blocking**: Service startup continues even if wrapper creation fails
 
 ## 🔧 Maven & Lombok Compatibility
 
@@ -275,15 +325,29 @@ The project includes CI/CD pipelines for both GitHub Actions and GitLab CI that 
 
 ### Building from Source
 
-```bash
-# Build Go backend
-go build -o vertex
+#### Quick Build
 
-# Build React frontend
-cd web
-npm install
-npm run build
-cd ..
+```bash
+# Use the automated build script (recommended)
+./build.sh
+
+# Or build manually:
+cd web && npm install && npm run build && cd ..
+go build -o vertex
+```
+
+#### Cross-Platform Build
+
+```bash
+# Build for all platforms
+./build.sh
+
+# Generated files:
+# - vertex (current platform)
+# - vertex-windows-amd64.exe
+# - vertex-linux-amd64  
+# - vertex-darwin-amd64
+# - vertex-darwin-arm64
 ```
 
 ### Running in Development Mode
@@ -399,16 +463,62 @@ Use the web interface to manage:
 - **Java Home Override**: Custom Java installation path
 - **Environment Variables**: Global and service-specific variables
 
+## 🔧 Service Management
+
+### Windows Service Commands
+
+```powershell
+# Start service
+Start-Service -Name "Vertex"
+
+# Stop service  
+Stop-Service -Name "Vertex"
+
+# Check status
+Get-Service -Name "Vertex"
+
+# View logs
+Get-EventLog -LogName Application -Source "Vertex" -Newest 20
+
+# Uninstall
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+### Linux/macOS Service Commands
+
+```bash
+# Start service
+sudo systemctl start vertex
+
+# Stop service
+sudo systemctl stop vertex
+
+# Check status
+sudo systemctl status vertex
+
+# View logs
+sudo journalctl -u vertex -f
+
+# Enable on boot
+sudo systemctl enable vertex
+```
+
 ## 📊 API Endpoints
 
 ### Service Management
 
 - `GET /api/services` - List all services
-- `POST /api/services/{name}/start` - Start a service
-- `POST /api/services/{name}/stop` - Stop a service
-- `POST /api/services/{name}/restart` - Restart a service
+- `POST /api/services/{id}/start` - Start a service by UUID
+- `POST /api/services/{id}/stop` - Stop a service by UUID
+- `POST /api/services/{id}/restart` - Restart a service by UUID
 - `POST /api/services/start-all` - Start all services
 - `POST /api/services/stop-all` - Stop all services
+
+### Library Installation
+
+- `GET /api/services/{id}/libraries/preview` - Preview libraries from GitLab CI
+- `POST /api/services/{id}/libraries/install` - Install selected libraries by environment
+- `POST /api/services/{id}/install-libraries` - Install all libraries (legacy)
 
 ### Lombok Compatibility
 
@@ -440,15 +550,59 @@ Use the web interface to manage:
 2. Verify environment variables are set correctly
 3. Ensure databases exist and are accessible
 4. Try the "Fix Lombok" button if you see compilation errors
+5. Check if Maven wrapper was created successfully
 
-### Database Connection Issues
+### Library Installation Issues
 
 ```bash
-# Check PostgreSQL is running
-pg_isready -h localhost -p 5432
+# Check if .gitlab-ci.yml exists in service directory
+ls -la path/to/service/.gitlab-ci.yml
 
-# Verify database exists
-psql -h localhost -U postgres -l
+# Verify Maven install commands are properly formatted
+grep -n "mvn install:install-file" path/to/service/.gitlab-ci.yml
+
+# Check service directory permissions
+ls -la path/to/service/
+```
+
+### Maven Wrapper Issues
+
+```bash
+# Check if wrapper was created
+ls -la path/to/service/mvnw
+
+# Manually create wrapper if needed
+cd path/to/service && mvn wrapper:wrapper -Dmaven=3.9.6
+
+# Verify wrapper permissions
+chmod +x path/to/service/mvnw
+```
+
+### Database Location Issues
+
+```bash
+# Check current data directory
+echo $VERTEX_DATA_DIR
+
+# Verify database file exists
+ls -la ~/.local/share/vertex/vertex.db  # Linux
+ls -la ~/Library/Application\ Support/Vertex/vertex.db  # macOS
+```
+
+### Windows-Specific Issues
+
+```powershell
+# Check service status
+Get-Service -Name "Vertex"
+
+# Fix data directory permissions
+icacls "C:\ProgramData\Vertex" /grant Users:F /T
+
+# Check Windows Firewall
+Get-NetFirewallRule -DisplayName "*Vertex*"
+
+# View Windows Event Log
+Get-EventLog -LogName Application -Source "Vertex" -Newest 10
 ```
 
 ### Maven Compilation Errors
@@ -456,17 +610,7 @@ psql -h localhost -U postgres -l
 - Use the automatic "Fix Lombok" feature
 - Ensure compatible Maven and Lombok versions
 - Check that `./mvnw` wrapper exists in service directories
-
-### Environment Variables Not Loading
-
-```bash
-# Check if variables are set
-echo $DB_HOST
-echo $ACTIVE_PROFILE
-
-# Reload environment
-source ./common_env_settings.sh
-```
+- Verify Maven wrapper has execution permissions
 
 ## 📝 License
 

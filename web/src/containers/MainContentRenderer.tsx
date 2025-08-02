@@ -60,7 +60,6 @@ export function MainContentRenderer({
             }
             onViewFiles={serviceManagement.openViewFiles}
             onEditEnv={serviceManagement.openEditEnv}
-            onInstallLibraries={serviceOps.installLibraries}
           />
         );
       case "profiles":

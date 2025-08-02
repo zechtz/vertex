@@ -3,6 +3,9 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -13,9 +16,48 @@ type Database struct {
 }
 
 func NewDatabase() (*Database, error) {
-	db, err := sql.Open("sqlite3", "nest_manager.db")
+	return NewDatabaseWithPath("")
+}
+
+func NewDatabaseWithPath(dbPath string) (*Database, error) {
+	// Determine database path
+	var finalPath string
+	if dbPath != "" {
+		finalPath = dbPath
+	} else {
+		// Check for VERTEX_DATA_DIR environment variable
+		if dataDir := os.Getenv("VERTEX_DATA_DIR"); dataDir != "" {
+			if err := os.MkdirAll(dataDir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create data directory %s: %w", dataDir, err)
+			}
+			finalPath = filepath.Join(dataDir, "vertex.db")
+		} else {
+			// Use platform-specific default data directory
+			defaultDataDir := getDefaultDataDir()
+			if defaultDataDir != "" {
+				if err := os.MkdirAll(defaultDataDir, 0755); err != nil {
+					// Fall back to current directory if we can't create the default
+					finalPath = "vertex.db"
+				} else {
+					finalPath = filepath.Join(defaultDataDir, "vertex.db")
+				}
+			} else {
+				// Default to current directory for backward compatibility
+				finalPath = "vertex.db"
+			}
+		}
+	}
+
+	// Ensure the directory exists
+	if dir := filepath.Dir(finalPath); dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory %s: %w", dir, err)
+		}
+	}
+
+	db, err := sql.Open("sqlite3", finalPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to open database at %s: %w", finalPath, err)
 	}
 
 	database := &Database{DB: db}
@@ -29,6 +71,35 @@ func NewDatabase() (*Database, error) {
 	}
 
 	return database, nil
+}
+
+// getDefaultDataDir returns the platform-specific default data directory
+func getDefaultDataDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		// Use %APPDATA%\Vertex on Windows
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, "Vertex")
+		}
+		// Fallback to user profile
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			return filepath.Join(userProfile, "AppData", "Roaming", "Vertex")
+		}
+	case "darwin":
+		// Use ~/Library/Application Support/Vertex on macOS
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, "Library", "Application Support", "Vertex")
+		}
+	case "linux":
+		// Use ~/.local/share/vertex on Linux (XDG Base Directory Specification)
+		if xdgDataHome := os.Getenv("XDG_DATA_HOME"); xdgDataHome != "" {
+			return filepath.Join(xdgDataHome, "vertex")
+		}
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, ".local", "share", "vertex")
+		}
+	}
+	return "" // No default found, will use current directory
 }
 
 func (db *Database) initTables() error {

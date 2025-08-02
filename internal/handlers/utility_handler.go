@@ -270,7 +270,7 @@ func (h *Handler) exportLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Generate filename
 	timestamp := time.Now().Format("20060102_150405")
-	filename := fmt.Sprintf("nest_logs_%s", timestamp)
+	filename := fmt.Sprintf("vertex_logs_%s", timestamp)
 
 	// Handle different export formats
 	switch exportRequest.Format {

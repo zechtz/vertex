@@ -45,7 +45,7 @@ RUN mkdir -p /app/data
 EXPOSE 8080
 
 # Set environment variable for database location
-ENV DB_PATH=/app/data/nest_manager.db
+ENV DB_PATH=/app/data/vertex.db
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

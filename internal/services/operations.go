@@ -333,6 +333,14 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
 
+	// Ensure Maven wrapper exists for Maven projects
+	if effectiveBuildSystem == BuildSystemMaven {
+		if err := EnsureMavenWrapper(serviceDir); err != nil {
+			log.Printf("[WARN] Failed to ensure Maven wrapper for service %s: %v", service.Name, err)
+			// Continue with startup - this is not a critical failure
+		}
+	}
+
 	// Get start command
 	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
 	if err != nil {
@@ -492,6 +500,14 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Auto-detect build system if needed and get appropriate command
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
+
+	// Ensure Maven wrapper exists for Maven projects
+	if effectiveBuildSystem == BuildSystemMaven {
+		if err := EnsureMavenWrapper(serviceDir); err != nil {
+			log.Printf("[WARN] Failed to ensure Maven wrapper for service %s: %v", service.Name, err)
+			// Continue with startup - this is not a critical failure
+		}
+	}
 
 	// Get the start command for the detected build system
 	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
@@ -825,4 +841,21 @@ func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
 	}
 
 	return results
+}
+
+// isPortEnvironmentVariable checks if an environment variable name represents a port configuration
+func isPortEnvironmentVariable(key string) bool {
+	portVarNames := []string{
+		"ACTIVE_PORT", "SERVER_PORT", "PORT", "SERVICE_PORT", "APP_PORT",
+		"HTTP_PORT", "HTTPS_PORT", "WEB_PORT", "API_PORT", "TOMCAT_PORT",
+		"SPRING_SERVER_PORT", "MICROSERVICE_PORT", "APPLICATION_PORT",
+	}
+	
+	keyUpper := strings.ToUpper(key)
+	for _, portVar := range portVarNames {
+		if keyUpper == portVar || strings.HasSuffix(keyUpper, "_"+portVar) {
+			return true
+		}
+	}
+	return false
 }

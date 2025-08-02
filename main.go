@@ -32,8 +32,10 @@ func main() {
 	// Handle command line flags
 	var showVersion bool
 	var port string
+	var dataDir string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.StringVar(&port, "port", "8080", "Port to run the server on (default: 8080)")
+	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
 	flag.Parse()
 
 	if showVersion {
@@ -43,8 +45,16 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Set data directory if provided
+	if dataDir != "" {
+		os.Setenv("VERTEX_DATA_DIR", dataDir)
+	}
+
 	// Display startup information
 	logMessage(fmt.Sprintf("Starting Vertex %s", version))
+	if dataDir := os.Getenv("VERTEX_DATA_DIR"); dataDir != "" {
+		logMessage(fmt.Sprintf("Using data directory: %s", dataDir))
+	}
 
 	// Initialize database first
 	db, err := database.NewDatabase()
