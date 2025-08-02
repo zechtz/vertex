@@ -1,86 +1,265 @@
-# GitLab CI/CD Pipeline for vertex
+# GitLab CI/CD Pipeline for Vertex Service Manager
 
 stages:
-  - build
+  - build-frontend
+  - build-binaries
   - release
 
 variables:
   GO_VERSION: "1.23"
-  PROJECT_NAME: "service-manager"
-  OUTPUT_DIR: "dist"
-  CGO_ENABLED: "0"
+  NODE_VERSION: "18"
+  PROJECT_NAME: "vertex"
+  CGO_ENABLED: "1"
 
-default:
-  image: golang:1.23
-  before_script:
-    - apt-get update && apt-get install -y nodejs npm jq
-    - mkdir -p $OUTPUT_DIR
+# Cache configuration for faster builds
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - web/node_modules/
+    - .go/pkg/mod/
 
-build:
-  stage: build
+# Build frontend once and reuse
+build-frontend:
+  stage: build-frontend
+  image: node:18-alpine
   script:
     - cd web
-    - npm ci
+    - npm ci --cache .npm --prefer-offline
     - npm run build
-    - cd ..
-    - go mod tidy
-    - mkdir -p $OUTPUT_DIR
-    - GOOS=linux   GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-linux-amd64
-    - GOOS=windows GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-windows-amd64.exe
-    - GOOS=darwin  GOARCH=amd64 go build -o $OUTPUT_DIR/${PROJECT_NAME}-darwin-amd64
   artifacts:
     paths:
-      - $OUTPUT_DIR
-    expire_in: 1 week
+      - web/dist/
+    expire_in: 1 hour
+  cache:
+    key: frontend-${CI_COMMIT_REF_SLUG}
+    paths:
+      - web/node_modules/
+      - web/.npm/
 
+# Build binaries in parallel
+.build_template: &build_template
+  stage: build-binaries
+  image: golang:1.23
+  needs:
+    - build-frontend
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git ca-certificates
+    - mkdir -p .go
+    - export GOPATH=${PWD}/.go
+  script:
+    - |
+      BINARY_NAME="${PROJECT_NAME}-${GOOS}-${GOARCH}"
+      if [ "$GOOS" = "windows" ]; then
+        BINARY_NAME="${BINARY_NAME}.exe"
+      fi
+      
+      echo "Building $BINARY_NAME..."
+      go build -ldflags="-s -w -X main.version=${CI_COMMIT_TAG:-dev}" -o "${BINARY_NAME}"
+      
+      # Create checksum
+      sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+      ls -lh "${BINARY_NAME}"*
+  artifacts:
+    paths:
+      - ${PROJECT_NAME}-*
+    expire_in: 1 hour
+  cache:
+    key: go-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .go/pkg/mod/
+
+build-linux-amd64:
+  <<: *build_template
+  variables:
+    GOOS: linux
+    GOARCH: amd64
+
+build-linux-arm64:
+  <<: *build_template
+  variables:
+    GOOS: linux
+    GOARCH: arm64
+
+build-darwin-amd64:
+  <<: *build_template
+  variables:
+    GOOS: darwin
+    GOARCH: amd64
+    CGO_ENABLED: "0"
+
+build-darwin-arm64:
+  <<: *build_template
+  variables:
+    GOOS: darwin
+    GOARCH: arm64
+    CGO_ENABLED: "0"
+
+build-windows-amd64:
+  <<: *build_template
+  image: golang:1.23
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git ca-certificates gcc-mingw-w64
+    - mkdir -p .go
+    - export GOPATH=${PWD}/.go
+    - export CC=x86_64-w64-mingw32-gcc
+  variables:
+    GOOS: windows
+    GOARCH: amd64
+
+# Create GitLab release
 release:
   stage: release
-  only:
-    - tags
+  image: alpine:latest
+  rules:
+    - if: $CI_COMMIT_TAG
+  needs:
+    - build-linux-amd64
+    - build-linux-arm64
+    - build-darwin-amd64
+    - build-darwin-arm64
+    - build-windows-amd64
+  before_script:
+    - apk add --no-cache curl jq
   script:
-    # Create release notes
-    - echo "# Release $CI_COMMIT_TAG" > release-notes.md
-    - echo "" >> release-notes.md
-    - echo "## 🚀 Features" >> release-notes.md
-    - echo "- Cross-platform service manager for NeST microservices" >> release-notes.md
-    - echo "- Embedded React web interface" >> release-notes.md
-    - echo "- Real-time logs and status" >> release-notes.md
-    - echo "" >> release-notes.md
-    - echo "## 📦 Downloads" >> release-notes.md
-    - echo "" >> release-notes.md
-    - ls -lh $OUTPUT_DIR
-    - echo "| Platform | Arch | Binary |" >> release-notes.md
-    - echo "|----------|------|--------|" >> release-notes.md
-    - >
-      for f in $OUTPUT_DIR/${PROJECT_NAME}-*; do
-        platform=$(echo "$f" | cut -d '-' -f3);
-        arch=$(echo "$f" | cut -d '-' -f4 | cut -d '.' -f1);
-        binary=$(basename "$f");
-        echo "| $platform | $arch | \`$binary\` |" >> release-notes.md;
+    - |
+      # Generate release notes
+      cat > release-notes.md << EOF
+      # Vertex Service Manager ${CI_COMMIT_TAG}
+      
+      ## 🚀 Features
+      - Complete microservice management platform
+      - Embedded React web interface (no external dependencies)
+      - Cross-platform support (Linux, macOS, Windows)
+      - Real-time service monitoring and logs
+      - Automatic environment variable management
+      - Lombok compatibility fixing
+      - Maven wrapper auto-generation
+      
+      ## 📦 Downloads
+      
+      | Platform | Architecture | Download | Size |
+      |----------|--------------|----------|------|
+      EOF
+      
+      # Add download table entries
+      for f in ${PROJECT_NAME}-*; do
+        if [[ "$f" != *.sha256 ]]; then
+          platform=$(echo "$f" | cut -d '-' -f2)
+          arch=$(echo "$f" | cut -d '-' -f3 | cut -d '.' -f1)
+          size=$(ls -lh "$f" | awk '{print $5}')
+          echo "| $platform | $arch | \`$f\` | $size |" >> release-notes.md
+        fi
       done
-    - cat release-notes.md
-    # Create GitLab release
-    - >
-      curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-           --data-urlencode "name=NeST Release $CI_COMMIT_TAG" \
-           --data-urlencode "tag_name=$CI_COMMIT_TAG" \
-           --data-urlencode "description=$(cat release-notes.md)" \
-           "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/releases"
-
-    # Upload and attach binaries
-    - >
-      for f in $OUTPUT_DIR/${PROJECT_NAME}-*; do
-        filename=$(basename "$f");
-        echo "Uploading $filename...";
-        curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-             --upload-file "$f" \
-             "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/uploads" > upload_response.json;
-
-        url=$(jq -r '.url' upload_response.json);
-        echo "Uploaded to: $url";
-
-        curl --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-             --data "name=$filename" \
-             --data "url=$CI_PROJECT_URL$url" \
-             "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/releases/$CI_COMMIT_TAG/assets/links";
+      
+      cat >> release-notes.md << EOF
+      
+      ## 🔧 Quick Start
+      
+      \`\`\`bash
+      # Download for your platform
+      wget https://gitlab.com/${CI_PROJECT_PATH}/-/releases/${CI_COMMIT_TAG}/downloads/${PROJECT_NAME}-linux-amd64
+      
+      # Make executable
+      chmod +x ${PROJECT_NAME}-linux-amd64
+      
+      # Run
+      ./${PROJECT_NAME}-linux-amd64
+      
+      # Access web interface
+      open http://localhost:8080
+      \`\`\`
+      
+      ## 📋 Checksums
+      
+      \`\`\`
+      EOF
+      
+      # Add checksums
+      cat *.sha256 >> release-notes.md
+      echo '```' >> release-notes.md
+      
+      echo "Generated release notes:"
+      cat release-notes.md
+    
+    - |
+      # Create the release
+      echo "Creating GitLab release..."
+      
+      RELEASE_DATA=$(jq -n \
+        --arg tag_name "$CI_COMMIT_TAG" \
+        --arg name "Vertex Service Manager $CI_COMMIT_TAG" \
+        --arg description "$(cat release-notes.md)" \
+        '{
+          tag_name: $tag_name,
+          name: $name,
+          description: $description
+        }')
+      
+      curl --fail --silent --show-error \
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data "$RELEASE_DATA" \
+        "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/releases" || {
+        echo "Failed to create release"
+        exit 1
+      }
+      
+      echo "Release created successfully"
+    
+    - |
+      # Upload and attach binaries
+      echo "Uploading binaries..."
+      
+      for f in ${PROJECT_NAME}-*; do
+        if [[ "$f" != *.sha256 ]]; then
+          filename=$(basename "$f")
+          echo "Uploading $filename..."
+          
+          # Upload file
+          upload_response=$(curl --fail --silent \
+            --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --form "file=@$f" \
+            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/uploads")
+          
+          if [ $? -ne 0 ]; then
+            echo "Failed to upload $filename"
+            continue
+          fi
+          
+          url=$(echo "$upload_response" | jq -r '.url')
+          full_url="${CI_PROJECT_URL}${url}"
+          
+          echo "Uploaded to: $full_url"
+          
+          # Attach to release
+          curl --fail --silent \
+            --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --data "name=$filename" \
+            --data "url=$full_url" \
+            "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/releases/$CI_COMMIT_TAG/assets/links" || {
+            echo "Failed to attach $filename to release"
+          }
+        fi
       done
+      
+      # Upload checksums file
+      echo "Uploading checksums..."
+      cat *.sha256 > checksums.txt
+      
+      upload_response=$(curl --fail --silent \
+        --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        --form "file=@checksums.txt" \
+        "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/uploads")
+      
+      if [ $? -eq 0 ]; then
+        url=$(echo "$upload_response" | jq -r '.url')
+        full_url="${CI_PROJECT_URL}${url}"
+        
+        curl --fail --silent \
+          --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          --data "name=checksums.txt" \
+          --data "url=$full_url" \
+          "https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/releases/$CI_COMMIT_TAG/assets/links"
+      fi
+      
+      echo "Release complete! Visit: ${CI_PROJECT_URL}/-/releases/${CI_COMMIT_TAG}"
