@@ -39,7 +39,7 @@ func NewServiceInstaller() *ServiceInstaller {
 	
 	return &ServiceInstaller{
 		BinaryPath: execPath,
-		Port:       "8080",
+		Port:       defaultPort,
 		DataDir:    dataDir,
 		User:       user,
 	}
