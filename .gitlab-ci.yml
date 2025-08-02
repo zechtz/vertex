@@ -76,6 +76,11 @@ build-linux-amd64:
 
 build-linux-arm64:
   <<: *build_template
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git ca-certificates gcc-aarch64-linux-gnu
+    - mkdir -p .go
+    - export GOPATH=${PWD}/.go
+    - export CC=aarch64-linux-gnu-gcc
   variables:
     GOOS: linux
     GOARCH: arm64
