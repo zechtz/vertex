@@ -71,3 +71,4 @@ web/src/components/EnvironmentVariables/README.md
 web/test-fish-parser.js
 vertex
 common_env_settings.sh
+ENVIRONMENT_SETUP.md
