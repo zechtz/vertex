@@ -36,6 +36,8 @@ A powerful service management platform that provides a web-based interface for m
 3. **Access the web interface:**
    Open your browser and navigate to: http://localhost:8080
 
+> 📖 **For detailed usage instructions and tutorials, see our [Getting Started Guide](https://github.com/zechtz/vertex/wiki/Getting-Started-with-Vertex-Service-Manager)** on the wiki.
+
 ## 🚀 Usage
 
 ### Service Management
