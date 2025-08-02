@@ -42,7 +42,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21"
+          go-version: "1.23"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -139,14 +139,16 @@ jobs:
 
       - name: Generate release notes
         run: |
-          echo "# NeST Service Manager ${GITHUB_REF#refs/tags/}" > release-notes.md
+          echo "# Vertex Service Manager ${GITHUB_REF#refs/tags/}" > release-notes.md
           echo "" >> release-notes.md
           echo "## 🚀 Features" >> release-notes.md
-          echo "- Complete service management for NeST microservices" >> release-notes.md
+          echo "- Complete microservice management platform" >> release-notes.md
           echo "- Embedded React web interface (no external dependencies)" >> release-notes.md
-          echo "- Automatic environment variable setup" >> release-notes.md
-          echo "- Lombok compatibility fixing" >> release-notes.md
+          echo "- Cross-platform support (Linux, macOS, Windows)" >> release-notes.md
           echo "- Real-time service monitoring and logs" >> release-notes.md
+          echo "- Automatic environment variable management" >> release-notes.md
+          echo "- Lombok compatibility fixing" >> release-notes.md
+          echo "- Maven wrapper auto-generation" >> release-notes.md
           echo "" >> release-notes.md
           echo "## 📦 Downloads" >> release-notes.md
           echo "" >> release-notes.md
