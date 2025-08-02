@@ -64,6 +64,7 @@ export function BulkImportModal({ isOpen, onClose, onImport }: BulkImportModalPr
     { value: 'fish', label: 'Fish Shell' },
     { value: 'batch', label: 'Windows Batch' },
     { value: 'properties', label: 'Java Properties' },
+    { value: 'semicolon', label: 'Semicolon Separated' },
   ];
 
   return (
