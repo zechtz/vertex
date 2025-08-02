@@ -5,6 +5,7 @@ param(
     [string]$InstallPath = "$env:ProgramFiles\Vertex",
     [string]$DataPath = "$env:ProgramData\Vertex",
     [string]$ServiceName = "Vertex",
+    [string]$ServiceUser = "vertex",
     [int]$Port = 8080
 )
 
@@ -34,6 +35,43 @@ try {
     Write-Host "📁 Creating data directory: $DataPath" -ForegroundColor Blue
     New-Item -ItemType Directory -Path $DataPath -Force | Out-Null
 
+    # Create service user account
+    Write-Host "👤 Creating service user: $ServiceUser" -ForegroundColor Blue
+    try {
+        # Check if user already exists
+        $existingUser = Get-LocalUser -Name $ServiceUser -ErrorAction SilentlyContinue
+        if (-not $existingUser) {
+            # Generate a random password (user won't log in interactively)
+            $password = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | % {[char]$_})
+            $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+            
+            # Create the user account
+            New-LocalUser -Name $ServiceUser -Password $securePassword -Description "Vertex Service Account" -AccountNeverExpires -PasswordNeverExpires | Out-Null
+            
+            # Add to "Log on as a service" right
+            $tmp = New-TemporaryFile
+            secedit /export /cfg $tmp.FullName | Out-Null
+            $content = Get-Content $tmp.FullName
+            $newContent = $content -replace "(SeServiceLogonRight = .*)", "`$1,$ServiceUser"
+            Set-Content $tmp.FullName $newContent
+            secedit /configure /db secedit.sdb /cfg $tmp.FullName | Out-Null
+            Remove-Item $tmp.FullName
+            
+            Write-Host "✅ Created service user: $ServiceUser" -ForegroundColor Green
+        } else {
+            Write-Host "✅ Service user already exists: $ServiceUser" -ForegroundColor Green
+        }
+        
+        # Set permissions on data directory
+        Write-Host "🔐 Setting directory permissions..." -ForegroundColor Blue
+        icacls $DataPath /grant "${ServiceUser}:(OI)(CI)F" /T | Out-Null
+        icacls $InstallPath /grant "${ServiceUser}:(RX)" /T | Out-Null
+        
+    } catch {
+        Write-Host "⚠️ Could not create service user. Service will run as LocalSystem." -ForegroundColor Yellow
+        $ServiceUser = $null
+    }
+
     # Copy binary
     Write-Host "📦 Installing binary to $InstallPath" -ForegroundColor Blue
     Copy-Item ".\vertex.exe" -Destination "$InstallPath\vertex.exe" -Force
@@ -54,7 +92,13 @@ try {
 
     # Create new service
     Write-Host "🔧 Creating Windows service..." -ForegroundColor Blue
-    sc.exe create $ServiceName binPath= "`"$servicePath`" $serviceArgs" start= auto DisplayName= "Vertex Service Manager" | Out-Null
+    if ($ServiceUser) {
+        # Create service with specific user account
+        sc.exe create $ServiceName binPath= "`"$servicePath`" $serviceArgs" start= auto DisplayName= "Vertex Service Manager" obj= ".\$ServiceUser" | Out-Null
+    } else {
+        # Create service with LocalSystem account
+        sc.exe create $ServiceName binPath= "`"$servicePath`" $serviceArgs" start= auto DisplayName= "Vertex Service Manager" | Out-Null
+    }
     
     # Set service description
     sc.exe description $ServiceName "Vertex microservice management platform" | Out-Null
@@ -83,6 +127,7 @@ try {
     Write-Host ""
     Write-Host "📋 Installation Details:" -ForegroundColor Cyan
     Write-Host "   • Service Name: $ServiceName"
+    Write-Host "   • Service User: $(if ($ServiceUser) { $ServiceUser } else { 'LocalSystem' })"
     Write-Host "   • Binary Path: $InstallPath\vertex.exe"
     Write-Host "   • Data Directory: $DataPath"
     Write-Host "   • Database: $DataPath\vertex.db"

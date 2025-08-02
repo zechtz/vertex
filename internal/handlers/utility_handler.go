@@ -27,6 +27,7 @@ func registerUtilityRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/environment/setup", h.setupEnvironmentHandler).Methods("POST")
 	r.HandleFunc("/api/environment/sync", h.syncEnvironmentHandler).Methods("POST")
 	r.HandleFunc("/api/environment/status", h.getEnvironmentStatusHandler).Methods("GET")
+	r.HandleFunc("/api/java/diagnostics", h.getJavaDiagnosticsHandler).Methods("GET")
 
 	r.HandleFunc("/api/env-vars/global", h.getGlobalEnvVarsHandler).Methods("GET")
 	r.HandleFunc("/api/env-vars/global", h.updateGlobalEnvVarsHandler).Methods("PUT")
@@ -729,5 +730,21 @@ func (h *Handler) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
+	}
+}
+
+// getJavaDiagnosticsHandler returns Java environment diagnostics
+func (h *Handler) getJavaDiagnosticsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Detect current Java environment
+	javaEnv := services.DetectJavaEnvironment()
+	diagnostics := javaEnv.GetDiagnostics()
+
+	if err := json.NewEncoder(w).Encode(diagnostics); err != nil {
+		log.Printf("Failed to encode Java diagnostics: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
 	}
 }
