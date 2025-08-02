@@ -63,6 +63,17 @@ func main() {
 	}
 	defer db.Close()
 
+	// Detect and setup Java environment
+	javaEnv := services.DetectJavaEnvironment()
+	if javaEnv.Available {
+		if err := javaEnv.SetupJavaEnvironment(); err != nil {
+			log.Printf("[WARN] Failed to setup Java environment: %v", err)
+		}
+	} else {
+		log.Printf("[WARN] Java not detected: %s", javaEnv.ErrorMsg)
+		log.Printf("[INFO] Services requiring Java may fail to start")
+	}
+
 	// Automatic environment setup check with database
 	checkAndSetupEnvironment(db)
 

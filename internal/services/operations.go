@@ -316,6 +316,17 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 
 	log.Printf("[INFO] Starting service %s from directory: %s", service.Name, serviceDir)
 
+	// Ensure vertex user has access to the profile's project directory
+	if err := EnsureVertexUserProjectAccess(projectsDir); err != nil {
+		log.Printf("[WARN] Failed to setup project directory access for service %s: %v", service.Name, err)
+		// Continue with startup - this shouldn't block service startup
+	}
+
+	// Also ensure the specific service's build directory exists with proper permissions
+	if err := ensureServiceBuildDirectory(serviceDir); err != nil {
+		log.Printf("[WARN] Failed to setup build directory for service %s: %v", service.Name, err)
+	}
+
 	// Check and fix Lombok compatibility before starting the service
 	if err := sm.checkAndFixLombokCompatibility(serviceDir, service.Name); err != nil {
 		log.Printf("[WARN] Lombok compatibility check failed for service %s: %v", service.Name, err)
@@ -482,6 +493,17 @@ func (sm *Manager) startService(service *models.Service) error {
 	serviceDir := filepath.Join(sm.config.ProjectsDir, service.Dir)
 	if _, err := os.Stat(serviceDir); os.IsNotExist(err) {
 		return fmt.Errorf("service directory does not exist: %s", serviceDir)
+	}
+
+	// Ensure vertex user has access to the profile's project directory
+	if err := EnsureVertexUserProjectAccess(sm.config.ProjectsDir); err != nil {
+		log.Printf("[WARN] Failed to setup project directory access for service %s: %v", service.Name, err)
+		// Continue with startup - this shouldn't block service startup
+	}
+
+	// Also ensure the specific service's build directory exists with proper permissions
+	if err := ensureServiceBuildDirectory(serviceDir); err != nil {
+		log.Printf("[WARN] Failed to setup build directory for service %s: %v", service.Name, err)
 	}
 
 	// Check and fix Lombok compatibility before starting the service
