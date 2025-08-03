@@ -19,6 +19,7 @@ import {
   Loader,
   Package,
   MoreVertical,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,6 +36,9 @@ interface ServiceCardProps {
     restarting?: boolean;
     checkingHealth?: boolean;
     installingLibraries?: boolean;
+    validatingWrapper?: boolean;
+    generatingWrapper?: boolean;
+    repairingWrapper?: boolean;
   };
   onStart: () => void;
   onStop: () => void;
@@ -45,6 +49,7 @@ interface ServiceCardProps {
   onDelete: () => void;
   onViewFiles: () => void;
   onEditEnv: () => void;
+  onManageWrappers: () => void;
 }
 
 export function ServiceCard({
@@ -59,6 +64,7 @@ export function ServiceCard({
   onDelete,
   onViewFiles,
   onEditEnv,
+  onManageWrappers,
 }: ServiceCardProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
@@ -274,6 +280,17 @@ export function ServiceCard({
                   >
                     <Package className="w-3 h-3" />
                     Install Libraries
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onManageWrappers();
+                      setShowDropdown(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Wrench className="w-3 h-3" />
+                    Manage Wrappers
                   </button>
 
                   <hr className="my-1 border-gray-100 dark:border-gray-700" />

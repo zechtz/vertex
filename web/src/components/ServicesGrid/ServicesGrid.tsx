@@ -32,6 +32,9 @@ interface ServicesGridProps {
       restarting?: boolean;
       checkingHealth?: boolean;
       installingLibraries?: boolean;
+      validatingWrapper?: boolean;
+      generatingWrapper?: boolean;
+      repairingWrapper?: boolean;
     }
   >;
   onStartAll: () => void;
@@ -48,6 +51,7 @@ interface ServicesGridProps {
   onDeleteService: (service: Service) => void;
   onViewFiles: (service: Service) => void;
   onEditEnv: (service: Service) => void;
+  onManageWrappers: (service: Service) => void;
 }
 
 export function ServicesGrid({
@@ -72,6 +76,7 @@ export function ServicesGrid({
   onDeleteService,
   onViewFiles,
   onEditEnv,
+  onManageWrappers,
 }: ServicesGridProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -391,6 +396,7 @@ export function ServicesGrid({
                 onDelete={() => onDeleteService(service)}
                 onViewFiles={() => onViewFiles(service)}
                 onEditEnv={() => onEditEnv(service)}
+                onManageWrappers={() => onManageWrappers(service)}
               />
             ))}
           </div>

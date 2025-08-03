@@ -42,6 +42,11 @@ func registerServiceRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/services/logs/clear", h.clearAllLogsHandler).Methods("DELETE")
 	r.HandleFunc("/api/services/{id}/metrics", h.getServiceMetricsHandler).Methods("GET")
 
+	// Wrapper management endpoints
+	r.HandleFunc("/api/services/{id}/wrapper/validate", h.validateWrapperHandler).Methods("GET")
+	r.HandleFunc("/api/services/{id}/wrapper/generate", h.generateWrapperHandler).Methods("POST")
+	r.HandleFunc("/api/services/{id}/wrapper/repair", h.repairWrapperHandler).Methods("POST")
+
 	// Utility endpoints
 	r.HandleFunc("/api/services/available-for-profile", h.getAvailableServicesForProfileHandler).Methods("GET")
 	r.HandleFunc("/api/services/normalize-order", h.normalizeServiceOrderHandler).Methods("POST")
@@ -915,6 +920,191 @@ func (h *Handler) installSelectedLibrariesHandler(w http.ResponseWriter, r *http
 		"serviceId":   serviceUUID,
 		"environments": request.Environments,
 		"librariesInstalled": len(librariesToInstall),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// validateWrapperHandler validates the integrity of wrapper files for a service
+func (h *Handler) validateWrapperHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serviceUUID := vars["id"]
+
+	if serviceUUID == "" {
+		http.Error(w, "Service UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Check if service exists
+	service, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Service with UUID %s not found", serviceUUID), http.StatusNotFound)
+		return
+	}
+
+	// Get the service directory using profile-aware logic
+	projectsDir := h.getServiceProjectsDir(serviceUUID)
+	serviceDir := fmt.Sprintf("%s/%s", projectsDir, service.Dir)
+
+	log.Printf("[INFO] Validating wrapper for service %s in directory: %s", service.Name, serviceDir)
+
+	// Import the services package to access build system functions
+	buildSystem := h.serviceManager.DetectBuildSystem(serviceDir)
+	isValid, err := h.serviceManager.ValidateWrapperIntegrity(serviceDir, buildSystem)
+
+	response := map[string]interface{}{
+		"serviceId":     serviceUUID,
+		"serviceName":   service.Name,
+		"buildSystem":   string(buildSystem),
+		"isValid":       isValid,
+		"hasWrapper":    false,
+		"wrapperFiles":  []string{},
+	}
+
+	if err != nil {
+		response["error"] = err.Error()
+		response["isValid"] = false
+		log.Printf("[WARN] Wrapper validation failed for service %s: %v", service.Name, err)
+	} else {
+		log.Printf("[INFO] Wrapper validation successful for service %s", service.Name)
+	}
+
+	// Check which wrapper files exist
+	switch buildSystem {
+	case "maven":
+		if h.serviceManager.HasMavenWrapper(serviceDir) {
+			response["hasWrapper"] = true
+			response["wrapperFiles"] = []string{"mvnw", ".mvn/wrapper/maven-wrapper.properties"}
+		}
+	case "gradle":
+		if h.serviceManager.HasGradleWrapper(serviceDir) {
+			response["hasWrapper"] = true
+			response["wrapperFiles"] = []string{"gradlew", "gradle/wrapper/gradle-wrapper.properties"}
+		}
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// generateWrapperHandler generates wrapper files for a service
+func (h *Handler) generateWrapperHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serviceUUID := vars["id"]
+
+	if serviceUUID == "" {
+		http.Error(w, "Service UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Check if service exists
+	service, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Service with UUID %s not found", serviceUUID), http.StatusNotFound)
+		return
+	}
+
+	// Get the service directory using profile-aware logic
+	projectsDir := h.getServiceProjectsDir(serviceUUID)
+	serviceDir := fmt.Sprintf("%s/%s", projectsDir, service.Dir)
+
+	log.Printf("[INFO] Generating wrapper for service %s in directory: %s", service.Name, serviceDir)
+
+	// Detect build system and generate appropriate wrapper
+	buildSystem := h.serviceManager.DetectBuildSystem(serviceDir)
+	var err error
+
+	switch buildSystem {
+	case "maven":
+		err = h.serviceManager.GenerateMavenWrapper(serviceDir)
+	case "gradle":
+		err = h.serviceManager.GenerateGradleWrapper(serviceDir)
+	default:
+		err = fmt.Errorf("unsupported build system: %s", buildSystem)
+	}
+
+	if err != nil {
+		log.Printf("[ERROR] Failed to generate wrapper for service %s: %v", service.Name, err)
+		response := map[string]interface{}{
+			"status":      "error",
+			"message":     fmt.Sprintf("Failed to generate wrapper: %v", err),
+			"serviceId":   serviceUUID,
+			"serviceName": service.Name,
+			"buildSystem": string(buildSystem),
+		}
+		http.Error(w, fmt.Sprintf("Failed to generate wrapper: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	log.Printf("[INFO] Successfully generated %s wrapper for service %s", buildSystem, service.Name)
+
+	response := map[string]interface{}{
+		"status":      "success",
+		"message":     fmt.Sprintf("Successfully generated %s wrapper for service %s", buildSystem, service.Name),
+		"serviceId":   serviceUUID,
+		"serviceName": service.Name,
+		"buildSystem": string(buildSystem),
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// repairWrapperHandler repairs corrupted wrapper files for a service
+func (h *Handler) repairWrapperHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serviceUUID := vars["id"]
+
+	if serviceUUID == "" {
+		http.Error(w, "Service UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Check if service exists
+	service, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, fmt.Sprintf("Service with UUID %s not found", serviceUUID), http.StatusNotFound)
+		return
+	}
+
+	// Get the service directory using profile-aware logic
+	projectsDir := h.getServiceProjectsDir(serviceUUID)
+	serviceDir := fmt.Sprintf("%s/%s", projectsDir, service.Dir)
+
+	log.Printf("[INFO] Repairing wrapper for service %s in directory: %s", service.Name, serviceDir)
+
+	// Use the RepairWrapper function which detects build system and repairs accordingly
+	err := h.serviceManager.RepairWrapper(serviceDir)
+	if err != nil {
+		log.Printf("[ERROR] Failed to repair wrapper for service %s: %v", service.Name, err)
+		response := map[string]interface{}{
+			"status":      "error",
+			"message":     fmt.Sprintf("Failed to repair wrapper: %v", err),
+			"serviceId":   serviceUUID,
+			"serviceName": service.Name,
+		}
+		http.Error(w, fmt.Sprintf("Failed to repair wrapper: %v", err), http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	buildSystem := h.serviceManager.DetectBuildSystem(serviceDir)
+	log.Printf("[INFO] Successfully repaired %s wrapper for service %s", buildSystem, service.Name)
+
+	response := map[string]interface{}{
+		"status":      "success",
+		"message":     fmt.Sprintf("Successfully repaired %s wrapper for service %s", buildSystem, service.Name),
+		"serviceId":   serviceUUID,
+		"serviceName": service.Name,
+		"buildSystem": string(buildSystem),
 	}
 
 	json.NewEncoder(w).Encode(response)

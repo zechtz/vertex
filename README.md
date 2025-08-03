@@ -11,6 +11,10 @@ A powerful service management platform that provides a web-based interface for m
 - 🌐 **Web Interface** - Modern React-based dashboard for service management
 - 🔒 **User Authentication** - Secure JWT-based authentication system
 - 📱 **Responsive Design** - Works on desktop and mobile devices
+- 🚀 **One-Command Installation** - `./vertex --domain myapp.local` installs everything automatically
+- 🌐 **Nginx Integration** - Optional nginx proxy for clean domain-based access
+- 🔒 **HTTPS Support** - Automatic locally-trusted certificates with mkcert (.dev domains auto-enable HTTPS)
+- 🔧 **Build Wrapper Management** - Generate and repair Maven/Gradle wrapper files
 
 ## 🛠️ Installation
 
@@ -19,6 +23,8 @@ A powerful service management platform that provides a web-based interface for m
 - **Java 11+** (OpenJDK or Oracle)
 - **Go 1.19+** (for building from source)
 - **Node.js 16+** (for frontend development)
+- **nginx** (optional - automatically installed when using `--nginx` flag)
+- **mkcert** (optional - automatically installed when using `--https` flag)
 
 ### Quick Install
 
@@ -39,10 +45,14 @@ A powerful service management platform that provides a web-based interface for m
 
 3. **Install as a user service:**
    ```bash
-   # Self-installing - handles renaming automatically!
-   ./vertex-linux-amd64 --install      # Linux example
-   ./vertex-darwin-arm64 --install     # macOS example
-   # vertex-windows-amd64.exe --install   (Windows example)
+   # 🚀 ONE-COMMAND INSTALLATION (recommended)
+   ./vertex-linux-amd64 --domain vertex.local    # Auto-installs with nginx!
+   ./vertex-darwin-arm64 --domain myapp.local    # macOS example
+   # vertex-windows-amd64.exe --domain myapp.local  (Windows example)
+   
+   # Traditional installation (still works)
+   ./vertex-linux-amd64 --install      # Basic installation
+   ./vertex-linux-amd64 --install --nginx --domain vertex.local  # Explicit
    ```
 
 #### Option 2: Build from Source
@@ -54,16 +64,134 @@ A powerful service management platform that provides a web-based interface for m
 
 2. **Install as a user service:**
    ```bash
-   # Self-installing - no external scripts needed!
-   ./vertex --install
+   # 🚀 ONE-COMMAND INSTALLATION (recommended)
+   ./vertex --domain myapp.local        # Auto-installs with nginx!
+   
+   # Traditional installation (still works)
+   ./vertex --install                   # Basic installation
+   ./vertex --install --nginx --domain myapp.local  # Explicit
    ```
 
 3. **Access the web interface:**
-   Open your browser and navigate to: http://localhost:8080
+   - **With HTTPS domain**: https://vertex.dev (when using `--domain vertex.dev`)
+   - **With HTTP domain**: http://myapp.local (when using `--domain myapp.local`)
+   - **Direct access**: http://localhost:54321
 
 > 📖 **For detailed usage instructions and tutorials, see our [Getting Started Guide](https://github.com/zechtz/vertex/wiki/Getting-Started-with-Vertex-Service-Manager)** on the wiki.
 
 ## 🚀 Usage
+
+### 🌐 Nginx Proxy Configuration
+
+Vertex includes optional nginx integration for clean domain-based access without port numbers.
+
+#### Quick Setup
+```bash
+# 🚀 ONE-COMMAND INSTALLATION (recommended)
+./vertex --domain vertex.dev
+
+# Access via clean domain with HTTPS (auto-enabled for .dev domains)
+open https://vertex.dev
+```
+
+#### Custom Domain
+```bash
+# One-command installation with custom domain (HTTP)
+./vertex --domain myapp.local
+
+# One-command installation with HTTPS
+./vertex --domain myapp.local --https
+
+# Access your custom domain
+open https://myapp.local    # With HTTPS
+open http://myapp.local     # HTTP only
+```
+
+#### Advanced Configuration
+```bash
+# Traditional explicit installation (all options available)
+./vertex --install \
+  --nginx \                    # Enable nginx proxy
+  --https \                    # Enable HTTPS with locally-trusted certificates
+  --domain myproject.local \   # Custom domain name
+  --port 54321                 # Vertex service port (default: 54321)
+
+# One-command with custom port
+./vertex --domain myproject.local --port 8080
+
+# Force HTTPS for any domain
+./vertex --domain myproject.local --https
+```
+
+#### What Nginx Setup Does
+- ✅ **Automatically installs nginx** on macOS (brew), Linux (apt/yum/etc), Windows (choco/winget)
+- ✅ **Creates proxy configuration** from port 80/443 to Vertex service
+- ✅ **Manages /etc/hosts entries** for local domain resolution
+- ✅ **Handles permissions** and log directory creation
+- ✅ **Starts nginx service** automatically
+- 🔒 **HTTPS Support** - Automatically installs mkcert and generates locally-trusted certificates
+- 🔒 **Auto-HTTPS for .dev domains** - Google-owned .dev domains automatically enable HTTPS (HSTS required)
+- 🔐 **HTTP to HTTPS redirect** - Automatic redirects when HTTPS is enabled
+- 🛡️ **Modern SSL configuration** - TLS 1.2+, HTTP/2, secure ciphers, security headers
+
+#### Access Methods
+| Method | URL | Use Case |
+|--------|-----|----------|
+| **Nginx Proxy (HTTPS)** | `https://vertex.dev` | Secure domain access (.dev domains auto-enable HTTPS) |
+| **Nginx Proxy (HTTP)** | `http://myproject.local` | Clean domain access for non-.dev domains |
+| **Direct Access** | `http://localhost:54321` | Development, bypassing nginx |
+
+#### HTTPS with mkcert
+
+Vertex uses [mkcert](https://mkcert.dev) to generate locally-trusted SSL certificates. This provides real HTTPS with valid certificates that browsers trust.
+
+```bash
+# Check certificate status
+ls -la ~/.vertex/ssl/
+
+# Manually generate certificates
+mkcert -install                          # Install local CA
+mkcert -cert-file ~/.vertex/ssl/mydomain.local.pem \
+       -key-file ~/.vertex/ssl/mydomain.local-key.pem \
+       mydomain.local
+
+# View certificate details  
+openssl x509 -in ~/.vertex/ssl/vertex.dev.pem -text -noout
+```
+
+**Special .dev Domain Handling:**
+- Google owns the `.dev` TLD and requires HTTPS via HSTS preloading
+- Vertex automatically enables HTTPS for any `.dev` domain
+- Certificates are generated and installed automatically
+- No browser security warnings with locally-trusted certificates
+
+**Certificate Management:**
+- Certificates stored in `~/.vertex/ssl/`
+- Valid for the local CA installed by mkcert
+- Automatically trusted by browsers and curl
+- Use `mkcert -uninstall` to remove the local CA if needed
+
+#### Troubleshooting Nginx
+```bash
+# Check nginx status
+brew services list | grep nginx           # macOS
+systemctl status nginx                   # Linux
+
+# View nginx logs
+tail -f /opt/homebrew/var/log/nginx/error.log    # macOS
+tail -f /var/log/nginx/error.log                 # Linux
+
+# Test configuration
+nginx -t
+
+# Restart nginx
+brew services restart nginx              # macOS
+sudo systemctl restart nginx            # Linux
+
+# Check HTTPS certificate
+curl -v https://vertex.dev
+openssl s_client -connect vertex.dev:443 -servername vertex.dev
+```
 
 ### Service Management
 
@@ -102,7 +230,7 @@ systemctl --user status vertex
 
 ### Custom Port Configuration
 
-You can run Vertex on a different port:
+You can run Vertex on a different port (default is 54321):
 
 #### Option 1: Direct execution
 ```bash
@@ -114,13 +242,13 @@ You can run Vertex on a different port:
 **macOS:**
 1. Stop the service: `launchctl stop com.vertex.manager`
 2. Edit the plist file: `~/Library/LaunchAgents/com.vertex.manager.plist`
-3. Change the port argument from `8080` to your desired port
+3. Change the port argument from `54321` to your desired port
 4. Reload: `launchctl unload ~/Library/LaunchAgents/com.vertex.manager.plist && launchctl load ~/Library/LaunchAgents/com.vertex.manager.plist`
 
 **Linux:**
 1. Stop the service: `systemctl --user stop vertex`
 2. Edit the service file: `~/.config/systemd/user/vertex.service`
-3. Change the `-port 8080` argument to your desired port
+3. Change the `--port 54321` argument to your desired port
 4. Reload: `systemctl --user daemon-reload && systemctl --user start vertex`
 
 ### Viewing Logs
@@ -167,6 +295,47 @@ journalctl --user -u vertex --since="1 hour ago"
 ```
 
 ## 🔧 Configuration
+
+### Command Line Options
+
+Vertex supports these command line flags:
+
+```bash
+./vertex --help
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--domain` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
+| `--install` | - | Install Vertex as a user service |
+| `--uninstall` | - | Uninstall Vertex service and data |
+| `--nginx` | false | Configure nginx proxy for domain access |
+| `--https` | false | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
+| `--port` | 54321 | Port to run the server on |
+| `--data-dir` | ~/.vertex | Directory to store application data |
+| `--version` | - | Show version information |
+
+#### Examples
+```bash
+# 🚀 ONE-COMMAND INSTALLATION (recommended)
+./vertex --domain myapp.local        # HTTP installation
+./vertex --domain vertex.dev         # HTTPS auto-enabled for .dev domains
+
+# Traditional installations (still supported)
+./vertex --install                   # Basic installation
+./vertex --install --nginx          # With nginx proxy
+./vertex --install --nginx --https --domain myapp.local  # With HTTPS
+./vertex --install --nginx --domain myapp.local --port 8080  # Full explicit
+
+# Force HTTPS for any domain
+./vertex --domain myproject.local --https
+
+# Temporary run (no installation)
+./vertex --port 9090
+
+# Custom data directory
+./vertex --data-dir /tmp/vertex-test --port 8080
+```
 
 ### Environment Variables
 
@@ -225,7 +394,7 @@ Vertex automatically detects Java installations in this order:
 
 3. **Check port availability:**
    ```bash
-   lsof -i :8080
+   lsof -i :54321
    ```
 
 ### Permission Issues
@@ -247,7 +416,7 @@ Since Vertex runs as your user account, it should have access to all your projec
 
 Run the built-in diagnostics:
 ```bash
-curl http://localhost:8080/api/system/java-diagnostics
+curl http://localhost:54321/api/system/java-diagnostics
 ```
 
 This will show:
@@ -335,10 +504,13 @@ npm run build
 
 ```bash
 # Run without installing
-./vertex --port 8080
+./vertex --port 54321
 
 # With custom data directory
 VERTEX_DATA_DIR=/tmp/vertex-dev ./vertex --port 9090
+
+# Run with nginx proxy in development
+./vertex --install --nginx --domain dev.local
 ```
 
 ## 🤝 Contributing
