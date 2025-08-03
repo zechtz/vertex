@@ -162,10 +162,29 @@ export function useServiceManagement(onServiceUpdated: () => void) {
           service,
           isCreate,
         });
+
+        const payload = {
+          id: service.id || "",
+          name: service.name || "",
+          dir: service.dir || "",
+          extraEnv: service.extraEnv || "",
+          javaOpts: service.javaOpts || "",
+          healthUrl:
+            service.healthUrl ||
+            `http://localhost:${service.port || 8080}/actuator/health`,
+          port: service.port || 8080,
+          order: service.order || 0,
+          description: service.description || "",
+          isEnabled: service.isEnabled || true,
+          buildSystem: service.buildSystem || "auto",
+          envVars: service.envVars || {},
+          startupDelay: service.startupDelay || 0,
+        };
+
         const response = await fetch(url, {
           method: method,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(service),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
