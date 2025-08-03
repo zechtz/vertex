@@ -52,8 +52,8 @@ export function useServices() {
         setServices([]);
       } else {
         // Filter to show only services that are in the active profile
-        const profileServiceIds = activeProfile.services.map((s: any) => 
-          typeof s === 'string' ? s : s.id
+        const profileServiceIds = activeProfile.services.map((s: any) =>
+          typeof s === "string" ? s : s.id,
         );
         const filteredServices = allServices.filter((service) =>
           profileServiceIds.includes(service.id),
@@ -101,8 +101,8 @@ export function useServices() {
         setConfigurations(allConfigs);
       } else {
         // Filter to show only configurations that contain services from the active profile
-        const profileServiceIds = activeProfile.services.map((s: any) => 
-          typeof s === 'string' ? s : s.id
+        const profileServiceIds = activeProfile.services.map((s: any) =>
+          typeof s === "string" ? s : s.id,
         );
         const filteredConfigs = allConfigs.filter((config) =>
           config.services.some((configService) =>
@@ -135,7 +135,8 @@ export function useServices() {
     fetchConfigurations();
 
     // WebSocket connection for real-time updates
-    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -170,7 +171,6 @@ export function useServices() {
 
     return () => ws.close();
   }, [selectedService, fetchServices, fetchConfigurations]);
-
   return {
     // State
     services,
