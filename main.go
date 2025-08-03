@@ -42,7 +42,7 @@ func main() {
 	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
 	flag.BoolVar(&enableNginx, "nginx", false, "Configure nginx proxy for domain access (requires nginx to be installed)")
-	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (default: vertex.dev)")
+	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (automatically installs with nginx when specified)")
 	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
 	
@@ -52,7 +52,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --data-dir string\n")
 		fmt.Fprintf(os.Stderr, "    \tDirectory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory\n")
 		fmt.Fprintf(os.Stderr, "  --domain string\n")
-		fmt.Fprintf(os.Stderr, "    \tDomain name for nginx proxy (default: vertex.dev) (default \"vertex.dev\")\n")
+		fmt.Fprintf(os.Stderr, "    \tDomain name for nginx proxy (automatically installs with nginx when specified) (default \"vertex.dev\")\n")
 		fmt.Fprintf(os.Stderr, "  --install\n")
 		fmt.Fprintf(os.Stderr, "    \tInstall Vertex as a user service\n")
 		fmt.Fprintf(os.Stderr, "  --nginx\n")
@@ -74,7 +74,28 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Check if domain flag was explicitly specified (smart auto-install)
+	domainWasExplicitlySet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "domain" {
+			domainWasExplicitlySet = true
+		}
+	})
+	
+	// Auto-install with nginx if domain is specified
+	if domainWasExplicitlySet && !install && !uninstall {
+		install = true
+		enableNginx = true
+		fmt.Printf("🌐 Domain specified (%s), automatically installing with nginx proxy\n", domain)
+	}
+
 	if install {
+		// Auto-enable nginx if domain flag was explicitly specified (smart UX)
+		if domainWasExplicitlySet && !enableNginx {
+			enableNginx = true
+			fmt.Printf("🌐 Domain specified (%s), automatically enabling nginx proxy\n", domain)
+		}
+		
 		if err := installService(enableNginx, domain); err != nil {
 			log.Fatalf("Installation failed: %v", err)
 		}

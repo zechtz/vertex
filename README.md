@@ -11,6 +11,7 @@ A powerful service management platform that provides a web-based interface for m
 - 🌐 **Web Interface** - Modern React-based dashboard for service management
 - 🔒 **User Authentication** - Secure JWT-based authentication system
 - 📱 **Responsive Design** - Works on desktop and mobile devices
+- 🚀 **One-Command Installation** - `./vertex --domain myapp.local` installs everything automatically
 - 🌐 **Nginx Integration** - Optional nginx proxy for clean domain-based access
 - 🔧 **Build Wrapper Management** - Generate and repair Maven/Gradle wrapper files
 
@@ -42,13 +43,14 @@ A powerful service management platform that provides a web-based interface for m
 
 3. **Install as a user service:**
    ```bash
-   # Self-installing - handles renaming automatically!
-   ./vertex-linux-amd64 --install      # Linux example
-   ./vertex-darwin-arm64 --install     # macOS example
-   # vertex-windows-amd64.exe --install   (Windows example)
+   # 🚀 ONE-COMMAND INSTALLATION (recommended)
+   ./vertex-linux-amd64 --domain vertex.local    # Auto-installs with nginx!
+   ./vertex-darwin-arm64 --domain myapp.local    # macOS example
+   # vertex-windows-amd64.exe --domain myapp.local  (Windows example)
    
-   # With nginx proxy for clean domain access
-   ./vertex-linux-amd64 --install --nginx --domain vertex.local
+   # Traditional installation (still works)
+   ./vertex-linux-amd64 --install      # Basic installation
+   ./vertex-linux-amd64 --install --nginx --domain vertex.local  # Explicit
    ```
 
 #### Option 2: Build from Source
@@ -60,16 +62,17 @@ A powerful service management platform that provides a web-based interface for m
 
 2. **Install as a user service:**
    ```bash
-   # Self-installing - no external scripts needed!
-   ./vertex --install
+   # 🚀 ONE-COMMAND INSTALLATION (recommended)
+   ./vertex --domain myapp.local        # Auto-installs with nginx!
    
-   # With nginx proxy for clean domain access
-   ./vertex --install --nginx --domain myapp.local
+   # Traditional installation (still works)
+   ./vertex --install                   # Basic installation
+   ./vertex --install --nginx --domain myapp.local  # Explicit
    ```
 
 3. **Access the web interface:**
-   - **Standard**: http://localhost:54321
-   - **With nginx**: http://vertex.dev (or your custom domain)
+   - **With domain**: http://myapp.local (when using `--domain`)
+   - **Direct access**: http://localhost:54321
 
 > 📖 **For detailed usage instructions and tutorials, see our [Getting Started Guide](https://github.com/zechtz/vertex/wiki/Getting-Started-with-Vertex-Service-Manager)** on the wiki.
 
@@ -81,8 +84,8 @@ Vertex includes optional nginx integration for clean domain-based access without
 
 #### Quick Setup
 ```bash
-# Install with nginx proxy
-./vertex --install --nginx
+# 🚀 ONE-COMMAND INSTALLATION (recommended)
+./vertex --domain vertex.dev
 
 # Access via clean domain
 open http://vertex.dev
@@ -90,8 +93,8 @@ open http://vertex.dev
 
 #### Custom Domain
 ```bash
-# Install with custom domain
-./vertex --install --nginx --domain myapp.local
+# One-command installation with custom domain
+./vertex --domain myapp.local
 
 # Access your custom domain
 open http://myapp.local
@@ -99,11 +102,14 @@ open http://myapp.local
 
 #### Advanced Configuration
 ```bash
-# Available options
+# Traditional explicit installation (all options available)
 ./vertex --install \
   --nginx \                    # Enable nginx proxy
   --domain myproject.local \   # Custom domain name
   --port 54321                 # Vertex service port (default: 54321)
+
+# One-command with custom port
+./vertex --domain myproject.local --port 8080
 ```
 
 #### What Nginx Setup Does
@@ -250,29 +256,28 @@ Vertex supports these command line flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--domain` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
 | `--install` | - | Install Vertex as a user service |
 | `--uninstall` | - | Uninstall Vertex service and data |
 | `--nginx` | false | Configure nginx proxy for domain access |
-| `--domain` | vertex.dev | Domain name for nginx proxy |
 | `--port` | 54321 | Port to run the server on |
 | `--data-dir` | ~/.vertex | Directory to store application data |
 | `--version` | - | Show version information |
 
 #### Examples
 ```bash
-# Basic installation
-./vertex --install
+# 🚀 ONE-COMMAND INSTALLATION (recommended)
+./vertex --domain myapp.local
 
-# Install with nginx proxy
-./vertex --install --nginx
+# Traditional installations (still supported)
+./vertex --install                   # Basic installation
+./vertex --install --nginx          # With nginx proxy
+./vertex --install --nginx --domain myapp.local --port 8080  # Full explicit
 
-# Install with custom domain and port
-./vertex --install --nginx --domain myapp.local --port 8080
-
-# Run temporarily on different port
+# Temporary run (no installation)
 ./vertex --port 9090
 
-# Use custom data directory
+# Custom data directory
 ./vertex --data-dir /tmp/vertex-test --port 8080
 ```
 
