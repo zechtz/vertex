@@ -309,6 +309,7 @@ Vertex supports these command line flags:
 | `--domain` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
 | `--install` | - | Install Vertex as a user service |
 | `--uninstall` | - | Uninstall Vertex service and data |
+| `--update` | - | Update the Vertex binary and restart the service |
 | `--nginx` | false | Configure nginx proxy for domain access |
 | `--https` | false | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
 | `--port` | 54321 | Port to run the server on |
@@ -426,7 +427,28 @@ This will show:
 
 ## 🔄 Updating
 
-To update Vertex:
+Vertex includes a built-in updater to simplify the process of updating the binary and restarting the service. This is especially useful during development.
+
+### Recommended Update Method
+
+1. **Build the new binary:**
+   ```bash
+   go build -o vertex
+   ```
+
+2. **Run the updater:**
+   ```bash
+   ./vertex --update
+   ```
+
+This command will:
+- Stop the running Vertex service.
+- Replace the existing binary with the new one.
+- Restart the service.
+
+### Manual Update Method
+
+To update Vertex manually:
 
 1. **Stop the service:**
    ```bash
