@@ -11,10 +11,12 @@ import (
 
 // ServiceInstaller handles cross-platform service installation
 type ServiceInstaller struct {
-	BinaryPath string
-	Port       string
-	DataDir    string
-	User       string
+	BinaryPath    string
+	Port          string
+	DataDir       string
+	User          string
+	Domain        string
+	EnableNginx   bool
 }
 
 // NewServiceInstaller creates a new service installer
@@ -39,10 +41,12 @@ func NewServiceInstaller() *ServiceInstaller {
 	}
 
 	return &ServiceInstaller{
-		BinaryPath: execPath,
-		Port:       "8080",
-		DataDir:    dataDir,
-		User:       user,
+		BinaryPath:  execPath,
+		Port:        "8080",
+		DataDir:     dataDir,
+		User:        user,
+		Domain:      "vertex.dev",
+		EnableNginx: false,
 	}
 }
 
@@ -61,16 +65,31 @@ func (si *ServiceInstaller) Install() error {
 	}
 
 	// Create and install service based on platform
+	var serviceErr error
 	switch runtime.GOOS {
 	case "darwin":
-		return si.installMacOSService()
+		serviceErr = si.installMacOSService()
 	case "linux":
-		return si.installLinuxService()
+		serviceErr = si.installLinuxService()
 	case "windows":
-		return si.installWindowsService()
+		serviceErr = si.installWindowsService()
 	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		serviceErr = fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
+
+	if serviceErr != nil {
+		return serviceErr
+	}
+
+	// Install nginx configuration if enabled
+	if si.EnableNginx {
+		if err := si.installNginxConfig(); err != nil {
+			fmt.Printf("⚠️  Nginx configuration failed: %v\n", err)
+			fmt.Printf("Service is still accessible at http://localhost:%s\n", si.Port)
+		}
+	}
+
+	return nil
 }
 
 // createDataDirectory creates the data directory
@@ -396,4 +415,20 @@ func (si *ServiceInstaller) uninstallWindowsService() error {
 	os.RemoveAll(si.DataDir)
 
 	return nil
+}
+
+// installNginxConfig installs nginx configuration for domain access
+func (si *ServiceInstaller) installNginxConfig() error {
+	nginxInstaller := NewNginxInstaller(si.Domain, si.Port)
+	return nginxInstaller.InstallNginxConfig()
+}
+
+// SetDomain sets the domain for nginx configuration
+func (si *ServiceInstaller) SetDomain(domain string) {
+	si.Domain = domain
+}
+
+// EnableNginxProxy enables nginx proxy configuration
+func (si *ServiceInstaller) EnableNginxProxy(enable bool) {
+	si.EnableNginx = enable
 }

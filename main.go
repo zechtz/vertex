@@ -36,9 +36,13 @@ func main() {
 	var uninstall bool
 	var port string
 	var dataDir string
+	var enableNginx bool
+	var domain string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
+	flag.BoolVar(&enableNginx, "nginx", false, "Configure nginx proxy for domain access (requires nginx to be installed)")
+	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (default: vertex.dev)")
 	flag.StringVar(&port, "port", "8080", "Port to run the server on (default: 8080)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
 	flag.Parse()
@@ -51,12 +55,18 @@ func main() {
 	}
 
 	if install {
-		if err := installService(); err != nil {
+		if err := installService(enableNginx, domain); err != nil {
 			log.Fatalf("Installation failed: %v", err)
 		}
 		fmt.Println("✅ Vertex installed successfully as a user service!")
 		fmt.Println("🚀 The service will start automatically.")
-		fmt.Println("🌐 Access the web interface at: http://localhost:8080")
+		if enableNginx {
+			fmt.Printf("🌐 Access the web interface at: http://%s\n", domain)
+			fmt.Printf("   Also available at: http://localhost:%s\n", port)
+		} else {
+			fmt.Printf("🌐 Access the web interface at: http://localhost:%s\n", port)
+			fmt.Println("   💡 Use --nginx flag next time to configure domain access")
+		}
 		os.Exit(0)
 	}
 
@@ -214,8 +224,12 @@ func checkAndSetupEnvironment(db *database.Database) {
 }
 
 // installService handles the --install flag
-func installService() error {
+func installService(enableNginx bool, domain string) error {
 	installer := installer.NewServiceInstaller()
+	if enableNginx {
+		installer.SetDomain(domain)
+		installer.EnableNginxProxy(true)
+	}
 	return installer.Install()
 }
 
