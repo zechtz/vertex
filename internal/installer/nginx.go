@@ -200,6 +200,78 @@ func (ni *NginxInstaller) createSitesDirectory() error {
 	return nil
 }
 
+// createNginxDirectories creates nginx log and run directories with proper permissions
+func (ni *NginxInstaller) createNginxDirectories() error {
+	var directories []string
+	
+	switch runtime.GOOS {
+	case "darwin":
+		// Detect homebrew path and create corresponding directories
+		if strings.Contains(ni.ConfigPath, "/opt/homebrew/") {
+			directories = []string{
+				"/opt/homebrew/var/log/nginx",
+				"/opt/homebrew/var/run",
+			}
+		} else {
+			directories = []string{
+				"/usr/local/var/log/nginx",
+				"/usr/local/var/run",
+			}
+		}
+	case "linux":
+		directories = []string{
+			"/var/log/nginx",
+			"/var/run/nginx",
+		}
+	default:
+		// Skip directory creation for unsupported platforms
+		return nil
+	}
+
+	fmt.Printf("📁 Creating nginx directories...\n")
+	
+	for _, dir := range directories {
+		// Try to create directory without sudo first
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			// If that fails, use sudo
+			cmd := exec.Command("sudo", "mkdir", "-p", dir)
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("⚠️  Failed to create %s: %v\n", dir, err)
+				continue
+			}
+		}
+
+		// Set proper ownership (current user for homebrew, nginx user for system)
+		if runtime.GOOS == "darwin" {
+			// On macOS with homebrew, use current user
+			currentUser := os.Getenv("USER")
+			if currentUser != "" {
+				cmd := exec.Command("sudo", "chown", "-R", currentUser, dir)
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("⚠️  Could not set ownership on %s: %v\n", dir, err)
+				}
+			}
+		} else {
+			// On Linux, try to use nginx user if it exists
+			cmd := exec.Command("sudo", "chown", "-R", "nginx:nginx", dir)
+			if err := cmd.Run(); err != nil {
+				// Fallback to www-data if nginx user doesn't exist
+				cmd = exec.Command("sudo", "chown", "-R", "www-data:www-data", dir)
+				cmd.Run() // Ignore error as this is best-effort
+			}
+		}
+
+		// Set proper permissions
+		cmd := exec.Command("sudo", "chmod", "755", dir)
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("⚠️  Could not set permissions on %s: %v\n", dir, err)
+		}
+	}
+
+	fmt.Printf("✅ Nginx directories created\n")
+	return nil
+}
+
 // InstallNginxConfig creates nginx configuration for Vertex
 func (ni *NginxInstaller) InstallNginxConfig() error {
 	if !ni.IsNginxInstalled() {
@@ -237,6 +309,11 @@ func (ni *NginxInstaller) InstallNginxConfig() error {
 		}
 	}
 
+	// Create nginx log directories with proper permissions
+	if err := ni.createNginxDirectories(); err != nil {
+		fmt.Printf("⚠️  Could not create nginx directories: %v\n", err)
+	}
+
 	// Test nginx configuration
 	if err := ni.testNginxConfig(); err != nil {
 		return fmt.Errorf("nginx configuration test failed: %v", err)
@@ -254,7 +331,7 @@ func (ni *NginxInstaller) InstallNginxConfig() error {
 	}
 
 	fmt.Printf("✅ Nginx configured successfully!\n")
-	fmt.Printf("🌐 Vertex is now available at: http://%s:8888\n", ni.Domain)
+	fmt.Printf("🌐 Vertex is now available at: http://%s\n", ni.Domain)
 	return nil
 }
 
@@ -262,7 +339,7 @@ func (ni *NginxInstaller) InstallNginxConfig() error {
 func (ni *NginxInstaller) createNginxConfig(configFile string) error {
 	config := fmt.Sprintf(`# Vertex Service Manager Configuration
 server {
-    listen 8888;
+    listen 80;
     server_name %s;
 
     # Security headers

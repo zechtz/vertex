@@ -43,7 +43,7 @@ func main() {
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
 	flag.BoolVar(&enableNginx, "nginx", false, "Configure nginx proxy for domain access (requires nginx to be installed)")
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (default: vertex.dev)")
-	flag.StringVar(&port, "port", "8080", "Port to run the server on (default: 8080)")
+	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
 	flag.Parse()
 

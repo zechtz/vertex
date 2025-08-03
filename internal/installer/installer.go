@@ -42,7 +42,7 @@ func NewServiceInstaller() *ServiceInstaller {
 
 	return &ServiceInstaller{
 		BinaryPath:  execPath,
-		Port:        "8080",
+		Port:        "54321",
 		DataDir:     dataDir,
 		User:        user,
 		Domain:      "vertex.dev",
