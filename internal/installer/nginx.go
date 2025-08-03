@@ -16,13 +16,15 @@ type NginxInstaller struct {
 	Port       string
 	ConfigPath string
 	SitesPath  string
+	HTTPSEnabled bool
 }
 
 // NewNginxInstaller creates a new nginx installer
 func NewNginxInstaller(domain, port string) *NginxInstaller {
 	ni := &NginxInstaller{
-		Domain: domain,
-		Port:   port,
+		Domain:       domain,
+		Port:         port,
+		HTTPSEnabled: false,
 	}
 
 	// Set platform-specific paths
@@ -281,6 +283,13 @@ func (ni *NginxInstaller) InstallNginxConfig() error {
 		}
 	}
 
+	// Setup HTTPS certificates if enabled
+	if ni.HTTPSEnabled {
+		if err := ni.setupHTTPS(); err != nil {
+			return fmt.Errorf("failed to setup HTTPS: %v", err)
+		}
+	}
+
 	fmt.Printf("🌐 Configuring nginx for %s...\n", ni.Domain)
 
 	// Create sites directory if it doesn't exist
@@ -331,13 +340,107 @@ func (ni *NginxInstaller) InstallNginxConfig() error {
 	}
 
 	fmt.Printf("✅ Nginx configured successfully!\n")
-	fmt.Printf("🌐 Vertex is now available at: http://%s\n", ni.Domain)
+	protocol := "http"
+	if ni.HTTPSEnabled {
+		protocol = "https"
+	}
+	fmt.Printf("🌐 Vertex is now available at: %s://%s\n", protocol, ni.Domain)
 	return nil
 }
 
 // createNginxConfig creates the nginx configuration file
 func (ni *NginxInstaller) createNginxConfig(configFile string) error {
-	config := fmt.Sprintf(`# Vertex Service Manager Configuration
+	var config string
+	
+	if ni.HTTPSEnabled {
+		// HTTPS configuration with SSL certificates
+		sslDir := filepath.Join(os.Getenv("HOME"), ".vertex", "ssl")
+		certFile := filepath.Join(sslDir, ni.Domain+".pem")
+		keyFile := filepath.Join(sslDir, ni.Domain+"-key.pem")
+		
+		config = fmt.Sprintf(`# Vertex Service Manager Configuration (HTTPS)
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    server_name %s;
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    server_name %s;
+
+    # SSL Configuration
+    ssl_certificate %s;
+    ssl_certificate_key %s;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+
+    # Modern configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=63072000" always;
+
+    # Proxy settings
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Main application
+    location / {
+        proxy_pass http://127.0.0.1:%s;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 86400;
+    }
+
+    # WebSocket support for real-time features
+    location /ws {
+        proxy_pass http://127.0.0.1:%s;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # API endpoints
+    location /api/ {
+        proxy_pass http://127.0.0.1:%s;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Static assets with caching
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        proxy_pass http://127.0.0.1:%s;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+}`, ni.Domain, ni.Domain, certFile, keyFile, ni.Port, ni.Port, ni.Port, ni.Port)
+	} else {
+		// HTTP configuration
+		config = fmt.Sprintf(`# Vertex Service Manager Configuration
 server {
     listen 80;
     server_name %s;
@@ -396,6 +499,7 @@ server {
     gzip_min_length 1024;
     gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
 }`, ni.Domain, ni.Port, ni.Port, ni.Port, ni.Port)
+	}
 
 	// Try to write file normally first
 	if err := os.WriteFile(configFile, []byte(config), 0644); err == nil {
@@ -575,4 +679,152 @@ func (ni *NginxInstaller) removeFromHosts() error {
 	newContent := strings.Join(newLines, "\n")
 	cmd := exec.Command("sudo", "sh", "-c", fmt.Sprintf("echo '%s' > %s", newContent, hostsFile))
 	return cmd.Run()
+}
+
+// EnableHTTPS enables HTTPS configuration
+func (ni *NginxInstaller) EnableHTTPS(enable bool) {
+	ni.HTTPSEnabled = enable
+}
+
+// isMkcertInstalled checks if mkcert is installed
+func (ni *NginxInstaller) isMkcertInstalled() bool {
+	_, err := exec.LookPath("mkcert")
+	return err == nil
+}
+
+// installMkcert installs mkcert on the current platform
+func (ni *NginxInstaller) installMkcert() error {
+	switch runtime.GOOS {
+	case "darwin":
+		return ni.installMkcertMacOS()
+	case "linux":
+		return ni.installMkcertLinux()
+	case "windows":
+		return ni.installMkcertWindows()
+	default:
+		return fmt.Errorf("automatic mkcert installation not supported on %s", runtime.GOOS)
+	}
+}
+
+// installMkcertMacOS installs mkcert on macOS using homebrew
+func (ni *NginxInstaller) installMkcertMacOS() error {
+	// Check if homebrew is installed
+	if _, err := exec.LookPath("brew"); err != nil {
+		return fmt.Errorf("homebrew is required to install mkcert on macOS")
+	}
+
+	fmt.Printf("🔒 Installing mkcert via homebrew...\n")
+	cmd := exec.Command("brew", "install", "mkcert")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to install mkcert: %s", string(output))
+	}
+
+	fmt.Printf("✅ mkcert installed successfully\n")
+	return nil
+}
+
+// installMkcertLinux installs mkcert on Linux
+func (ni *NginxInstaller) installMkcertLinux() error {
+	// Try different package managers
+	packageManagers := []struct {
+		command string
+		args    []string
+		name    string
+	}{
+		{"apt", []string{"install", "-y", "mkcert"}, "apt"},
+		{"yum", []string{"install", "-y", "mkcert"}, "yum"},
+		{"dnf", []string{"install", "-y", "mkcert"}, "dnf"},
+		{"pacman", []string{"-S", "--noconfirm", "mkcert"}, "pacman"},
+	}
+
+	for _, pm := range packageManagers {
+		if _, err := exec.LookPath(pm.command); err == nil {
+			fmt.Printf("🔒 Installing mkcert using %s...\n", pm.name)
+			
+			args := append([]string{pm.command}, pm.args...)
+			cmd := exec.Command("sudo", args...)
+			
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				fmt.Printf("⚠️  Failed with %s: %s\n", pm.name, string(output))
+				continue
+			}
+			
+			fmt.Printf("✅ mkcert installed successfully using %s\n", pm.name)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no supported package manager found. Please install mkcert manually")
+}
+
+// installMkcertWindows installs mkcert on Windows
+func (ni *NginxInstaller) installMkcertWindows() error {
+	// Check if chocolatey is available
+	if _, err := exec.LookPath("choco"); err == nil {
+		fmt.Printf("🔒 Installing mkcert via chocolatey...\n")
+		cmd := exec.Command("choco", "install", "mkcert", "-y")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to install mkcert via chocolatey: %s", string(output))
+		}
+		fmt.Printf("✅ mkcert installed successfully via chocolatey\n")
+		return nil
+	}
+
+	// Check if winget is available
+	if _, err := exec.LookPath("winget"); err == nil {
+		fmt.Printf("🔒 Installing mkcert via winget...\n")
+		cmd := exec.Command("winget", "install", "mkcert")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to install mkcert via winget: %s", string(output))
+		}
+		fmt.Printf("✅ mkcert installed successfully via winget\n")
+		return nil
+	}
+
+	return fmt.Errorf("no package manager found. Please install mkcert manually")
+}
+
+// setupHTTPS sets up HTTPS certificates using mkcert
+func (ni *NginxInstaller) setupHTTPS() error {
+	if !ni.isMkcertInstalled() {
+		fmt.Printf("🔒 mkcert not found, installing automatically...\n")
+		if err := ni.installMkcert(); err != nil {
+			return fmt.Errorf("failed to install mkcert: %v", err)
+		}
+	}
+
+	fmt.Printf("🔒 Setting up HTTPS certificates for %s...\n", ni.Domain)
+
+	// Install local CA
+	fmt.Printf("🔐 Installing local certificate authority...\n")
+	cmd := exec.Command("mkcert", "-install")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to install local CA: %s", string(output))
+	}
+
+	// Create SSL directory
+	sslDir := filepath.Join(os.Getenv("HOME"), ".vertex", "ssl")
+	if err := os.MkdirAll(sslDir, 0755); err != nil {
+		return fmt.Errorf("failed to create SSL directory: %v", err)
+	}
+
+	// Generate certificate for domain
+	certFile := filepath.Join(sslDir, ni.Domain+".pem")
+	keyFile := filepath.Join(sslDir, ni.Domain+"-key.pem")
+
+	fmt.Printf("🔐 Generating trusted certificate for %s...\n", ni.Domain)
+	cmd = exec.Command("mkcert", "-cert-file", certFile, "-key-file", keyFile, ni.Domain)
+	cmd.Dir = sslDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to generate certificate: %s", string(output))
+	}
+
+	fmt.Printf("✅ HTTPS certificates generated successfully\n")
+	return nil
 }

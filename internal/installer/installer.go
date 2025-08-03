@@ -17,6 +17,7 @@ type ServiceInstaller struct {
 	User          string
 	Domain        string
 	EnableNginx   bool
+	HTTPSEnabled  bool
 }
 
 // NewServiceInstaller creates a new service installer
@@ -41,12 +42,13 @@ func NewServiceInstaller() *ServiceInstaller {
 	}
 
 	return &ServiceInstaller{
-		BinaryPath:  execPath,
-		Port:        "54321",
-		DataDir:     dataDir,
-		User:        user,
-		Domain:      "vertex.dev",
-		EnableNginx: false,
+		BinaryPath:   execPath,
+		Port:         "54321",
+		DataDir:      dataDir,
+		User:         user,
+		Domain:       "vertex.dev",
+		EnableNginx:  false,
+		HTTPSEnabled: false,
 	}
 }
 
@@ -420,6 +422,7 @@ func (si *ServiceInstaller) uninstallWindowsService() error {
 // installNginxConfig installs nginx configuration for domain access
 func (si *ServiceInstaller) installNginxConfig() error {
 	nginxInstaller := NewNginxInstaller(si.Domain, si.Port)
+	nginxInstaller.EnableHTTPS(si.HTTPSEnabled)
 	return nginxInstaller.InstallNginxConfig()
 }
 
@@ -431,4 +434,9 @@ func (si *ServiceInstaller) SetDomain(domain string) {
 // EnableNginxProxy enables nginx proxy configuration
 func (si *ServiceInstaller) EnableNginxProxy(enable bool) {
 	si.EnableNginx = enable
+}
+
+// EnableHTTPS enables HTTPS configuration
+func (si *ServiceInstaller) EnableHTTPS(enable bool) {
+	si.HTTPSEnabled = enable
 }
