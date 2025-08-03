@@ -7,6 +7,9 @@ export interface ServiceLoadingStates {
     restarting?: boolean;
     checkingHealth?: boolean;
     installingLibraries?: boolean;
+    validatingWrapper?: boolean;
+    generatingWrapper?: boolean;
+    repairingWrapper?: boolean;
   };
 }
 
@@ -405,6 +408,93 @@ export class ServiceOperations {
           error instanceof Error
             ? error.message
             : "An unexpected error occurred",
+      };
+    }
+  }
+
+  // Wrapper Management Operations
+
+  static async validateWrapper(
+    serviceId: string,
+  ): Promise<ServiceOperationResult & { data?: any }> {
+    try {
+      const response = await fetch(`/api/services/${serviceId}/wrapper/validate`);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to validate wrapper: ${response.status} ${response.statusText}`,
+        );
+      }
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.isValid 
+          ? `${result.buildSystem} wrapper is valid for ${result.serviceName}`
+          : `${result.buildSystem} wrapper validation failed for ${result.serviceName}`,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while validating wrapper",
+      };
+    }
+  }
+
+  static async generateWrapper(
+    serviceId: string,
+  ): Promise<ServiceOperationResult> {
+    try {
+      const response = await fetch(`/api/services/${serviceId}/wrapper/generate`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to generate wrapper: ${response.status} ${response.statusText}`,
+        );
+      }
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || `Successfully generated ${result.buildSystem} wrapper`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while generating wrapper",
+      };
+    }
+  }
+
+  static async repairWrapper(
+    serviceId: string,
+  ): Promise<ServiceOperationResult> {
+    try {
+      const response = await fetch(`/api/services/${serviceId}/wrapper/repair`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to repair wrapper: ${response.status} ${response.statusText}`,
+        );
+      }
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || `Successfully repaired ${result.buildSystem} wrapper`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while repairing wrapper",
       };
     }
   }
