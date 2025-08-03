@@ -1,4 +1,3 @@
-// Package main
 package main
 
 import (
@@ -35,6 +34,7 @@ func main() {
 	var showVersion bool
 	var install bool
 	var uninstall bool
+	var update bool
 	var port string
 	var dataDir string
 	var enableNginx bool
@@ -43,6 +43,7 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
+	flag.BoolVar(&update, "update", false, "Update the Vertex service")
 	flag.BoolVar(&enableNginx, "nginx", false, "Configure nginx proxy for domain access (requires nginx to be installed)")
 	flag.BoolVar(&enableHTTPS, "https", false, "Enable HTTPS with locally-trusted certificates (automatically enabled for .dev domains)")
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (automatically installs with nginx when specified)")
@@ -66,6 +67,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "    \tPort to run the server on (default: 54321) (default \"54321\")\n")
 		fmt.Fprintf(os.Stderr, "  --uninstall\n")
 		fmt.Fprintf(os.Stderr, "    \tUninstall Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  --update\n")
+		fmt.Fprintf(os.Stderr, "    \tUpdate the Vertex service\n")
 		fmt.Fprintf(os.Stderr, "  --version\n")
 		fmt.Fprintf(os.Stderr, "    \tShow version information\n")
 	}
@@ -76,6 +79,13 @@ func main() {
 		fmt.Printf("Vertex %s\n", version)
 		fmt.Printf("Commit: %s\n", commit)
 		fmt.Printf("Built: %s\n", date)
+		os.Exit(0)
+	}
+
+	if update {
+		if err := installer.UpdateService(); err != nil {
+			log.Fatalf("Failed to update service: %v", err)
+		}
 		os.Exit(0)
 	}
 
