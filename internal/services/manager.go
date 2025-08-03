@@ -871,3 +871,40 @@ func (sm *Manager) updateServiceInDB(service *models.Service) error {
 	}
 	return nil
 }
+
+// Wrapper management methods - delegates to buildsystem.go functions
+
+// DetectBuildSystem detects the build system for a service directory
+func (sm *Manager) DetectBuildSystem(serviceDir string) BuildSystemType {
+	return DetectBuildSystem(serviceDir)
+}
+
+// ValidateWrapperIntegrity validates wrapper files for a service
+func (sm *Manager) ValidateWrapperIntegrity(serviceDir string, buildSystem BuildSystemType) (bool, error) {
+	return ValidateWrapperIntegrity(serviceDir, buildSystem)
+}
+
+// GenerateMavenWrapper generates Maven wrapper files
+func (sm *Manager) GenerateMavenWrapper(serviceDir string) error {
+	return GenerateMavenWrapper(serviceDir)
+}
+
+// GenerateGradleWrapper generates Gradle wrapper files
+func (sm *Manager) GenerateGradleWrapper(serviceDir string) error {
+	return GenerateGradleWrapper(serviceDir)
+}
+
+// RepairWrapper repairs wrapper files for a service
+func (sm *Manager) RepairWrapper(serviceDir string) error {
+	return RepairWrapper(serviceDir)
+}
+
+// HasMavenWrapper checks if Maven wrapper exists
+func (sm *Manager) HasMavenWrapper(serviceDir string) bool {
+	return HasMavenWrapper(serviceDir)
+}
+
+// HasGradleWrapper checks if Gradle wrapper exists
+func (sm *Manager) HasGradleWrapper(serviceDir string) bool {
+	return HasGradleWrapper(serviceDir)
+}

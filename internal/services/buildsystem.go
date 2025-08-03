@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // BuildSystemType represents the type of build system
@@ -169,37 +168,152 @@ func ValidateBuildSystem(serviceDir string, buildSystem BuildSystemType) bool {
 	return false
 }
 
-// EnsureMavenWrapper creates or updates Maven wrapper files if they don't exist or are outdated
-func EnsureMavenWrapper(serviceDir string) error {
-	// Check if Maven wrapper already exists and is recent
-	mvnwPath := filepath.Join(serviceDir, "mvnw")
+// GenerateMavenWrapper creates Maven wrapper files using the recommended takari plugin
+func GenerateMavenWrapper(serviceDir string) error {
+	log.Printf("[INFO] Generating Maven wrapper in %s", serviceDir)
 	
-	// If wrapper exists and is less than 30 days old, skip creation
-	if info, err := os.Stat(mvnwPath); err == nil {
-		if time.Since(info.ModTime()) < 30*24*time.Hour {
-			return nil // Wrapper is recent enough
-		}
-	}
-	
-	// Create Maven wrapper using maven wrapper plugin
-	log.Printf("[INFO] Creating/updating Maven wrapper in %s", serviceDir)
-	
-	// Use mvn wrapper:wrapper command to generate wrapper files
-	cmd := exec.Command("mvn", "wrapper:wrapper", "-Dmaven=3.9.6")
+	// Use the recommended mvn -N io.takari:maven:wrapper command
+	cmd := exec.Command("mvn", "-N", "io.takari:maven:wrapper")
 	cmd.Dir = serviceDir
 	
 	// Capture output for debugging
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[WARN] Failed to create Maven wrapper: %v - output: %s", err, string(output))
-		return fmt.Errorf("failed to create Maven wrapper: %w", err)
+		log.Printf("[WARN] Failed to generate Maven wrapper: %v - output: %s", err, string(output))
+		return fmt.Errorf("failed to generate Maven wrapper: %w", err)
 	}
 	
-	// Make mvnw executable
+	// Make mvnw executable on Unix systems
+	mvnwPath := filepath.Join(serviceDir, "mvnw")
 	if err := os.Chmod(mvnwPath, 0755); err != nil {
 		log.Printf("[WARN] Failed to make mvnw executable: %v", err)
 	}
 	
-	log.Printf("[INFO] Successfully created/updated Maven wrapper in %s", serviceDir)
+	log.Printf("[INFO] Successfully generated Maven wrapper in %s", serviceDir)
+	log.Printf("[DEBUG] Maven wrapper output: %s", string(output))
 	return nil
+}
+
+// GenerateGradleWrapper creates Gradle wrapper files
+func GenerateGradleWrapper(serviceDir string) error {
+	log.Printf("[INFO] Generating Gradle wrapper in %s", serviceDir)
+	
+	// Use gradle wrapper command to generate wrapper files
+	cmd := exec.Command("gradle", "wrapper")
+	cmd.Dir = serviceDir
+	
+	// Capture output for debugging
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("[WARN] Failed to generate Gradle wrapper: %v - output: %s", err, string(output))
+		return fmt.Errorf("failed to generate Gradle wrapper: %w", err)
+	}
+	
+	// Make gradlew executable on Unix systems
+	gradlewPath := filepath.Join(serviceDir, "gradlew")
+	if err := os.Chmod(gradlewPath, 0755); err != nil {
+		log.Printf("[WARN] Failed to make gradlew executable: %v", err)
+	}
+	
+	log.Printf("[INFO] Successfully generated Gradle wrapper in %s", serviceDir)
+	log.Printf("[DEBUG] Gradle wrapper output: %s", string(output))
+	return nil
+}
+
+// ValidateWrapperIntegrity checks if wrapper files are valid and not corrupted
+func ValidateWrapperIntegrity(serviceDir string, buildSystem BuildSystemType) (bool, error) {
+	switch buildSystem {
+	case BuildSystemMaven:
+		return validateMavenWrapperIntegrity(serviceDir)
+	case BuildSystemGradle:
+		return validateGradleWrapperIntegrity(serviceDir)
+	default:
+		return false, fmt.Errorf("unsupported build system: %s", buildSystem)
+	}
+}
+
+// validateMavenWrapperIntegrity checks Maven wrapper files
+func validateMavenWrapperIntegrity(serviceDir string) (bool, error) {
+	requiredFiles := []string{"mvnw", ".mvn/wrapper/maven-wrapper.properties"}
+	
+	for _, file := range requiredFiles {
+		path := filepath.Join(serviceDir, file)
+		if _, err := os.Stat(path); err != nil {
+			return false, fmt.Errorf("missing or corrupted wrapper file: %s", file)
+		}
+		
+		// Check if mvnw is executable and not empty
+		if file == "mvnw" {
+			info, err := os.Stat(path)
+			if err != nil {
+				return false, err
+			}
+			if info.Size() == 0 {
+				return false, fmt.Errorf("mvnw file is empty/corrupted")
+			}
+		}
+	}
+	
+	// Try to run wrapper to test if it works
+	cmd := exec.Command("./mvnw", "--version")
+	cmd.Dir = serviceDir
+	err := cmd.Run()
+	if err != nil {
+		return false, fmt.Errorf("wrapper execution test failed: %w", err)
+	}
+	
+	return true, nil
+}
+
+// validateGradleWrapperIntegrity checks Gradle wrapper files
+func validateGradleWrapperIntegrity(serviceDir string) (bool, error) {
+	requiredFiles := []string{"gradlew", "gradle/wrapper/gradle-wrapper.properties"}
+	
+	for _, file := range requiredFiles {
+		path := filepath.Join(serviceDir, file)
+		if _, err := os.Stat(path); err != nil {
+			return false, fmt.Errorf("missing or corrupted wrapper file: %s", file)
+		}
+		
+		// Check if gradlew is executable and not empty
+		if file == "gradlew" {
+			info, err := os.Stat(path)
+			if err != nil {
+				return false, err
+			}
+			if info.Size() == 0 {
+				return false, fmt.Errorf("gradlew file is empty/corrupted")
+			}
+		}
+	}
+	
+	// Try to run wrapper to test if it works
+	cmd := exec.Command("./gradlew", "--version")
+	cmd.Dir = serviceDir
+	err := cmd.Run()
+	if err != nil {
+		return false, fmt.Errorf("wrapper execution test failed: %w", err)
+	}
+	
+	return true, nil
+}
+
+// RepairWrapper generates/repairs wrapper files for the detected build system
+func RepairWrapper(serviceDir string) error {
+	buildSystem := DetectBuildSystem(serviceDir)
+	
+	switch buildSystem {
+	case BuildSystemMaven:
+		return GenerateMavenWrapper(serviceDir)
+	case BuildSystemGradle:
+		return GenerateGradleWrapper(serviceDir)
+	default:
+		return fmt.Errorf("unable to detect build system for wrapper repair")
+	}
+}
+
+// EnsureMavenWrapper creates or updates Maven wrapper files if they don't exist or are outdated
+// Deprecated: Use GenerateMavenWrapper instead
+func EnsureMavenWrapper(serviceDir string) error {
+	return GenerateMavenWrapper(serviceDir)
 }
