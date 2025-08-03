@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,11 +38,13 @@ func main() {
 	var port string
 	var dataDir string
 	var enableNginx bool
+	var enableHTTPS bool
 	var domain string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
 	flag.BoolVar(&enableNginx, "nginx", false, "Configure nginx proxy for domain access (requires nginx to be installed)")
+	flag.BoolVar(&enableHTTPS, "https", false, "Enable HTTPS with locally-trusted certificates (automatically enabled for .dev domains)")
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (automatically installs with nginx when specified)")
 	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
@@ -57,6 +60,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "    \tInstall Vertex as a user service\n")
 		fmt.Fprintf(os.Stderr, "  --nginx\n")
 		fmt.Fprintf(os.Stderr, "    \tConfigure nginx proxy for domain access (requires nginx to be installed)\n")
+		fmt.Fprintf(os.Stderr, "  --https\n")
+		fmt.Fprintf(os.Stderr, "    \tEnable HTTPS with locally-trusted certificates (automatically enabled for .dev domains)\n")
 		fmt.Fprintf(os.Stderr, "  --port string\n")
 		fmt.Fprintf(os.Stderr, "    \tPort to run the server on (default: 54321) (default \"54321\")\n")
 		fmt.Fprintf(os.Stderr, "  --uninstall\n")
@@ -82,11 +87,23 @@ func main() {
 		}
 	})
 	
+	// Auto-enable HTTPS for .dev domains (Google-owned TLD requires HTTPS)
+	if strings.HasSuffix(domain, ".dev") && !enableHTTPS {
+		enableHTTPS = true
+		fmt.Printf("🔒 .dev domain detected (%s), automatically enabling HTTPS\n", domain)
+	}
+	
 	// Auto-install with nginx if domain is specified
 	if domainWasExplicitlySet && !install && !uninstall {
 		install = true
 		enableNginx = true
 		fmt.Printf("🌐 Domain specified (%s), automatically installing with nginx proxy\n", domain)
+	}
+	
+	// Auto-enable nginx if HTTPS is requested
+	if enableHTTPS && !enableNginx {
+		enableNginx = true
+		fmt.Printf("🔒 HTTPS enabled, automatically configuring nginx proxy\n")
 	}
 
 	if install {
@@ -96,13 +113,17 @@ func main() {
 			fmt.Printf("🌐 Domain specified (%s), automatically enabling nginx proxy\n", domain)
 		}
 		
-		if err := installService(enableNginx, domain); err != nil {
+		if err := installService(enableNginx, enableHTTPS, domain); err != nil {
 			log.Fatalf("Installation failed: %v", err)
 		}
 		fmt.Println("✅ Vertex installed successfully as a user service!")
 		fmt.Println("🚀 The service will start automatically.")
 		if enableNginx {
-			fmt.Printf("🌐 Access the web interface at: http://%s\n", domain)
+			protocol := "http"
+			if enableHTTPS {
+				protocol = "https"
+			}
+			fmt.Printf("🌐 Access the web interface at: %s://%s\n", protocol, domain)
 			fmt.Printf("   Also available at: http://localhost:%s\n", port)
 		} else {
 			fmt.Printf("🌐 Access the web interface at: http://localhost:%s\n", port)
@@ -265,11 +286,12 @@ func checkAndSetupEnvironment(db *database.Database) {
 }
 
 // installService handles the --install flag
-func installService(enableNginx bool, domain string) error {
+func installService(enableNginx bool, enableHTTPS bool, domain string) error {
 	installer := installer.NewServiceInstaller()
 	if enableNginx {
 		installer.SetDomain(domain)
 		installer.EnableNginxProxy(true)
+		installer.EnableHTTPS(enableHTTPS)
 	}
 	return installer.Install()
 }
