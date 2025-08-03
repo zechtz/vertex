@@ -11,6 +11,8 @@ A powerful service management platform that provides a web-based interface for m
 - 🌐 **Web Interface** - Modern React-based dashboard for service management
 - 🔒 **User Authentication** - Secure JWT-based authentication system
 - 📱 **Responsive Design** - Works on desktop and mobile devices
+- 🌐 **Nginx Integration** - Optional nginx proxy for clean domain-based access
+- 🔧 **Build Wrapper Management** - Generate and repair Maven/Gradle wrapper files
 
 ## 🛠️ Installation
 
@@ -19,6 +21,7 @@ A powerful service management platform that provides a web-based interface for m
 - **Java 11+** (OpenJDK or Oracle)
 - **Go 1.19+** (for building from source)
 - **Node.js 16+** (for frontend development)
+- **nginx** (optional - automatically installed when using `--nginx` flag)
 
 ### Quick Install
 
@@ -43,6 +46,9 @@ A powerful service management platform that provides a web-based interface for m
    ./vertex-linux-amd64 --install      # Linux example
    ./vertex-darwin-arm64 --install     # macOS example
    # vertex-windows-amd64.exe --install   (Windows example)
+   
+   # With nginx proxy for clean domain access
+   ./vertex-linux-amd64 --install --nginx --domain vertex.local
    ```
 
 #### Option 2: Build from Source
@@ -56,14 +62,80 @@ A powerful service management platform that provides a web-based interface for m
    ```bash
    # Self-installing - no external scripts needed!
    ./vertex --install
+   
+   # With nginx proxy for clean domain access
+   ./vertex --install --nginx --domain myapp.local
    ```
 
 3. **Access the web interface:**
-   Open your browser and navigate to: http://localhost:8080
+   - **Standard**: http://localhost:54321
+   - **With nginx**: http://vertex.dev (or your custom domain)
 
 > 📖 **For detailed usage instructions and tutorials, see our [Getting Started Guide](https://github.com/zechtz/vertex/wiki/Getting-Started-with-Vertex-Service-Manager)** on the wiki.
 
 ## 🚀 Usage
+
+### 🌐 Nginx Proxy Configuration
+
+Vertex includes optional nginx integration for clean domain-based access without port numbers.
+
+#### Quick Setup
+```bash
+# Install with nginx proxy
+./vertex --install --nginx
+
+# Access via clean domain
+open http://vertex.dev
+```
+
+#### Custom Domain
+```bash
+# Install with custom domain
+./vertex --install --nginx --domain myapp.local
+
+# Access your custom domain
+open http://myapp.local
+```
+
+#### Advanced Configuration
+```bash
+# Available options
+./vertex --install \
+  --nginx \                    # Enable nginx proxy
+  --domain myproject.local \   # Custom domain name
+  --port 54321                 # Vertex service port (default: 54321)
+```
+
+#### What Nginx Setup Does
+- ✅ **Automatically installs nginx** on macOS (brew), Linux (apt/yum/etc), Windows (choco/winget)
+- ✅ **Creates proxy configuration** from port 80 to Vertex service
+- ✅ **Manages /etc/hosts entries** for local domain resolution
+- ✅ **Handles permissions** and log directory creation
+- ✅ **Starts nginx service** automatically
+
+#### Access Methods
+| Method | URL | Use Case |
+|--------|-----|----------|
+| **Nginx Proxy** | `http://vertex.dev` | Clean domain access, no port needed |
+| **Direct Access** | `http://localhost:54321` | Development, bypassing nginx |
+
+#### Troubleshooting Nginx
+```bash
+# Check nginx status
+brew services list | grep nginx           # macOS
+systemctl status nginx                   # Linux
+
+# View nginx logs
+tail -f /opt/homebrew/var/log/nginx/error.log    # macOS
+tail -f /var/log/nginx/error.log                 # Linux
+
+# Test configuration
+nginx -t
+
+# Restart nginx
+brew services restart nginx              # macOS
+sudo systemctl restart nginx            # Linux
+```
 
 ### Service Management
 
@@ -102,7 +174,7 @@ systemctl --user status vertex
 
 ### Custom Port Configuration
 
-You can run Vertex on a different port:
+You can run Vertex on a different port (default is 54321):
 
 #### Option 1: Direct execution
 ```bash
@@ -114,13 +186,13 @@ You can run Vertex on a different port:
 **macOS:**
 1. Stop the service: `launchctl stop com.vertex.manager`
 2. Edit the plist file: `~/Library/LaunchAgents/com.vertex.manager.plist`
-3. Change the port argument from `8080` to your desired port
+3. Change the port argument from `54321` to your desired port
 4. Reload: `launchctl unload ~/Library/LaunchAgents/com.vertex.manager.plist && launchctl load ~/Library/LaunchAgents/com.vertex.manager.plist`
 
 **Linux:**
 1. Stop the service: `systemctl --user stop vertex`
 2. Edit the service file: `~/.config/systemd/user/vertex.service`
-3. Change the `-port 8080` argument to your desired port
+3. Change the `--port 54321` argument to your desired port
 4. Reload: `systemctl --user daemon-reload && systemctl --user start vertex`
 
 ### Viewing Logs
@@ -167,6 +239,42 @@ journalctl --user -u vertex --since="1 hour ago"
 ```
 
 ## 🔧 Configuration
+
+### Command Line Options
+
+Vertex supports these command line flags:
+
+```bash
+./vertex --help
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--install` | - | Install Vertex as a user service |
+| `--uninstall` | - | Uninstall Vertex service and data |
+| `--nginx` | false | Configure nginx proxy for domain access |
+| `--domain` | vertex.dev | Domain name for nginx proxy |
+| `--port` | 54321 | Port to run the server on |
+| `--data-dir` | ~/.vertex | Directory to store application data |
+| `--version` | - | Show version information |
+
+#### Examples
+```bash
+# Basic installation
+./vertex --install
+
+# Install with nginx proxy
+./vertex --install --nginx
+
+# Install with custom domain and port
+./vertex --install --nginx --domain myapp.local --port 8080
+
+# Run temporarily on different port
+./vertex --port 9090
+
+# Use custom data directory
+./vertex --data-dir /tmp/vertex-test --port 8080
+```
 
 ### Environment Variables
 
@@ -225,7 +333,7 @@ Vertex automatically detects Java installations in this order:
 
 3. **Check port availability:**
    ```bash
-   lsof -i :8080
+   lsof -i :54321
    ```
 
 ### Permission Issues
@@ -247,7 +355,7 @@ Since Vertex runs as your user account, it should have access to all your projec
 
 Run the built-in diagnostics:
 ```bash
-curl http://localhost:8080/api/system/java-diagnostics
+curl http://localhost:54321/api/system/java-diagnostics
 ```
 
 This will show:
@@ -335,10 +443,13 @@ npm run build
 
 ```bash
 # Run without installing
-./vertex --port 8080
+./vertex --port 54321
 
 # With custom data directory
 VERTEX_DATA_DIR=/tmp/vertex-dev ./vertex --port 9090
+
+# Run with nginx proxy in development
+./vertex --install --nginx --domain dev.local
 ```
 
 ## 🤝 Contributing
