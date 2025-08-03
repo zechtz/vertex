@@ -45,6 +45,26 @@ func main() {
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (default: vertex.dev)")
 	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
+	
+	// Custom usage function to show double dashes
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  --data-dir string\n")
+		fmt.Fprintf(os.Stderr, "    \tDirectory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory\n")
+		fmt.Fprintf(os.Stderr, "  --domain string\n")
+		fmt.Fprintf(os.Stderr, "    \tDomain name for nginx proxy (default: vertex.dev) (default \"vertex.dev\")\n")
+		fmt.Fprintf(os.Stderr, "  --install\n")
+		fmt.Fprintf(os.Stderr, "    \tInstall Vertex as a user service\n")
+		fmt.Fprintf(os.Stderr, "  --nginx\n")
+		fmt.Fprintf(os.Stderr, "    \tConfigure nginx proxy for domain access (requires nginx to be installed)\n")
+		fmt.Fprintf(os.Stderr, "  --port string\n")
+		fmt.Fprintf(os.Stderr, "    \tPort to run the server on (default: 54321) (default \"54321\")\n")
+		fmt.Fprintf(os.Stderr, "  --uninstall\n")
+		fmt.Fprintf(os.Stderr, "    \tUninstall Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  --version\n")
+		fmt.Fprintf(os.Stderr, "    \tShow version information\n")
+	}
+	
 	flag.Parse()
 
 	if showVersion {
