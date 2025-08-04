@@ -198,8 +198,33 @@ openssl s_client -connect vertex.dev:443 -servername vertex.dev
 The service **starts automatically** after installation using:
 - **macOS**: LaunchAgent (user-level service)
 - **Linux**: systemd user service
+- **Windows**: Scheduled Task
 
-#### Start/Stop Service
+#### Built-in Service Commands (Recommended)
+
+Vertex includes built-in commands that work across all platforms:
+
+```bash
+# Start the service
+./vertex --start
+
+# Stop the service  
+./vertex --stop
+
+# Restart the service
+./vertex --restart
+
+# Check service status and available URLs
+./vertex --status
+
+# Show recent logs
+./vertex --logs
+
+# Follow logs in real-time (press Ctrl+C to exit)
+./vertex --logs --follow
+```
+
+#### Platform-Specific Commands (Advanced)
 
 **macOS:**
 ```bash
@@ -209,8 +234,8 @@ launchctl start com.vertex.manager
 # Stop
 launchctl stop com.vertex.manager
 
-# Restart
-launchctl stop com.vertex.manager && launchctl start com.vertex.manager
+# Check status
+launchctl list | grep vertex
 ```
 
 **Linux:**
@@ -226,6 +251,18 @@ systemctl --user restart vertex
 
 # Check status
 systemctl --user status vertex
+```
+
+**Windows:**
+```bash
+# Start
+schtasks /run /tn "VertexServiceManager"
+
+# Stop
+schtasks /end /tn "VertexServiceManager"
+
+# Check status
+schtasks /query /tn "VertexServiceManager"
 ```
 
 ### Custom Port Configuration
@@ -253,7 +290,17 @@ You can run Vertex on a different port (default is 54321):
 
 ### Viewing Logs
 
-#### Real-time Log Monitoring
+#### Built-in Log Commands (Recommended)
+
+```bash
+# Show recent logs from all sources
+./vertex --logs
+
+# Follow logs in real-time (press Ctrl+C to exit)
+./vertex --logs --follow
+```
+
+#### Platform-Specific Log Access
 
 **macOS:**
 ```bash
@@ -271,6 +318,12 @@ journalctl --user -u vertex -f
 
 # Recent logs
 journalctl --user -u vertex --since="1 hour ago"
+```
+
+**Windows:**
+```bash
+# View log files directly
+type %USERPROFILE%\.vertex\vertex.log
 ```
 
 #### Log Locations
@@ -310,6 +363,12 @@ Vertex supports these command line flags:
 | `--install` | - | Install Vertex as a user service |
 | `--uninstall` | - | Uninstall Vertex service and data |
 | `--update` | - | Update the Vertex binary and restart the service |
+| `--start` | - | Start the Vertex service |
+| `--stop` | - | Stop the Vertex service |
+| `--restart` | - | Restart the Vertex service |
+| `--status` | - | Show service status and availability |
+| `--logs` | - | Show service logs |
+| `--follow` | - | Follow log output (use with --logs) |
 | `--nginx` | false | Configure nginx proxy for domain access |
 | `--https` | false | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
 | `--port` | 54321 | Port to run the server on |
@@ -327,6 +386,14 @@ Vertex supports these command line flags:
 ./vertex --install --nginx          # With nginx proxy
 ./vertex --install --nginx --https --domain myapp.local  # With HTTPS
 ./vertex --install --nginx --domain myapp.local --port 8080  # Full explicit
+
+# Service Management
+./vertex --start                     # Start the service
+./vertex --stop                      # Stop the service
+./vertex --restart                   # Restart the service
+./vertex --status                    # Show service status and URLs
+./vertex --logs                      # Show recent logs
+./vertex --logs --follow             # Follow logs in real-time
 
 # Force HTTPS for any domain
 ./vertex --domain myproject.local --https

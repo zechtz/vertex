@@ -35,6 +35,12 @@ func main() {
 	var install bool
 	var uninstall bool
 	var update bool
+	var start bool
+	var stop bool
+	var restart bool
+	var status bool
+	var logs bool
+	var follow bool
 	var port string
 	var dataDir string
 	var enableNginx bool
@@ -44,6 +50,12 @@ func main() {
 	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
 	flag.BoolVar(&update, "update", false, "Update the Vertex service")
+	flag.BoolVar(&start, "start", false, "Start the Vertex service")
+	flag.BoolVar(&stop, "stop", false, "Stop the Vertex service")
+	flag.BoolVar(&restart, "restart", false, "Restart the Vertex service")
+	flag.BoolVar(&status, "status", false, "Show service status")
+	flag.BoolVar(&logs, "logs", false, "Show service logs")
+	flag.BoolVar(&follow, "follow", false, "Follow log output (use with --logs)")
 	flag.BoolVar(&enableNginx, "nginx", false, "Configure nginx proxy for domain access (requires nginx to be installed)")
 	flag.BoolVar(&enableHTTPS, "https", false, "Enable HTTPS with locally-trusted certificates (automatically enabled for .dev domains)")
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (automatically installs with nginx when specified)")
@@ -57,14 +69,26 @@ func main() {
 		fmt.Fprintf(os.Stderr, "    \tDirectory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory\n")
 		fmt.Fprintf(os.Stderr, "  --domain string\n")
 		fmt.Fprintf(os.Stderr, "    \tDomain name for nginx proxy (automatically installs with nginx when specified) (default \"vertex.dev\")\n")
-		fmt.Fprintf(os.Stderr, "  --install\n")
-		fmt.Fprintf(os.Stderr, "    \tInstall Vertex as a user service\n")
-		fmt.Fprintf(os.Stderr, "  --nginx\n")
-		fmt.Fprintf(os.Stderr, "    \tConfigure nginx proxy for domain access (requires nginx to be installed)\n")
+		fmt.Fprintf(os.Stderr, "  --follow\n")
+		fmt.Fprintf(os.Stderr, "    \tFollow log output (use with --logs)\n")
 		fmt.Fprintf(os.Stderr, "  --https\n")
 		fmt.Fprintf(os.Stderr, "    \tEnable HTTPS with locally-trusted certificates (automatically enabled for .dev domains)\n")
+		fmt.Fprintf(os.Stderr, "  --install\n")
+		fmt.Fprintf(os.Stderr, "    \tInstall Vertex as a user service\n")
+		fmt.Fprintf(os.Stderr, "  --logs\n")
+		fmt.Fprintf(os.Stderr, "    \tShow service logs\n")
+		fmt.Fprintf(os.Stderr, "  --nginx\n")
+		fmt.Fprintf(os.Stderr, "    \tConfigure nginx proxy for domain access (requires nginx to be installed)\n")
 		fmt.Fprintf(os.Stderr, "  --port string\n")
 		fmt.Fprintf(os.Stderr, "    \tPort to run the server on (default: 54321) (default \"54321\")\n")
+		fmt.Fprintf(os.Stderr, "  --restart\n")
+		fmt.Fprintf(os.Stderr, "    \tRestart the Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  --start\n")
+		fmt.Fprintf(os.Stderr, "    \tStart the Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  --status\n")
+		fmt.Fprintf(os.Stderr, "    \tShow service status\n")
+		fmt.Fprintf(os.Stderr, "  --stop\n")
+		fmt.Fprintf(os.Stderr, "    \tStop the Vertex service\n")
 		fmt.Fprintf(os.Stderr, "  --uninstall\n")
 		fmt.Fprintf(os.Stderr, "    \tUninstall Vertex service\n")
 		fmt.Fprintf(os.Stderr, "  --update\n")
@@ -85,6 +109,44 @@ func main() {
 	if update {
 		if err := installer.UpdateService(); err != nil {
 			log.Fatalf("Failed to update service: %v", err)
+		}
+		os.Exit(0)
+	}
+
+	if start {
+		if err := startService(); err != nil {
+			log.Fatalf("Failed to start service: %v", err)
+		}
+		fmt.Println("✅ Vertex service started successfully!")
+		os.Exit(0)
+	}
+
+	if stop {
+		if err := stopService(); err != nil {
+			log.Fatalf("Failed to stop service: %v", err)
+		}
+		fmt.Println("✅ Vertex service stopped successfully!")
+		os.Exit(0)
+	}
+
+	if restart {
+		if err := restartService(); err != nil {
+			log.Fatalf("Failed to restart service: %v", err)
+		}
+		fmt.Println("✅ Vertex service restarted successfully!")
+		os.Exit(0)
+	}
+
+	if status {
+		if err := showStatus(); err != nil {
+			log.Fatalf("Failed to show status: %v", err)
+		}
+		os.Exit(0)
+	}
+
+	if logs {
+		if err := showLogs(follow); err != nil {
+			log.Fatalf("Failed to show logs: %v", err)
 		}
 		os.Exit(0)
 	}
@@ -310,4 +372,34 @@ func installService(enableNginx bool, enableHTTPS bool, domain string) error {
 func uninstallService() error {
 	installer := installer.NewServiceInstaller()
 	return installer.Uninstall()
+}
+
+// startService handles the --start flag
+func startService() error {
+	serviceManager := installer.NewServiceManager()
+	return serviceManager.Start()
+}
+
+// stopService handles the --stop flag
+func stopService() error {
+	serviceManager := installer.NewServiceManager()
+	return serviceManager.Stop()
+}
+
+// restartService handles the --restart flag
+func restartService() error {
+	serviceManager := installer.NewServiceManager()
+	return serviceManager.Restart()
+}
+
+// showStatus handles the --status flag
+func showStatus() error {
+	serviceManager := installer.NewServiceManager()
+	return serviceManager.ShowStatus()
+}
+
+// showLogs handles the --logs flag
+func showLogs(follow bool) error {
+	serviceManager := installer.NewServiceManager()
+	return serviceManager.ShowLogs(follow)
 }
