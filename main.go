@@ -29,7 +29,53 @@ var (
 	date    = "unknown"
 )
 
+// parseSubcommands converts subcommands to equivalent flags for backward compatibility
+// Supports both "vertex start" and "vertex --start" syntax
+func parseSubcommands() {
+	if len(os.Args) < 2 {
+		return
+	}
+
+	subcommand := os.Args[1]
+	
+	// Skip if first arg is already a flag (starts with -)
+	if strings.HasPrefix(subcommand, "-") {
+		return
+	}
+
+	// Map subcommands to their equivalent flags
+	subcommandMap := map[string]string{
+		"start":     "--start",
+		"stop":      "--stop", 
+		"restart":   "--restart",
+		"status":    "--status",
+		"logs":      "--logs",
+		"install":   "--install",
+		"uninstall": "--uninstall",
+		"update":    "--update",
+		"version":   "--version",
+	}
+
+	// Check if the subcommand is valid
+	if flag, exists := subcommandMap[subcommand]; exists {
+		// Replace the subcommand with the equivalent flag
+		os.Args[1] = flag
+		
+		// Handle special case for 'logs' subcommand with -f or --follow
+		if subcommand == "logs" && len(os.Args) > 2 {
+			for i := 2; i < len(os.Args); i++ {
+				if os.Args[i] == "-f" {
+					os.Args[i] = "--follow"
+				}
+			}
+		}
+	}
+}
+
 func main() {
+	// Parse subcommands before flag parsing
+	parseSubcommands()
+	
 	// Handle command line flags
 	var showVersion bool
 	var install bool
@@ -62,9 +108,21 @@ func main() {
 	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
 	
-	// Custom usage function to show double dashes
+	// Custom usage function to show both flag and subcommand syntax
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nSubcommands (recommended):\n")
+		fmt.Fprintf(os.Stderr, "  vertex start        Start the Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  vertex stop         Stop the Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  vertex restart      Restart the Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  vertex status       Show service status\n")
+		fmt.Fprintf(os.Stderr, "  vertex logs         Show service logs\n")
+		fmt.Fprintf(os.Stderr, "  vertex logs -f      Follow log output (tail -f style)\n")
+		fmt.Fprintf(os.Stderr, "  vertex install      Install Vertex as a user service\n")
+		fmt.Fprintf(os.Stderr, "  vertex uninstall    Uninstall Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  vertex update       Update the Vertex service\n")
+		fmt.Fprintf(os.Stderr, "  vertex version      Show version information\n")
+		fmt.Fprintf(os.Stderr, "\nFlags (alternative syntax):\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir string\n")
 		fmt.Fprintf(os.Stderr, "    \tDirectory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory\n")
 		fmt.Fprintf(os.Stderr, "  --domain string\n")

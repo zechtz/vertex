@@ -202,26 +202,33 @@ The service **starts automatically** after installation using:
 
 #### Built-in Service Commands (Recommended)
 
-Vertex includes built-in commands that work across all platforms:
+Vertex includes built-in commands that work across all platforms. You can use either the modern subcommand syntax or the traditional flag syntax:
 
 ```bash
 # Start the service
-./vertex --start
+./vertex start          # (recommended)
+./vertex --start        # (alternative)
 
 # Stop the service  
-./vertex --stop
+./vertex stop           # (recommended)
+./vertex --stop         # (alternative)
 
 # Restart the service
-./vertex --restart
+./vertex restart        # (recommended)
+./vertex --restart      # (alternative)
 
 # Check service status and available URLs
-./vertex --status
+./vertex status         # (recommended)
+./vertex --status       # (alternative)
 
 # Show recent logs
-./vertex --logs
+./vertex logs           # (recommended)
+./vertex --logs         # (alternative)
 
 # Follow logs in real-time (press Ctrl+C to exit)
-./vertex --logs --follow
+./vertex logs -f        # (recommended - like tail -f)
+./vertex logs --follow  # (explicit long form)
+./vertex --logs --follow # (traditional syntax)
 ```
 
 #### Platform-Specific Commands (Advanced)
@@ -294,10 +301,13 @@ You can run Vertex on a different port (default is 54321):
 
 ```bash
 # Show recent logs from all sources
-./vertex --logs
+./vertex logs           # (recommended)
+./vertex --logs         # (alternative)
 
 # Follow logs in real-time (press Ctrl+C to exit)
-./vertex --logs --follow
+./vertex logs -f        # (recommended - like tail -f)
+./vertex logs --follow  # (explicit long form)
+./vertex --logs --follow # (traditional syntax)
 ```
 
 #### Platform-Specific Log Access
@@ -351,29 +361,33 @@ type %USERPROFILE%\.vertex\vertex.log
 
 ### Command Line Options
 
-Vertex supports these command line flags:
+Vertex supports both modern subcommand syntax and traditional flag syntax:
 
 ```bash
 ./vertex --help
 ```
 
+| Subcommand | Flag | Default | Description |
+|------------|------|---------|-------------|
+| `vertex start` | `--start` | - | Start the Vertex service |
+| `vertex stop` | `--stop` | - | Stop the Vertex service |
+| `vertex restart` | `--restart` | - | Restart the Vertex service |
+| `vertex status` | `--status` | - | Show service status and availability |
+| `vertex logs` | `--logs` | - | Show service logs |
+| `vertex logs -f` | `--logs --follow` | - | Follow log output (like tail -f) |
+| `vertex install` | `--install` | - | Install Vertex as a user service |
+| `vertex uninstall` | `--uninstall` | - | Uninstall Vertex service and data |
+| `vertex update` | `--update` | - | Update the Vertex binary and restart the service |
+| `vertex version` | `--version` | - | Show version information |
+
+**Additional Configuration Flags:**
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--domain` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
-| `--install` | - | Install Vertex as a user service |
-| `--uninstall` | - | Uninstall Vertex service and data |
-| `--update` | - | Update the Vertex binary and restart the service |
-| `--start` | - | Start the Vertex service |
-| `--stop` | - | Stop the Vertex service |
-| `--restart` | - | Restart the Vertex service |
-| `--status` | - | Show service status and availability |
-| `--logs` | - | Show service logs |
-| `--follow` | - | Follow log output (use with --logs) |
 | `--nginx` | false | Configure nginx proxy for domain access |
 | `--https` | false | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
 | `--port` | 54321 | Port to run the server on |
 | `--data-dir` | ~/.vertex | Directory to store application data |
-| `--version` | - | Show version information |
 
 #### Examples
 ```bash
@@ -382,18 +396,33 @@ Vertex supports these command line flags:
 ./vertex --domain vertex.dev         # HTTPS auto-enabled for .dev domains
 
 # Traditional installations (still supported)
-./vertex --install                   # Basic installation
+./vertex install                     # Basic installation (recommended)
+./vertex --install                   # Basic installation (alternative)
 ./vertex --install --nginx          # With nginx proxy
 ./vertex --install --nginx --https --domain myapp.local  # With HTTPS
 ./vertex --install --nginx --domain myapp.local --port 8080  # Full explicit
 
-# Service Management
+# Service Management (modern subcommand syntax - recommended)
+./vertex start                       # Start the service
+./vertex stop                        # Stop the service
+./vertex restart                     # Restart the service
+./vertex status                      # Show service status and URLs
+./vertex logs                        # Show recent logs
+./vertex logs -f                     # Follow logs in real-time (like tail -f)
+
+# Service Management (traditional flag syntax - alternative)
 ./vertex --start                     # Start the service
 ./vertex --stop                      # Stop the service
 ./vertex --restart                   # Restart the service
 ./vertex --status                    # Show service status and URLs
 ./vertex --logs                      # Show recent logs
 ./vertex --logs --follow             # Follow logs in real-time
+
+# Other operations
+./vertex version                     # Show version (recommended)
+./vertex --version                   # Show version (alternative)
+./vertex update                      # Update service (recommended)
+./vertex --update                    # Update service (alternative)
 
 # Force HTTPS for any domain
 ./vertex --domain myproject.local --https
@@ -505,7 +534,8 @@ Vertex includes a built-in updater to simplify the process of updating the binar
 
 2. **Run the updater:**
    ```bash
-   ./vertex --update
+   ./vertex update       # (recommended)
+   ./vertex --update     # (alternative)
    ```
 
 This command will:
@@ -543,7 +573,8 @@ To completely remove Vertex:
 
 ```bash
 # Self-uninstalling - works on all platforms!
-./vertex --uninstall
+./vertex uninstall       # (recommended)
+./vertex --uninstall     # (alternative)
 ```
 
 Or manually:
