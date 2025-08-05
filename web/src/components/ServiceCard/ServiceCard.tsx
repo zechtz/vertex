@@ -26,7 +26,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Service } from "@/types";
 import { useState, useRef, useEffect } from "react";
-import { LibraryInstallModal } from "@/components/LibraryInstallModal";
 
 interface ServiceCardProps {
   service: Service;
@@ -49,6 +48,7 @@ interface ServiceCardProps {
   onDelete: () => void;
   onViewFiles: () => void;
   onEditEnv: () => void;
+  onInstallLibraries: () => void;
   onManageWrappers: () => void;
 }
 
@@ -64,10 +64,10 @@ export function ServiceCard({
   onDelete,
   onViewFiles,
   onEditEnv,
+  onInstallLibraries,
   onManageWrappers,
 }: ServiceCardProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showLibraryModal, setShowLibraryModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -273,7 +273,7 @@ export function ServiceCard({
 
                   <button
                     onClick={() => {
-                      setShowLibraryModal(true);
+                      onInstallLibraries();
                       setShowDropdown(false);
                     }}
                     className="w-full px-3 py-2 text-left text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -493,14 +493,6 @@ export function ServiceCard({
           </div>
         )}
       </CardContent>
-      
-      {/* Library Installation Modal */}
-      <LibraryInstallModal
-        serviceId={service.id}
-        serviceName={service.name}
-        isOpen={showLibraryModal}
-        onClose={() => setShowLibraryModal(false)}
-      />
     </Card>
   );
 }

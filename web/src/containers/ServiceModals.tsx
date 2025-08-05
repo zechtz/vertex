@@ -2,6 +2,7 @@ import { ServiceConfigModal } from "@/components/ServiceConfigModal/ServiceConfi
 import { ServiceFilesModal } from "@/components/ServiceConfigModal/ServiceFilesModal";
 import { ServiceEnvModal } from "@/components/ServiceEnvModal/ServiceEnvModal";
 import { ServiceActionModal } from "@/components/ServiceActionModal/ServiceActionModal";
+import { LibraryInstallModal } from "@/components/LibraryInstallModal";
 import { useProfile } from "@/contexts/ProfileContext";
 
 interface ServiceModalsProps {
@@ -45,6 +46,13 @@ export function ServiceModals({ serviceManagement }: ServiceModalsProps) {
         activeProfile={activeProfile}
         onRemoveFromProfile={serviceManagement.handleRemoveFromProfile}
         onDeleteGlobally={serviceManagement.handleDeleteGlobally}
+      />
+
+      <LibraryInstallModal
+        serviceId={serviceManagement.libraryInstallData?.id || ""}
+        serviceName={serviceManagement.libraryInstallData?.name || ""}
+        isOpen={serviceManagement.isLibraryInstallOpen}
+        onClose={serviceManagement.closeLibraryInstall}
       />
     </>
   );

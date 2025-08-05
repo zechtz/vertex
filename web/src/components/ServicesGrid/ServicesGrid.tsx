@@ -51,6 +51,7 @@ interface ServicesGridProps {
   onDeleteService: (service: Service) => void;
   onViewFiles: (service: Service) => void;
   onEditEnv: (service: Service) => void;
+  onInstallLibraries: (service: Service) => void;
   onManageWrappers: (service: Service) => void;
 }
 
@@ -76,6 +77,7 @@ export function ServicesGrid({
   onDeleteService,
   onViewFiles,
   onEditEnv,
+  onInstallLibraries,
   onManageWrappers,
 }: ServicesGridProps) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -396,6 +398,7 @@ export function ServicesGrid({
                 onDelete={() => onDeleteService(service)}
                 onViewFiles={() => onViewFiles(service)}
                 onEditEnv={() => onEditEnv(service)}
+                onInstallLibraries={() => onInstallLibraries(service)}
                 onManageWrappers={() => onManageWrappers(service)}
               />
             ))}
