@@ -16,6 +16,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     "serviceFiles",
     "serviceEnv",
     "serviceAction",
+    "libraryInstall",
   ]);
 
   // Service creation state
@@ -82,7 +83,13 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     (service: Service) => {
       modalManager.openModal("serviceEnv", service);
     },
+    [modalManager],
+  );
 
+  const openLibraryInstall = useCallback(
+    (service: Service) => {
+      modalManager.openModal("libraryInstall", service);
+    },
     [modalManager],
   );
 
@@ -264,18 +271,21 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     isServiceFilesOpen: modalManager.isModalOpen("serviceFiles"),
     isServiceEnvOpen: modalManager.isModalOpen("serviceEnv"),
     isServiceActionOpen: modalManager.isModalOpen("serviceAction"),
+    isLibraryInstallOpen: modalManager.isModalOpen("libraryInstall"),
 
     // Modal data
     serviceConfigData: modalManager.getModalData<Service>("serviceConfig"),
     serviceFilesData: modalManager.getModalData<Service>("serviceFiles"),
     serviceEnvData: modalManager.getModalData<Service>("serviceEnv"),
     serviceActionData: modalManager.getModalData<Service>("serviceAction"),
+    libraryInstallData: modalManager.getModalData<Service>("libraryInstall"),
 
     // Actions
     openCreateService,
     openEditService,
     openViewFiles,
     openEditEnv,
+    openLibraryInstall,
     deleteService,
     handleRemoveFromProfile,
     handleDeleteGlobally,
@@ -289,5 +299,6 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     closeServiceFiles: () => modalManager.closeModal("serviceFiles"),
     closeServiceEnv: () => modalManager.closeModal("serviceEnv"),
     closeServiceActionModal: () => modalManager.closeModal("serviceAction"),
+    closeLibraryInstall: () => modalManager.closeModal("libraryInstall"),
   };
 }

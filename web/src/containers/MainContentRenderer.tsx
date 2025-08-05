@@ -60,6 +60,7 @@ export function MainContentRenderer({
             }
             onViewFiles={serviceManagement.openViewFiles}
             onEditEnv={serviceManagement.openEditEnv}
+            onInstallLibraries={serviceManagement.openLibraryInstall}
             onManageWrappers={(service: Service) => {
               console.log('Manage wrappers for service:', service.name);
               // TODO: Implement wrapper management modal integration
