@@ -54,6 +54,11 @@ func parseSubcommands() {
 		"uninstall": "--uninstall",
 		"update":    "--update",
 		"version":   "--version",
+		"domain":    "--domain",
+		"port":      "--port",
+		"data-dir":  "--data-dir",
+		"nginx":     "--nginx",
+		"https":     "--https",
 	}
 
 	// Check if the subcommand is valid
@@ -122,6 +127,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  vertex uninstall    Uninstall Vertex service\n")
 		fmt.Fprintf(os.Stderr, "  vertex update       Update the Vertex service\n")
 		fmt.Fprintf(os.Stderr, "  vertex version      Show version information\n")
+		fmt.Fprintf(os.Stderr, "\nSubcommands with arguments:\n")
+		fmt.Fprintf(os.Stderr, "  vertex domain <name>        Set domain and auto-install with nginx\n")
+		fmt.Fprintf(os.Stderr, "  vertex port <number>        Set port number\n")
+		fmt.Fprintf(os.Stderr, "  vertex data-dir <path>      Set data directory\n")
+		fmt.Fprintf(os.Stderr, "  vertex nginx                Enable nginx proxy\n")
+		fmt.Fprintf(os.Stderr, "  vertex https                Enable HTTPS\n")
 		fmt.Fprintf(os.Stderr, "\nFlags (alternative syntax):\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir string\n")
 		fmt.Fprintf(os.Stderr, "    \tDirectory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory\n")

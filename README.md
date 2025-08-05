@@ -45,14 +45,21 @@ A powerful service management platform that provides a web-based interface for m
 
 3. **Install as a user service:**
    ```bash
-   # 🚀 ONE-COMMAND INSTALLATION (recommended)
+   # 🚀 ONE-COMMAND INSTALLATION (modern syntax - recommended)
+   ./vertex-linux-amd64 domain vertex.local      # Auto-installs with nginx!
+   ./vertex-darwin-arm64 domain myapp.local      # macOS example
+   # vertex-windows-amd64.exe domain myapp.local  (Windows example)
+   
+   # 🚀 ONE-COMMAND INSTALLATION (traditional syntax - alternative)
    ./vertex-linux-amd64 --domain vertex.local    # Auto-installs with nginx!
    ./vertex-darwin-arm64 --domain myapp.local    # macOS example
    # vertex-windows-amd64.exe --domain myapp.local  (Windows example)
    
-   # Traditional installation (still works)
-   ./vertex-linux-amd64 --install      # Basic installation
-   ./vertex-linux-amd64 --install --nginx --domain vertex.local  # Explicit
+   # Basic installation options
+   ./vertex-linux-amd64 install                  # Basic (modern)
+   ./vertex-linux-amd64 --install                # Basic (traditional)
+   ./vertex-linux-amd64 install nginx domain vertex.local  # Full (modern)
+   ./vertex-linux-amd64 --install --nginx --domain vertex.local  # Full (traditional)
    ```
 
 #### Option 2: Build from Source
@@ -64,12 +71,17 @@ A powerful service management platform that provides a web-based interface for m
 
 2. **Install as a user service:**
    ```bash
-   # 🚀 ONE-COMMAND INSTALLATION (recommended)
+   # 🚀 ONE-COMMAND INSTALLATION (modern syntax - recommended)
+   ./vertex domain myapp.local          # Auto-installs with nginx!
+   
+   # 🚀 ONE-COMMAND INSTALLATION (traditional syntax - alternative)
    ./vertex --domain myapp.local        # Auto-installs with nginx!
    
-   # Traditional installation (still works)
-   ./vertex --install                   # Basic installation
-   ./vertex --install --nginx --domain myapp.local  # Explicit
+   # Basic installation options
+   ./vertex install                     # Basic (modern)
+   ./vertex --install                   # Basic (traditional)
+   ./vertex install nginx domain myapp.local  # Full (modern)
+   ./vertex --install --nginx --domain myapp.local  # Full (traditional)
    ```
 
 3. **Access the web interface:**
@@ -87,7 +99,10 @@ Vertex includes optional nginx integration for clean domain-based access without
 
 #### Quick Setup
 ```bash
-# 🚀 ONE-COMMAND INSTALLATION (recommended)
+# 🚀 ONE-COMMAND INSTALLATION (modern syntax - recommended)
+./vertex domain vertex.dev
+
+# 🚀 ONE-COMMAND INSTALLATION (traditional syntax - alternative)
 ./vertex --domain vertex.dev
 
 # Access via clean domain with HTTPS (auto-enabled for .dev domains)
@@ -96,11 +111,13 @@ open https://vertex.dev
 
 #### Custom Domain
 ```bash
-# One-command installation with custom domain (HTTP)
-./vertex --domain myapp.local
+# One-command installation with custom domain (modern syntax - recommended)
+./vertex domain myapp.local           # HTTP
+./vertex domain myapp.local https     # With HTTPS
 
-# One-command installation with HTTPS
-./vertex --domain myapp.local --https
+# One-command installation with custom domain (traditional syntax - alternative)
+./vertex --domain myapp.local         # HTTP
+./vertex --domain myapp.local --https # With HTTPS
 
 # Access your custom domain
 open https://myapp.local    # With HTTPS
@@ -109,18 +126,20 @@ open http://myapp.local     # HTTP only
 
 #### Advanced Configuration
 ```bash
-# Traditional explicit installation (all options available)
+# Modern subcommand syntax (recommended)
+./vertex install nginx https domain myproject.local port 54321  # Full installation
+./vertex domain myproject.local port 8080                       # One-command with custom port
+./vertex domain myproject.local https                           # Force HTTPS for any domain
+
+# Traditional flag syntax (alternative)
 ./vertex --install \
   --nginx \                    # Enable nginx proxy
   --https \                    # Enable HTTPS with locally-trusted certificates
   --domain myproject.local \   # Custom domain name
   --port 54321                 # Vertex service port (default: 54321)
 
-# One-command with custom port
-./vertex --domain myproject.local --port 8080
-
-# Force HTTPS for any domain
-./vertex --domain myproject.local --https
+./vertex --domain myproject.local --port 8080                   # One-command with custom port
+./vertex --domain myproject.local --https                       # Force HTTPS for any domain
 ```
 
 #### What Nginx Setup Does
@@ -367,37 +386,47 @@ Vertex supports both modern subcommand syntax and traditional flag syntax:
 ./vertex --help
 ```
 
+**Service Management Commands:**
+| Subcommand | Flag | Description |
+|------------|------|-------------|
+| `vertex start` | `--start` | Start the Vertex service |
+| `vertex stop` | `--stop` | Stop the Vertex service |
+| `vertex restart` | `--restart` | Restart the Vertex service |
+| `vertex status` | `--status` | Show service status and availability |
+| `vertex logs` | `--logs` | Show service logs |
+| `vertex logs -f` | `--logs --follow` | Follow log output (like tail -f) |
+| `vertex install` | `--install` | Install Vertex as a user service |
+| `vertex uninstall` | `--uninstall` | Uninstall Vertex service and data |
+| `vertex update` | `--update` | Update the Vertex binary and restart the service |
+| `vertex version` | `--version` | Show version information |
+
+**Configuration Commands:**
 | Subcommand | Flag | Default | Description |
 |------------|------|---------|-------------|
-| `vertex start` | `--start` | - | Start the Vertex service |
-| `vertex stop` | `--stop` | - | Stop the Vertex service |
-| `vertex restart` | `--restart` | - | Restart the Vertex service |
-| `vertex status` | `--status` | - | Show service status and availability |
-| `vertex logs` | `--logs` | - | Show service logs |
-| `vertex logs -f` | `--logs --follow` | - | Follow log output (like tail -f) |
-| `vertex install` | `--install` | - | Install Vertex as a user service |
-| `vertex uninstall` | `--uninstall` | - | Uninstall Vertex service and data |
-| `vertex update` | `--update` | - | Update the Vertex binary and restart the service |
-| `vertex version` | `--version` | - | Show version information |
-
-**Additional Configuration Flags:**
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--domain` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
-| `--nginx` | false | Configure nginx proxy for domain access |
-| `--https` | false | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
-| `--port` | 54321 | Port to run the server on |
-| `--data-dir` | ~/.vertex | Directory to store application data |
+| `vertex domain <name>` | `--domain <name>` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
+| `vertex port <number>` | `--port <number>` | 54321 | Port to run the server on |
+| `vertex data-dir <path>` | `--data-dir <path>` | ~/.vertex | Directory to store application data |
+| `vertex nginx` | `--nginx` | - | Configure nginx proxy for domain access |
+| `vertex https` | `--https` | - | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
 
 #### Examples
 ```bash
-# 🚀 ONE-COMMAND INSTALLATION (recommended)
+# 🚀 ONE-COMMAND INSTALLATION (modern subcommand syntax - recommended)
+./vertex domain myapp.local          # HTTP installation
+./vertex domain vertex.dev           # HTTPS auto-enabled for .dev domains
+
+# 🚀 ONE-COMMAND INSTALLATION (traditional flag syntax - alternative)
 ./vertex --domain myapp.local        # HTTP installation
 ./vertex --domain vertex.dev         # HTTPS auto-enabled for .dev domains
 
-# Traditional installations (still supported)
-./vertex install                     # Basic installation (recommended)
-./vertex --install                   # Basic installation (alternative)
+# Installation Commands (modern subcommand syntax - recommended)
+./vertex install                     # Basic installation
+./vertex install nginx               # With nginx proxy
+./vertex install nginx https domain myapp.local  # With HTTPS
+./vertex domain myapp.local port 8080  # Custom domain and port
+
+# Installation Commands (traditional flag syntax - alternative)
+./vertex --install                   # Basic installation
 ./vertex --install --nginx          # With nginx proxy
 ./vertex --install --nginx --https --domain myapp.local  # With HTTPS
 ./vertex --install --nginx --domain myapp.local --port 8080  # Full explicit
@@ -409,6 +438,8 @@ Vertex supports both modern subcommand syntax and traditional flag syntax:
 ./vertex status                      # Show service status and URLs
 ./vertex logs                        # Show recent logs
 ./vertex logs -f                     # Follow logs in real-time (like tail -f)
+./vertex version                     # Show version
+./vertex update                      # Update service
 
 # Service Management (traditional flag syntax - alternative)
 ./vertex --start                     # Start the service
@@ -417,21 +448,26 @@ Vertex supports both modern subcommand syntax and traditional flag syntax:
 ./vertex --status                    # Show service status and URLs
 ./vertex --logs                      # Show recent logs
 ./vertex --logs --follow             # Follow logs in real-time
+./vertex --version                   # Show version
+./vertex --update                    # Update service
 
-# Other operations
-./vertex version                     # Show version (recommended)
-./vertex --version                   # Show version (alternative)
-./vertex update                      # Update service (recommended)
-./vertex --update                    # Update service (alternative)
+# Configuration Commands (modern subcommand syntax - recommended)
+./vertex port 9090                   # Run on custom port
+./vertex data-dir /tmp/vertex-test   # Custom data directory
+./vertex domain myproject.local https  # Force HTTPS for any domain
+./vertex nginx                       # Enable nginx proxy
+./vertex https                       # Enable HTTPS
 
-# Force HTTPS for any domain
-./vertex --domain myproject.local --https
+# Configuration Commands (traditional flag syntax - alternative)
+./vertex --port 9090                 # Run on custom port
+./vertex --data-dir /tmp/vertex-test # Custom data directory
+./vertex --domain myproject.local --https  # Force HTTPS for any domain
+./vertex --nginx                     # Enable nginx proxy
+./vertex --https                     # Enable HTTPS
 
-# Temporary run (no installation)
-./vertex --port 9090
-
-# Custom data directory
-./vertex --data-dir /tmp/vertex-test --port 8080
+# Combined Examples (modern syntax)
+./vertex domain vertex.dev https port 8080  # Full configuration
+./vertex install nginx domain myapp.local data-dir /custom/path  # Advanced install
 ```
 
 ### Environment Variables
