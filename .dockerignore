@@ -25,8 +25,18 @@ nest-up
 .DS_Store
 Thumbs.db
 
-# Node modules (will be installed during build)
+# Node modules and frontend dev files (using pre-built dist/)
 web/node_modules/
+web/src/
+web/public/
+web/package.json
+web/package-lock.json
+web/yarn.lock
+web/vite.config.ts
+web/tailwind.config.js
+web/postcss.config.js
+web/tsconfig.json
+web/tsconfig.node.json
 
 # Logs
 *.log

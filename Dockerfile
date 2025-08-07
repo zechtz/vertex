@@ -1,16 +1,7 @@
-# Multi-stage Dockerfile for vertex
-FROM node:18-alpine AS frontend-builder
+# Optimized single-stage build for vertex
+FROM golang:1.23-bullseye AS builder
 
-WORKDIR /app/web
-COPY web/package*.json ./
-RUN npm ci
-
-COPY web/ ./
-RUN npm run build
-
-FROM golang:1.23-bullseye AS backend-builder
-
-# Install build dependencies
+# Install build dependencies in one layer
 RUN apt-get update && apt-get install -y \
     gcc \
     libc6-dev \
@@ -19,17 +10,14 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy go mod files
+# Copy go mod files first for better caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy source code and pre-built frontend
 COPY . .
 
-# Copy built frontend from previous stage
-COPY --from=frontend-builder /app/web/dist ./web/dist
-
-# Build the binary
+# Build the binary with optimizations
 RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex
 
 FROM alpine:latest
@@ -40,7 +28,7 @@ RUN apk --no-cache add ca-certificates sqlite
 WORKDIR /app
 
 # Copy the binary
-COPY --from=backend-builder /app/vertex .
+COPY --from=builder /app/vertex .
 
 # Create directory for database
 RUN mkdir -p /app/data
