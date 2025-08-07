@@ -37,6 +37,9 @@ web/tailwind.config.js
 web/postcss.config.js
 web/tsconfig.json
 web/tsconfig.node.json
+# Keep web/dist/ and web/embed.go - needed for go:embed
+!web/dist/
+!web/embed.go
 
 # Logs
 *.log

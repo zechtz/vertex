@@ -14,8 +14,11 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code and pre-built frontend
+# Copy source code (frontend should be pre-built by CI)
 COPY . .
+
+# Verify frontend dist exists (required for go:embed)
+RUN ls -la web/dist/ || (echo "ERROR: web/dist directory missing! Frontend must be built before Docker build." && exit 1)
 
 # Build the binary with optimizations
 RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex
