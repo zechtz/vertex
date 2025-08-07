@@ -1,5 +1,3 @@
-# Getting Started with Vertex Service Manager
-
 Welcome to Vertex! This guide will walk you through setting up and using Vertex to manage your microservices from initial setup to full service orchestration.
 
 ## 📋 Prerequisites
@@ -13,7 +11,53 @@ Welcome to Vertex! This guide will walk you through setting up and using Vertex 
 
 ### 1. Installation & Launch
 
-#### Option A: Download Pre-built Binary
+#### Option A: Docker (Recommended)
+
+**Quick Start:**
+```bash
+# Run with default settings
+docker run -d \
+  --name vertex \
+  -p 8080:8080 \
+  -v vertex-data:/app/data \
+  zechtz/vertex:latest
+
+# Access the web interface
+open http://localhost:8080
+```
+
+**Production Setup with Docker Compose:**
+
+Create a `docker-compose.yml` file:
+```yaml
+version: '3.8'
+services:
+  vertex:
+    image: zechtz/vertex:latest
+    container_name: vertex
+    ports:
+      - "8080:8080"
+    volumes:
+      - vertex-data:/app/data
+      - ./projects:/projects  # Mount your projects directory
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/default-jvm
+      - VERTEX_DATA_DIR=/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  vertex-data:
+```
+
+Start with: `docker-compose up -d`
+
+#### Option B: Download Pre-built Binary
+
 ```bash
 # Download latest release for your platform
 wget https://github.com/zechtz/vertex/releases/latest/download/vertex-linux-amd64
@@ -21,11 +65,15 @@ wget https://github.com/zechtz/vertex/releases/latest/download/vertex-linux-amd6
 # Make executable
 chmod +x vertex-linux-amd64
 
-# Run Vertex
+# Install as service with domain (optional)
+./vertex-linux-amd64 domain vertex.local
+
+# Or run directly
 ./vertex-linux-amd64
 ```
 
-#### Option B: Build from Source
+#### Option C: Build from Source
+
 ```bash
 # Clone repository
 git clone https://github.com/zechtz/vertex.git
@@ -44,8 +92,21 @@ go build -o vertex
 ### 2. Access Web Interface
 
 Open your browser and navigate to:
+
+**For Docker installations:**
 ```
 http://localhost:8080
+```
+
+**For binary installations:**
+```
+http://localhost:54321
+```
+
+**With domain setup (nginx proxy):**
+```
+https://vertex.dev        # .dev domains auto-enable HTTPS
+http://vertex.local       # Custom domains
 ```
 
 ---
@@ -81,6 +142,7 @@ Profiles allow you to group and manage related services together (e.g., dev, sta
    - Click **"Create New Profile"**
 
 2. **Basic Information**:
+
    ```
    Profile Name: My Development Environment
    Description: Development services for my microservice project
@@ -125,9 +187,10 @@ Vertex can automatically discover Maven and Gradle projects in your workspace.
    - Fill in service details manually
 
 ### Example Auto-Discovery Result
+
 ```
 ✅ eureka-server (Port: 8800, Maven)
-✅ config-server (Port: 8801, Maven)  
+✅ config-server (Port: 8801, Maven)
 ✅ api-gateway (Port: 8080, Maven)
 ✅ user-service (Port: 8081, Maven)
 ✅ product-service (Port: 8082, Gradle)
@@ -141,17 +204,21 @@ Proper startup order ensures dependencies are available when services start.
 
 ### Setting Service Order
 
-1. **Navigate to Dependencies**:
-   - Go to **"Dependencies"** in the sidebar
-   - Or click **"Configure Dependencies"** in your profile
+1. **Navigate to Configurations**:
+   - Go to **"Configurations"** in the sidebar
+   - Click **"New Configuration"** in your profile
+   - Add a **"Configuration Name"**
 
 2. **Drag & Drop Ordering**:
    - **Registry Services** (like Eureka): Order 1-2
-   - **Config Services**: Order 3-4  
+   - **Config Services**: Order 3-4
    - **Infrastructure** (Gateway, Auth): Order 5-10
    - **Business Services**: Order 11+
 
+When you're done, just save and apply the configuration and it will become the default configuration
+
 ### Recommended Startup Order
+
 ```
 1. eureka-server      (Service Registry)
 2. config-server      (Configuration)
@@ -163,6 +230,7 @@ Proper startup order ensures dependencies are available when services start.
 ```
 
 ### Auto-Generated Order
+
 - Vertex can suggest order based on common microservice patterns
 - Click **"Auto-Generate Order"** for automatic ordering
 
@@ -179,6 +247,7 @@ Dependencies ensure services wait for required services to be healthy before sta
    - Click **"Add Dependency"**
 
 2. **Configure Dependency**:
+
    ```
    Service: user-service
    Depends On: eureka-server, config-server
@@ -192,6 +261,7 @@ Dependencies ensure services wait for required services to be healthy before sta
    - **Health Check**: Verifies dependency is healthy
 
 ### Example Dependencies
+
 ```
 api-gateway depends on:
   ├── eureka-server (health check required)
@@ -199,7 +269,7 @@ api-gateway depends on:
 
 user-service depends on:
   ├── eureka-server (health check required)
-  ├── config-server (health check required)  
+  ├── config-server (health check required)
   └── database-service (hard dependency)
 ```
 
@@ -216,6 +286,7 @@ Manage global and service-specific environment variables.
    - Or click **"Environment Variables"** in sidebar
 
 2. **Add Global Variables**:
+
    ```
    DB_HOST=localhost
    DB_PORT=5432
@@ -226,7 +297,7 @@ Manage global and service-specific environment variables.
 
 3. **Variable Categories**:
    - **Database**: DB_HOST, DB_PORT, DB_USER
-   - **Cache**: REDIS_HOST, REDIS_PORT  
+   - **Cache**: REDIS_HOST, REDIS_PORT
    - **Config**: CONFIG_SERVER_URL
    - **Network**: SERVICE URLs and ports
 
@@ -244,11 +315,13 @@ Manage global and service-specific environment variables.
    ```
 
 ### Variable Precedence
+
 - **Service-specific** variables override global variables
 - **Environment Variables** are automatically passed to services
 - **Spring Profiles**: `ACTIVE_PROFILE` sets `SPRING_PROFILES_ACTIVE`
 
 ### Export/Import Variables
+
 - **Export**: Copy variables to clipboard for sharing
 - **Bulk Import**: Import from text or environment files
 
@@ -259,12 +332,14 @@ Manage global and service-specific environment variables.
 ### Starting Services
 
 #### Individual Services
+
 1. **Start Single Service**:
    - Click **"Start"** button on service card
    - Watch real-time status updates
    - Health status shows: Starting → Running → Healthy
 
 #### Bulk Operations
+
 1. **Start All Services**:
    - Click **"Start All"** in top toolbar
    - Services start in configured dependency order
@@ -289,12 +364,12 @@ Manage global and service-specific environment variables.
 
 ### Service Status Indicators
 
-| Status | Color | Meaning |
-|--------|-------|---------|
-| **Healthy** | 🟢 Green | Running and responding |
-| **Starting** | 🟡 Yellow | Boot process active |
-| **Unhealthy** | 🔴 Red | Running but not responding |
-| **Stopped** | ⚪ Gray | Not running |
+| Status        | Color     | Meaning                    |
+| ------------- | --------- | -------------------------- |
+| **Healthy**   | 🟢 Green  | Running and responding     |
+| **Starting**  | 🟡 Yellow | Boot process active        |
+| **Unhealthy** | 🔴 Red    | Running but not responding |
+| **Stopped**   | ⚪ Gray   | Not running                |
 
 ---
 
@@ -396,20 +471,61 @@ Manage global and service-specific environment variables.
 ### Common Issues
 
 #### Service Won't Start
+
 1. **Check Dependencies**: Ensure required services are running
-2. **Port Conflicts**: Use port cleanup feature
+2. **Port Conflicts**: Use port cleanup feature  
 3. **Environment Variables**: Verify all required variables are set
 4. **Java Version**: Ensure Java 17+ is available
+5. **Docker Volume Permissions**: Check if mounted directories are accessible
 
-#### Compilation Errors  
+#### Docker-Specific Issues
+
+1. **Container Won't Start**:
+   ```bash
+   # Check container logs
+   docker logs vertex
+   
+   # Check container status
+   docker ps -a
+   ```
+
+2. **Port Already in Use**:
+   ```bash
+   # Find processes using port 8080
+   lsof -i :8080
+   
+   # Stop conflicting containers
+   docker stop $(docker ps -q --filter "publish=8080")
+   ```
+
+3. **Volume Mount Issues**:
+   ```bash
+   # Verify volume exists
+   docker volume ls | grep vertex-data
+   
+   # Check volume permissions
+   docker run --rm -v vertex-data:/data alpine ls -la /data
+   ```
+
+4. **Java Not Found in Container**:
+   ```bash
+   # Check Java installation in container
+   docker exec vertex java -version
+   ```
+
+#### Compilation Errors
+
 1. **Lombok Issues**: Use "Fix Lombok" feature
-2. **Maven Wrapper**: Vertex auto-creates missing wrappers
+2. **Maven Wrapper**: Vertex auto-creates missing wrappers  
 3. **Dependencies**: Check if libraries are properly installed
+4. **Docker Build Context**: Ensure projects are accessible within container
 
 #### Connection Issues
+
 1. **Eureka Registration**: Verify registry server is running
 2. **Network Configuration**: Check service URLs and ports
 3. **Health Checks**: Monitor service health endpoints
+4. **Docker Networking**: Services in containers may need different host references
 
 ### Getting Help
 
@@ -439,7 +555,71 @@ Now that you have Vertex set up and running:
    - Standardize development environments
    - Document service dependencies
 
+4. **Maintenance**:
+   - Regular updates for security and features
+   - Backup your configurations and data
+   - Monitor resource usage and optimize
+
 **Welcome to efficient microservice management with Vertex!** 🚀
+
+---
+
+## 🔄 Update & Maintenance
+
+### Updating Vertex
+
+**For Docker installations:**
+```bash
+# Using docker-compose
+docker-compose pull
+docker-compose up -d
+
+# Manual update
+docker pull zechtz/vertex:latest
+docker stop vertex
+docker rm vertex
+docker run -d --name vertex -p 8080:8080 -v vertex-data:/app/data zechtz/vertex:latest
+```
+
+**For binary installations:**
+```bash
+# Using built-in updater
+./vertex update
+
+# Manual update
+wget https://github.com/zechtz/vertex/releases/latest/download/vertex-linux-amd64
+chmod +x vertex-linux-amd64
+# Stop current service and replace binary
+```
+
+### Backup Your Data
+
+**Docker:**
+```bash
+# Backup database and configuration
+docker run --rm -v vertex-data:/data -v $(pwd):/backup alpine tar czf /backup/vertex-backup.tar.gz /data
+```
+
+**Binary installation:**
+```bash
+# Backup user data directory
+tar czf vertex-backup.tar.gz ~/.vertex/
+```
+
+### Uninstalling
+
+**Docker:**
+```bash
+# Remove everything (WARNING: This deletes all data!)
+docker-compose down -v
+docker rmi zechtz/vertex:latest
+```
+
+**Binary installation:**
+```bash
+# Self-uninstall
+./vertex uninstall
+```
 
 ---
 

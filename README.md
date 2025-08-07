@@ -38,9 +38,12 @@ A powerful service management platform that provides a web-based interface for m
      - `vertex-darwin-arm64` (macOS Apple Silicon)
      - `vertex-windows-amd64.exe` (Windows 64-bit)
 
-2. **Make it executable (Linux/macOS only):**
+2. **Make it executable and bypass macOS security (macOS only):**
    ```bash
    chmod +x vertex-*
+   
+   # macOS: Remove quarantine to bypass "malware" warning
+   xattr -d com.apple.quarantine vertex-darwin-*
    ```
 
 3. **Install as a user service:**
@@ -62,7 +65,62 @@ A powerful service management platform that provides a web-based interface for m
    ./vertex-linux-amd64 --install --nginx --domain vertex.local  # Full (traditional)
    ```
 
-#### Option 2: Build from Source
+#### Option 2: Docker (Recommended for Containers)
+
+Run Vertex in a Docker container with persistent data:
+
+```bash
+# Quick start - run with default settings
+docker run -d \
+  --name vertex \
+  -p 8080:8080 \
+  -v vertex-data:/app/data \
+  zechtz/vertex:latest
+
+# With custom configuration
+docker run -d \
+  --name vertex \
+  -p 8080:8080 \
+  -v vertex-data:/app/data \
+  -v /path/to/your/projects:/projects \
+  -e JAVA_HOME=/usr/lib/jvm/default-jvm \
+  zechtz/vertex:latest
+
+# Access the web interface
+open http://localhost:8080
+```
+
+**Docker Compose (recommended for production):**
+
+Create a `docker-compose.yml` file:
+```yaml
+version: '3.8'
+services:
+  vertex:
+    image: zechtz/vertex:latest
+    container_name: vertex
+    ports:
+      - "8080:8080"
+    volumes:
+      - vertex-data:/app/data
+      - ./projects:/projects
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/default-jvm
+      - VERTEX_DATA_DIR=/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  vertex-data:
+```
+
+Start with: `docker-compose up -d`
+
+#### Option 3: Build from Source
 
 1. **Build the application:**
    ```bash
@@ -85,6 +143,7 @@ A powerful service management platform that provides a web-based interface for m
    ```
 
 3. **Access the web interface:**
+   - **Docker**: http://localhost:8080
    - **With HTTPS domain**: https://vertex.dev (when using `--domain vertex.dev`)
    - **With HTTP domain**: http://myapp.local (when using `--domain myapp.local`)
    - **Direct access**: http://localhost:54321
@@ -508,6 +567,28 @@ Vertex automatically detects Java installations in this order:
 
 ## 🐛 Troubleshooting
 
+### macOS Security Warning ("cannot verify vertex is free of malware")
+
+This is a common macOS Gatekeeper security warning for unsigned binaries.
+
+**Quick Fix:**
+```bash
+# Remove quarantine attribute
+xattr -d com.apple.quarantine ./vertex-darwin-arm64
+
+# Then run your command
+./vertex domain vertex.dev
+```
+
+**Alternative Fix:**
+1. Try running the command and get the security warning
+2. Go to **System Preferences → Security & Privacy → General**
+3. Click **"Allow Anyway"** next to the vertex warning
+4. Run the command again
+
+**For Developers:**
+Consider code signing your releases with an Apple Developer Certificate to eliminate this warning for users.
+
 ### Service Won't Start
 
 1. **Check logs:**
@@ -581,7 +662,7 @@ This command will:
 
 ### Manual Update Method
 
-To update Vertex manually:
+**For Native Installation:**
 
 1. **Stop the service:**
    ```bash
@@ -603,9 +684,36 @@ To update Vertex manually:
    ./install.sh
    ```
 
+**For Docker Installation:**
+
+```bash
+# Pull latest image and restart
+docker-compose pull
+docker-compose up -d
+
+# Or with docker run
+docker pull zechtz/vertex:latest
+docker stop vertex
+docker rm vertex
+docker run -d --name vertex -p 8080:8080 -v vertex-data:/app/data zechtz/vertex:latest
+```
+
 ## 🗑️ Uninstalling
 
-To completely remove Vertex:
+**For Docker Installation:**
+
+```bash
+# Using docker-compose
+docker-compose down -v
+
+# Or manually
+docker stop vertex
+docker rm vertex
+docker volume rm vertex-data  # This removes all data!
+docker rmi zechtz/vertex:latest
+```
+
+**For Native Installation:**
 
 ```bash
 # Self-uninstalling - works on all platforms!
