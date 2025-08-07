@@ -73,21 +73,21 @@ Run Vertex in a Docker container with persistent data:
 # Quick start - run with default settings
 docker run -d \
   --name vertex \
-  -p 8080:8080 \
+  -p 54321:54321 \
   -v vertex-data:/app/data \
   zechtz/vertex:latest
 
 # With custom configuration
 docker run -d \
   --name vertex \
-  -p 8080:8080 \
+  -p 54321:54321 \
   -v vertex-data:/app/data \
   -v /path/to/your/projects:/projects \
   -e JAVA_HOME=/usr/lib/jvm/default-jvm \
   zechtz/vertex:latest
 
 # Access the web interface
-open http://localhost:8080
+open http://localhost:54321
 ```
 
 **Docker Compose (recommended for production):**
@@ -100,7 +100,7 @@ services:
     image: zechtz/vertex:latest
     container_name: vertex
     ports:
-      - "8080:8080"
+      - "54321:54321"
     volumes:
       - vertex-data:/app/data
       - ./projects:/projects
@@ -109,7 +109,7 @@ services:
       - VERTEX_DATA_DIR=/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -143,7 +143,7 @@ Start with: `docker-compose up -d`
    ```
 
 3. **Access the web interface:**
-   - **Docker**: http://localhost:8080
+   - **Docker**: http://localhost:54321
    - **With HTTPS domain**: https://vertex.dev (when using `--domain vertex.dev`)
    - **With HTTP domain**: http://myapp.local (when using `--domain myapp.local`)
    - **Direct access**: http://localhost:54321
@@ -695,7 +695,7 @@ docker-compose up -d
 docker pull zechtz/vertex:latest
 docker stop vertex
 docker rm vertex
-docker run -d --name vertex -p 8080:8080 -v vertex-data:/app/data zechtz/vertex:latest
+docker run -d --name vertex -p 54321:54321 -v vertex-data:/app/data zechtz/vertex:latest
 ```
 
 ## 🗑️ Uninstalling

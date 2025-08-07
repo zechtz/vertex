@@ -45,15 +45,16 @@ COPY --from=backend-builder /app/vertex .
 # Create directory for database
 RUN mkdir -p /app/data
 
-# Expose port
-EXPOSE 8080
+# Expose port (default 54321, configurable via PORT env var)
+EXPOSE 54321
 
-# Set environment variable for database location
+# Set environment variables
 ENV DB_PATH=/app/data/vertex.db
+ENV PORT=54321
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/ || exit 1
 
-# Run the application
-CMD ["./vertex"]
+# Run the application with port from environment
+CMD ["sh", "-c", "./vertex --port $PORT"]

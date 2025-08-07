@@ -18,12 +18,12 @@ Welcome to Vertex! This guide will walk you through setting up and using Vertex 
 # Run with default settings
 docker run -d \
   --name vertex \
-  -p 8080:8080 \
+  -p 54321:54321 \
   -v vertex-data:/app/data \
   zechtz/vertex:latest
 
 # Access the web interface
-open http://localhost:8080
+open http://localhost:54321
 ```
 
 **Production Setup with Docker Compose:**
@@ -36,7 +36,7 @@ services:
     image: zechtz/vertex:latest
     container_name: vertex
     ports:
-      - "8080:8080"
+      - "54321:54321"
     volumes:
       - vertex-data:/app/data
       - ./projects:/projects  # Mount your projects directory
@@ -45,7 +45,7 @@ services:
       - VERTEX_DATA_DIR=/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -95,7 +95,7 @@ Open your browser and navigate to:
 
 **For Docker installations:**
 ```
-http://localhost:8080
+http://localhost:54321
 ```
 
 **For binary installations:**
@@ -491,11 +491,11 @@ Manage global and service-specific environment variables.
 
 2. **Port Already in Use**:
    ```bash
-   # Find processes using port 8080
-   lsof -i :8080
+   # Find processes using port 54321
+   lsof -i :54321
    
    # Stop conflicting containers
-   docker stop $(docker ps -q --filter "publish=8080")
+   docker stop $(docker ps -q --filter "publish=54321")
    ```
 
 3. **Volume Mount Issues**:
@@ -578,7 +578,7 @@ docker-compose up -d
 docker pull zechtz/vertex:latest
 docker stop vertex
 docker rm vertex
-docker run -d --name vertex -p 8080:8080 -v vertex-data:/app/data zechtz/vertex:latest
+docker run -d --name vertex -p 54321:54321 -v vertex-data:/app/data zechtz/vertex:latest
 ```
 
 **For binary installations:**
