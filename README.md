@@ -92,7 +92,7 @@ open http://localhost:54321
 
 **Docker Compose (recommended for production):**
 
-Create a `docker-compose.yml` file:
+**Basic setup (localhost access only):**
 ```yaml
 version: '3.8'
 services:
@@ -116,6 +116,120 @@ services:
 
 volumes:
   vertex-data:
+```
+
+**Advanced setup with domain access (like native `./vertex domain vertex.dev`):**
+
+Create a `docker-compose.yml` file:
+```yaml
+version: '3.8'
+services:
+  vertex:
+    image: zechtz/vertex:latest
+    container_name: vertex
+    expose:
+      - "54321"
+    volumes:
+      - vertex-data:/app/data
+      - ./projects:/projects
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/default-jvm
+      - VERTEX_DATA_DIR=/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - vertex-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: vertex-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - vertex
+    restart: unless-stopped
+    networks:
+      - vertex-network
+
+networks:
+  vertex-network:
+    driver: bridge
+
+volumes:
+  vertex-data:
+```
+
+**Required nginx.conf:**
+```nginx
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream vertex {
+        server vertex:54321;
+    }
+
+    server {
+        listen 80;
+        server_name vertex.dev;
+        return 301 https://$server_name$request_uri;
+    }
+
+    server {
+        listen 443 ssl http2;
+        server_name vertex.dev;
+
+        ssl_certificate /etc/nginx/ssl/vertex.dev.pem;
+        ssl_certificate_key /etc/nginx/ssl/vertex.dev-key.pem;
+        
+        # Modern SSL configuration
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+        ssl_prefer_server_ciphers off;
+        
+        location / {
+            proxy_pass http://vertex;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            
+            # WebSocket support
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+    }
+}
+```
+
+**Generate SSL certificates (requires mkcert):**
+```bash
+# Install mkcert if not already installed
+# macOS: brew install mkcert
+# Ubuntu: apt install libnss3-tools && wget -O mkcert https://dl.filippo.io/mkcert/latest?for=linux/amd64 && chmod +x mkcert
+
+# Setup local CA and generate certificates
+mkcert -install
+mkdir ssl
+mkcert -cert-file ssl/vertex.dev.pem -key-file ssl/vertex.dev-key.pem vertex.dev
+
+# Add to /etc/hosts
+echo "127.0.0.1 vertex.dev" | sudo tee -a /etc/hosts
+
+# Start services
+docker-compose up -d
+
+# Access at: https://vertex.dev
 ```
 
 Start with: `docker-compose up -d`

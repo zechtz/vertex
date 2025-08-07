@@ -28,7 +28,7 @@ open http://localhost:54321
 
 **Production Setup with Docker Compose:**
 
-Create a `docker-compose.yml` file:
+**Basic setup (localhost only):**
 ```yaml
 version: '3.8'
 services:
@@ -52,6 +52,67 @@ services:
 
 volumes:
   vertex-data:
+```
+
+**Advanced setup with HTTPS domain (equivalent to `./vertex domain vertex.dev`):**
+
+This setup mimics the native `./vertex domain vertex.dev` experience using Docker containers:
+
+```yaml
+version: '3.8'
+services:
+  vertex:
+    image: zechtz/vertex:latest
+    container_name: vertex
+    expose:
+      - "54321"
+    volumes:
+      - vertex-data:/app/data
+      - ./projects:/projects
+    environment:
+      - JAVA_HOME=/usr/lib/jvm/default-jvm
+      - VERTEX_DATA_DIR=/app/data
+    restart: unless-stopped
+    networks:
+      - vertex-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: vertex-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - vertex
+    restart: unless-stopped
+    networks:
+      - vertex-network
+
+networks:
+  vertex-network:
+
+volumes:
+  vertex-data:
+```
+
+**Setup SSL certificates and nginx:**
+```bash
+# Install mkcert and setup certificates (same as native setup)
+mkcert -install
+mkdir ssl
+mkcert -cert-file ssl/vertex.dev.pem -key-file ssl/vertex.dev-key.pem vertex.dev
+
+# Add to hosts file
+echo "127.0.0.1 vertex.dev" | sudo tee -a /etc/hosts
+
+# Create nginx.conf (see README.md for full config)
+# Start services
+docker-compose up -d
+
+# Access at: https://vertex.dev (same as native!)
 ```
 
 Start with: `docker-compose up -d`
