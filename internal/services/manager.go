@@ -779,7 +779,15 @@ func (sm *Manager) RestartService(serviceUUID string) error {
 	}
 
 	// Start the service
-	return sm.startService(service)
+	err := sm.startService(service)
+	
+	// Record restart event if successful
+	if err == nil {
+		uptimeTracker := GetUptimeTracker()
+		uptimeTracker.RecordEvent(service.ID, "restart", "running")
+	}
+	
+	return err
 }
 
 // StartServiceWithProjectsDir starts a service using a specific projects directory

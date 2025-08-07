@@ -633,6 +633,10 @@ func (sm *Manager) startService(service *models.Service) error {
 	service.LastStarted = time.Now()
 	service.Logs = []models.LogEntry{}
 
+	// Record uptime event
+	uptimeTracker := GetUptimeTracker()
+	uptimeTracker.RecordEvent(service.ID, "start", "running")
+
 	// Start reading logs
 	go sm.readLogs(service, stdout)
 	go sm.readLogs(service, stderr)
@@ -663,6 +667,11 @@ func (sm *Manager) startService(service *models.Service) error {
 		service.PID = 0
 		service.Cmd = nil
 		service.Uptime = ""
+		
+		// Record uptime event
+		uptimeTracker := GetUptimeTracker()
+		uptimeTracker.RecordEvent(service.ID, "stop", "stopped")
+		
 		sm.updateServiceInDB(service)
 		sm.broadcastUpdate(service)
 	}()
