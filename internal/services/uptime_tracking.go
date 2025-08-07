@@ -70,8 +70,8 @@ func (ut *UptimeTracker) CalculateUptimeStats(serviceID string, service *models.
 		return models.UptimeStatistics{
 			UptimePercentage24h: 100.0,
 			UptimePercentage7d:  100.0,
-			MTBF:               0,
-			TotalRestarts:      0,
+			MTBF:                0,
+			TotalRestarts:       0,
 		}
 	}
 

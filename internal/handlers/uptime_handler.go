@@ -46,13 +46,13 @@ func (h *Handler) getUptimeStatisticsHandler(w http.ResponseWriter, r *http.Requ
 				"status":       service.Status,
 				"healthStatus": service.HealthStatus,
 				"stats": map[string]interface{}{
-					"totalRestarts":      0,
+					"totalRestarts":       0,
 					"uptimePercentage24h": 100.0,
 					"uptimePercentage7d":  100.0,
-					"mtbf":              0,
-					"lastDowntime":      nil,
-					"totalDowntime24h":  0,
-					"totalDowntime7d":   0,
+					"mtbf":                0,
+					"lastDowntime":        nil,
+					"totalDowntime24h":    0,
+					"totalDowntime7d":     0,
 				},
 			}
 		}

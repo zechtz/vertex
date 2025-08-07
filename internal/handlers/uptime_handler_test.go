@@ -71,13 +71,13 @@ func (h *MockHandler) getUptimeStatisticsHandler(w http.ResponseWriter, r *http.
 			"status":       service.Status,
 			"healthStatus": service.HealthStatus,
 			"stats": map[string]interface{}{
-				"totalRestarts":      0,
+				"totalRestarts":       0,
 				"uptimePercentage24h": 100.0,
 				"uptimePercentage7d":  100.0,
-				"mtbf":              0,
-				"lastDowntime":      nil,
-				"totalDowntime24h":  0,
-				"totalDowntime7d":   0,
+				"mtbf":                0,
+				"lastDowntime":        nil,
+				"totalDowntime24h":    0,
+				"totalDowntime7d":     0,
 			},
 		}
 	}
@@ -114,13 +114,13 @@ func (h *MockHandler) getServiceUptimeStatisticsHandler(w http.ResponseWriter, r
 		"status":       service.Status,
 		"healthStatus": service.HealthStatus,
 		"stats": map[string]interface{}{
-			"totalRestarts":      0,
+			"totalRestarts":       0,
 			"uptimePercentage24h": 100.0,
 			"uptimePercentage7d":  100.0,
-			"mtbf":              0,
-			"lastDowntime":      nil,
-			"totalDowntime24h":  0,
-			"totalDowntime7d":   0,
+			"mtbf":                0,
+			"lastDowntime":        nil,
+			"totalDowntime24h":    0,
+			"totalDowntime7d":     0,
 		},
 	}
 

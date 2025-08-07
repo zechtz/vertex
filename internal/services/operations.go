@@ -667,11 +667,11 @@ func (sm *Manager) startService(service *models.Service) error {
 		service.PID = 0
 		service.Cmd = nil
 		service.Uptime = ""
-		
+
 		// Record uptime event
 		uptimeTracker := GetUptimeTracker()
 		uptimeTracker.RecordEvent(service.ID, "stop", "stopped")
-		
+
 		sm.updateServiceInDB(service)
 		sm.broadcastUpdate(service)
 	}()
@@ -881,7 +881,7 @@ func isPortEnvironmentVariable(key string) bool {
 		"HTTP_PORT", "HTTPS_PORT", "WEB_PORT", "API_PORT", "TOMCAT_PORT",
 		"SPRING_SERVER_PORT", "MICROSERVICE_PORT", "APPLICATION_PORT",
 	}
-	
+
 	keyUpper := strings.ToUpper(key)
 	for _, portVar := range portVarNames {
 		if keyUpper == portVar || strings.HasSuffix(keyUpper, "_"+portVar) {
