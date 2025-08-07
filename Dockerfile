@@ -8,10 +8,14 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.23-bullseye AS backend-builder
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libc6-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
