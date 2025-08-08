@@ -9,6 +9,7 @@ import { AutoDiscoveryModal } from "@/components/AutoDiscoveryModal/AutoDiscover
 import { ConfigurationManager } from "@/components/ConfigurationManager/ConfigurationManager";
 import { GlobalEnvModal } from "@/components/GlobalEnvModal/GlobalEnvModal";
 import { GlobalConfigModal } from "@/components/GlobalConfigModal/GlobalConfigModal";
+import { UptimeStatisticsDashboard } from "@/components/UptimeStatistics/UptimeStatisticsDashboard";
 import { Service } from "@/types";
 import { useProfile } from "@/contexts/ProfileContext";
 
@@ -90,6 +91,8 @@ export function MainContentRenderer({
             services={servicesData.services}
           />
         );
+      case "uptime":
+        return <UptimeStatisticsDashboard />;
       case "logs":
         return (
           <LogAggregationModal

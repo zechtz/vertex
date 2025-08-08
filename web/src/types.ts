@@ -11,11 +11,22 @@ export interface ResponseTime {
   status: number;
 }
 
+export interface UptimeStatistics {
+  totalRestarts: number;
+  uptimePercentage24h: number;
+  uptimePercentage7d: number;
+  mtbf: number; // Mean Time Between Failures in nanoseconds
+  lastDowntime: string | null;
+  totalDowntime24h: number; // Duration in nanoseconds
+  totalDowntime7d: number; // Duration in nanoseconds
+}
+
 export interface ServiceMetrics {
   responseTimes: ResponseTime[];
   errorRate: number;
   requestCount: number;
   lastChecked: string;
+  uptimeStats: UptimeStatistics;
 }
 
 export interface ServiceDependency {

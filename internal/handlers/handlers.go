@@ -48,7 +48,7 @@ func (h *Handler) getServiceProjectsDir(serviceUUID string) string {
 	// Get global config as fallback
 	globalConfig := h.serviceManager.GetConfig()
 	defaultProjectsDir := globalConfig.ProjectsDir
-	
+
 	log.Printf("[DEBUG] getServiceProjectsDir - serviceUUID: %s, defaultProjectsDir: '%s'", serviceUUID, defaultProjectsDir)
 
 	// Query database to find all profiles that contain this service
@@ -94,7 +94,7 @@ func (h *Handler) getServiceProjectsDir(serviceUUID string) string {
 // Checks the user's active profile first, then falls back to global logic
 func (h *Handler) getServiceProjectsDirForUser(serviceUUID, userID string) string {
 	log.Printf("[DEBUG] getServiceProjectsDirForUser called - serviceUUID: %s, userID: %s", serviceUUID, userID)
-	
+
 	// First, try to get the user's active profile
 	activeProfile, err := h.profileService.GetActiveProfile(userID)
 	if err != nil {
@@ -110,7 +110,7 @@ func (h *Handler) getServiceProjectsDirForUser(serviceUUID, userID string) strin
 	if activeProfile != nil && activeProfile.ProjectsDir != "" {
 		log.Printf("[DEBUG] Active profile has ProjectsDir: %s", activeProfile.ProjectsDir)
 		log.Printf("[DEBUG] Active profile services: %v", activeProfile.Services)
-		
+
 		// Check if the service is in this profile
 		if slices.Contains(activeProfile.Services, serviceUUID) {
 			log.Printf("[INFO] Using active profile projects directory for service UUID %s: %s", serviceUUID, activeProfile.ProjectsDir)
@@ -144,6 +144,7 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	registerCIRoutes(h, r)
 	registerConfigRoutes(h, r)
 	registerServiceRoutes(h, r)
+	registerUptimeRoutes(h, r)
 
 	// Service routes (will be protected later)
 	registerTopologyRoutes(h, r)

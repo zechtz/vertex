@@ -10,6 +10,7 @@ import {
   Search,
   Users,
   Monitor,
+  Clock,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -56,6 +57,12 @@ export function Sidebar({
       label: "Metrics",
       icon: <BarChart3 className="w-5 h-5" />,
       description: "System performance",
+    },
+    {
+      id: "uptime",
+      label: "Uptime Stats",
+      icon: <Clock className="w-5 h-5" />,
+      description: "Service uptime statistics",
     },
     {
       id: "logs",

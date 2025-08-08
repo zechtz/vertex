@@ -126,6 +126,11 @@ func (sm *Manager) collectAllServiceMetrics() {
 					service.PID = 0
 					service.Cmd = nil
 					service.Uptime = ""
+
+					// Record uptime event
+					uptimeTracker := GetUptimeTracker()
+					uptimeTracker.RecordEvent(service.ID, "stop", "stopped")
+
 					// Reset metrics
 					service.CPUPercent = 0
 					service.MemoryUsage = 0
@@ -137,7 +142,9 @@ func (sm *Manager) collectAllServiceMetrics() {
 					sm.broadcastUpdate(service)
 				}
 			} else {
-				// Successful metrics collection, broadcast update
+				// Successful metrics collection, update uptime stats and broadcast update
+				uptimeTracker := GetUptimeTracker()
+				service.Metrics.UptimeStats = uptimeTracker.CalculateUptimeStats(service.ID, service)
 				sm.broadcastUpdate(service)
 			}
 		}
