@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Clock, AlertTriangle, TrendingUp, Activity } from "lucide-react";
+import {
+  RefreshCw,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  Activity,
+} from "lucide-react";
 import { UptimeStatistics } from "@/types";
 
 interface ServiceUptimeStats {
@@ -34,12 +40,18 @@ export function UptimeStatisticsDashboard() {
       setError(null);
       const response = await fetch("/api/uptime/statistics");
       if (!response.ok) {
-        throw new Error(`Failed to fetch uptime statistics: ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch uptime statistics: ${response.statusText}`,
+        );
       }
       const data = await response.json();
       setUptimeData(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch uptime statistics");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to fetch uptime statistics",
+      );
       console.error("Error fetching uptime statistics:", err);
     } finally {
       setIsLoading(false);
@@ -55,7 +67,7 @@ export function UptimeStatisticsDashboard() {
 
   const formatDuration = (nanoseconds: number): string => {
     if (nanoseconds === 0) return "None";
-    
+
     const totalSeconds = nanoseconds / 1_000_000_000;
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -85,7 +97,8 @@ export function UptimeStatisticsDashboard() {
 
   const getStatusBadgeVariant = (status: string, healthStatus: string) => {
     if (status === "running" && healthStatus === "healthy") return "default";
-    if (status === "running" && healthStatus === "unhealthy") return "destructive";
+    if (status === "running" && healthStatus === "unhealthy")
+      return "destructive";
     if (status === "running") return "secondary";
     return "outline";
   };
@@ -103,7 +116,9 @@ export function UptimeStatisticsDashboard() {
     return (
       <div className="p-8 text-center">
         <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-red-700 mb-2">Error Loading Uptime Statistics</h3>
+        <h3 className="text-lg font-semibold text-red-700 mb-2">
+          Error Loading Uptime Statistics
+        </h3>
         <p className="text-red-600 mb-4">{error}</p>
         <Button onClick={fetchUptimeStats} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -132,7 +147,9 @@ export function UptimeStatisticsDashboard() {
           </p>
         </div>
         <Button onClick={fetchUptimeStats} variant="outline" size="sm">
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
       </div>
@@ -141,17 +158,23 @@ export function UptimeStatisticsDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Services</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Services
+            </CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{uptimeData.summary.totalServices}</div>
+            <div className="text-2xl font-bold">
+              {uptimeData.summary.totalServices}
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Running Services</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Running Services
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -163,7 +186,9 @@ export function UptimeStatisticsDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unhealthy Services</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Unhealthy Services
+            </CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -189,34 +214,56 @@ export function UptimeStatisticsDashboard() {
                 <tr className="border-b">
                   <th className="text-left py-3 px-4 font-semibold">Service</th>
                   <th className="text-left py-3 px-4 font-semibold">Status</th>
-                  <th className="text-right py-3 px-4 font-semibold">24h Uptime</th>
-                  <th className="text-right py-3 px-4 font-semibold">7d Uptime</th>
-                  <th className="text-right py-3 px-4 font-semibold">Restarts</th>
+                  <th className="text-right py-3 px-4 font-semibold">
+                    24h Uptime
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold">
+                    7d Uptime
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold">
+                    Restarts
+                  </th>
                   <th className="text-right py-3 px-4 font-semibold">MTBF</th>
-                  <th className="text-right py-3 px-4 font-semibold">24h Downtime</th>
+                  <th className="text-right py-3 px-4 font-semibold">
+                    24h Downtime
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {services.map((service) => (
-                  <tr key={service.serviceId} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <tr
+                    key={service.serviceId}
+                    className="border-b hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
                     <td className="py-3 px-4">
                       <div>
                         <div className="font-medium">{service.serviceName}</div>
-                        <div className="text-sm text-gray-500">Port {service.port}</div>
+                        <div className="text-sm text-gray-500">
+                          Port {service.port}
+                        </div>
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <Badge 
-                        variant={getStatusBadgeVariant(service.status, service.healthStatus)}
+                      <Badge
+                        variant={getStatusBadgeVariant(
+                          service.status,
+                          service.healthStatus,
+                        )}
                         className="text-xs"
                       >
-                        {service.status === "running" ? service.healthStatus : service.status}
+                        {service.status === "running"
+                          ? service.healthStatus
+                          : service.status}
                       </Badge>
                     </td>
-                    <td className={`py-3 px-4 text-right font-medium ${getUptimeColor(service.stats.uptimePercentage24h)}`}>
+                    <td
+                      className={`py-3 px-4 text-right font-medium ${getUptimeColor(service.stats.uptimePercentage24h)}`}
+                    >
                       {service.stats.uptimePercentage24h.toFixed(2)}%
                     </td>
-                    <td className={`py-3 px-4 text-right font-medium ${getUptimeColor(service.stats.uptimePercentage7d)}`}>
+                    <td
+                      className={`py-3 px-4 text-right font-medium ${getUptimeColor(service.stats.uptimePercentage7d)}`}
+                    >
                       {service.stats.uptimePercentage7d.toFixed(2)}%
                     </td>
                     <td className="py-3 px-4 text-right">
@@ -233,7 +280,7 @@ export function UptimeStatisticsDashboard() {
               </tbody>
             </table>
           </div>
-          
+
           {services.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No services available
