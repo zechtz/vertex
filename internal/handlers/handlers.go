@@ -145,6 +145,7 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	registerConfigRoutes(h, r)
 	registerServiceRoutes(h, r)
 	registerUptimeRoutes(h, r)
+	registerDockerComposeRoutes(h, r)
 
 	// Service routes (will be protected later)
 	registerTopologyRoutes(h, r)

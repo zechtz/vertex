@@ -11,6 +11,7 @@ import {
   Clock,
   Zap,
   Check,
+  Container,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/contexts/ProfileContext";
@@ -21,6 +22,7 @@ import { EditProfileModal } from "./EditProfileModal";
 import { UserProfileModal } from "./UserProfileModal";
 import { ProfileEnvManager } from "../ProfileEnvManager/ProfileEnvManager";
 import { ProfileServiceManager } from "../ProfileServiceManager/ProfileServiceManager";
+import { DockerComposeModal } from "../DockerCompose/DockerComposeModal";
 
 interface ProfileManagementProps {
   isOpen: boolean;
@@ -49,12 +51,15 @@ export function ProfileManagement({
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [showEnvManager, setShowEnvManager] = useState(false);
   const [showServiceManager, setShowServiceManager] = useState(false);
+  const [showDockerCompose, setShowDockerCompose] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ServiceProfile | null>(
     null,
   );
   const [envManagerProfile, setEnvManagerProfile] =
     useState<ServiceProfile | null>(null);
   const [serviceManagerProfile, setServiceManagerProfile] =
+    useState<ServiceProfile | null>(null);
+  const [dockerComposeProfile, setDockerComposeProfile] =
     useState<ServiceProfile | null>(null);
   const [deletingProfile, setDeletingProfile] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
@@ -124,6 +129,11 @@ export function ProfileManagement({
   const handleManageServices = (profile: ServiceProfile) => {
     setServiceManagerProfile(profile);
     setShowServiceManager(true);
+  };
+
+  const handleDockerCompose = (profile: ServiceProfile) => {
+    setDockerComposeProfile(profile);
+    setShowDockerCompose(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -262,6 +272,15 @@ export function ProfileManagement({
                       >
                         <Zap className="h-4 w-4" />
                         Env Vars
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDockerCompose(activeProfile)}
+                        className="flex items-center gap-2"
+                      >
+                        <Container className="h-4 w-4" />
+                        Docker
                       </Button>
                       <Button
                         variant="outline"
@@ -424,6 +443,13 @@ export function ProfileManagement({
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handleDockerCompose(profile)}
+                        >
+                          <Container className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleEditProfile(profile)}
                         >
                           <Edit className="h-3 w-3" />
@@ -506,6 +532,15 @@ export function ProfileManagement({
         }}
         profile={serviceManagerProfile}
         onProfileUpdated={onProfileUpdated}
+      />
+
+      <DockerComposeModal
+        isOpen={showDockerCompose}
+        onClose={() => {
+          setShowDockerCompose(false);
+          setDockerComposeProfile(null);
+        }}
+        profile={dockerComposeProfile}
       />
     </div>
   );

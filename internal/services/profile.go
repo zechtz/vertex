@@ -880,3 +880,21 @@ func (ps *ProfileService) startServicesWithDependencies(serviceNames []string) e
 
 	return nil
 }
+
+func (ps *ProfileService) ProfileHasService(profileID, serviceUUID string) (bool, error) {
+	ps.mutex.RLock()
+	defer ps.mutex.RUnlock()
+
+	// Get the profile
+	profile, err := ps.getServiceProfileInternal(profileID, "")
+	if err != nil {
+		return false, fmt.Errorf("failed to get profile: %w", err)
+	}
+
+	// Check if the service exists in the profile
+	if slices.Contains(profile.Services, serviceUUID) {
+		return true, nil
+	}
+
+	return false, nil
+}

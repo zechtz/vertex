@@ -1,0 +1,1 @@
+export { DockerComposeModal } from './DockerComposeModal';

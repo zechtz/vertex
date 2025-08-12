@@ -39,25 +39,27 @@ A powerful service management platform that provides a web-based interface for m
      - `vertex-windows-amd64.exe` (Windows 64-bit)
 
 2. **Make it executable and bypass macOS security (macOS only):**
+
    ```bash
    chmod +x vertex-*
-   
+
    # macOS: Remove quarantine to bypass "malware" warning
    xattr -d com.apple.quarantine vertex-darwin-*
    ```
 
 3. **Install as a user service:**
+
    ```bash
    # 🚀 ONE-COMMAND INSTALLATION (modern syntax - recommended)
    ./vertex-linux-amd64 domain vertex.local      # Auto-installs with nginx!
    ./vertex-darwin-arm64 domain myapp.local      # macOS example
    # vertex-windows-amd64.exe domain myapp.local  (Windows example)
-   
+
    # 🚀 ONE-COMMAND INSTALLATION (traditional syntax - alternative)
    ./vertex-linux-amd64 --domain vertex.local    # Auto-installs with nginx!
    ./vertex-darwin-arm64 --domain myapp.local    # macOS example
    # vertex-windows-amd64.exe --domain myapp.local  (Windows example)
-   
+
    # Basic installation options
    ./vertex-linux-amd64 install                  # Basic (modern)
    ./vertex-linux-amd64 --install                # Basic (traditional)
@@ -93,8 +95,9 @@ open http://localhost:54321
 **Docker Compose (recommended for production):**
 
 **Basic setup (localhost access only):**
+
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   vertex:
     image: zechtz/vertex:latest
@@ -109,7 +112,15 @@ services:
       - VERTEX_DATA_DIR=/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:54321/",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -121,8 +132,9 @@ volumes:
 **Advanced setup with domain access (like native `./vertex domain vertex.dev`):**
 
 Create a `docker-compose.yml` file:
+
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   vertex:
     image: zechtz/vertex:latest
@@ -137,7 +149,15 @@ services:
       - VERTEX_DATA_DIR=/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:54321/",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -168,6 +188,7 @@ volumes:
 ```
 
 **Required nginx.conf:**
+
 ```nginx
 events {
     worker_connections 1024;
@@ -190,19 +211,19 @@ http {
 
         ssl_certificate /etc/nginx/ssl/vertex.dev.pem;
         ssl_certificate_key /etc/nginx/ssl/vertex.dev-key.pem;
-        
+
         # Modern SSL configuration
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
         ssl_prefer_server_ciphers off;
-        
+
         location / {
             proxy_pass http://vertex;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
-            
+
             # WebSocket support
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
@@ -213,6 +234,7 @@ http {
 ```
 
 **Generate SSL certificates (requires mkcert):**
+
 ```bash
 # Install mkcert if not already installed
 # macOS: brew install mkcert
@@ -237,18 +259,20 @@ Start with: `docker-compose up -d`
 #### Option 3: Build from Source
 
 1. **Build the application:**
+
    ```bash
    go build -o vertex
    ```
 
 2. **Install as a user service:**
+
    ```bash
    # 🚀 ONE-COMMAND INSTALLATION (modern syntax - recommended)
    ./vertex domain myapp.local          # Auto-installs with nginx!
-   
+
    # 🚀 ONE-COMMAND INSTALLATION (traditional syntax - alternative)
    ./vertex --domain myapp.local        # Auto-installs with nginx!
-   
+
    # Basic installation options
    ./vertex install                     # Basic (modern)
    ./vertex --install                   # Basic (traditional)
@@ -271,6 +295,7 @@ Start with: `docker-compose up -d`
 Vertex includes optional nginx integration for clean domain-based access without port numbers.
 
 #### Quick Setup
+
 ```bash
 # 🚀 ONE-COMMAND INSTALLATION (modern syntax - recommended)
 ./vertex domain vertex.dev
@@ -283,6 +308,7 @@ open https://vertex.dev
 ```
 
 #### Custom Domain
+
 ```bash
 # One-command installation with custom domain (modern syntax - recommended)
 ./vertex domain myapp.local           # HTTP
@@ -298,6 +324,7 @@ open http://myapp.local     # HTTP only
 ```
 
 #### Advanced Configuration
+
 ```bash
 # Modern subcommand syntax (recommended)
 ./vertex install nginx https domain myproject.local port 54321  # Full installation
@@ -316,6 +343,7 @@ open http://myapp.local     # HTTP only
 ```
 
 #### What Nginx Setup Does
+
 - ✅ **Automatically installs nginx** on macOS (brew), Linux (apt/yum/etc), Windows (choco/winget)
 - ✅ **Creates proxy configuration** from port 80/443 to Vertex service
 - ✅ **Manages /etc/hosts entries** for local domain resolution
@@ -327,11 +355,12 @@ open http://myapp.local     # HTTP only
 - 🛡️ **Modern SSL configuration** - TLS 1.2+, HTTP/2, secure ciphers, security headers
 
 #### Access Methods
-| Method | URL | Use Case |
-|--------|-----|----------|
-| **Nginx Proxy (HTTPS)** | `https://vertex.dev` | Secure domain access (.dev domains auto-enable HTTPS) |
-| **Nginx Proxy (HTTP)** | `http://myproject.local` | Clean domain access for non-.dev domains |
-| **Direct Access** | `http://localhost:54321` | Development, bypassing nginx |
+
+| Method                  | URL                      | Use Case                                              |
+| ----------------------- | ------------------------ | ----------------------------------------------------- |
+| **Nginx Proxy (HTTPS)** | `https://vertex.dev`     | Secure domain access (.dev domains auto-enable HTTPS) |
+| **Nginx Proxy (HTTP)**  | `http://myproject.local` | Clean domain access for non-.dev domains              |
+| **Direct Access**       | `http://localhost:54321` | Development, bypassing nginx                          |
 
 #### HTTPS with mkcert
 
@@ -347,23 +376,26 @@ mkcert -cert-file ~/.vertex/ssl/mydomain.local.pem \
        -key-file ~/.vertex/ssl/mydomain.local-key.pem \
        mydomain.local
 
-# View certificate details  
+# View certificate details
 openssl x509 -in ~/.vertex/ssl/vertex.dev.pem -text -noout
 ```
 
 **Special .dev Domain Handling:**
+
 - Google owns the `.dev` TLD and requires HTTPS via HSTS preloading
 - Vertex automatically enables HTTPS for any `.dev` domain
 - Certificates are generated and installed automatically
 - No browser security warnings with locally-trusted certificates
 
 **Certificate Management:**
+
 - Certificates stored in `~/.vertex/ssl/`
 - Valid for the local CA installed by mkcert
 - Automatically trusted by browsers and curl
 - Use `mkcert -uninstall` to remove the local CA if needed
 
 #### Troubleshooting Nginx
+
 ```bash
 # Check nginx status
 brew services list | grep nginx           # macOS
@@ -388,6 +420,7 @@ openssl s_client -connect vertex.dev:443 -servername vertex.dev
 ### Service Management
 
 The service **starts automatically** after installation using:
+
 - **macOS**: LaunchAgent (user-level service)
 - **Linux**: systemd user service
 - **Windows**: Scheduled Task
@@ -401,7 +434,7 @@ Vertex includes built-in commands that work across all platforms. You can use ei
 ./vertex start          # (recommended)
 ./vertex --start        # (alternative)
 
-# Stop the service  
+# Stop the service
 ./vertex stop           # (recommended)
 ./vertex --stop         # (alternative)
 
@@ -426,6 +459,7 @@ Vertex includes built-in commands that work across all platforms. You can use ei
 #### Platform-Specific Commands (Advanced)
 
 **macOS:**
+
 ```bash
 # Start
 launchctl start com.vertex.manager
@@ -438,6 +472,7 @@ launchctl list | grep vertex
 ```
 
 **Linux:**
+
 ```bash
 # Start
 systemctl --user start vertex
@@ -453,6 +488,7 @@ systemctl --user status vertex
 ```
 
 **Windows:**
+
 ```bash
 # Start
 schtasks /run /tn "VertexServiceManager"
@@ -469,6 +505,7 @@ schtasks /query /tn "VertexServiceManager"
 You can run Vertex on a different port (default is 54321):
 
 #### Option 1: Direct execution
+
 ```bash
 ./vertex --port 9090
 ```
@@ -476,12 +513,14 @@ You can run Vertex on a different port (default is 54321):
 #### Option 2: Modify service configuration
 
 **macOS:**
+
 1. Stop the service: `launchctl stop com.vertex.manager`
 2. Edit the plist file: `~/Library/LaunchAgents/com.vertex.manager.plist`
 3. Change the port argument from `54321` to your desired port
 4. Reload: `launchctl unload ~/Library/LaunchAgents/com.vertex.manager.plist && launchctl load ~/Library/LaunchAgents/com.vertex.manager.plist`
 
 **Linux:**
+
 1. Stop the service: `systemctl --user stop vertex`
 2. Edit the service file: `~/.config/systemd/user/vertex.service`
 3. Change the `--port 54321` argument to your desired port
@@ -505,6 +544,7 @@ You can run Vertex on a different port (default is 54321):
 #### Platform-Specific Log Access
 
 **macOS:**
+
 ```bash
 # Main application logs
 tail -f ~/.vertex/vertex.stderr.log
@@ -514,6 +554,7 @@ tail -f ~/.vertex/vertex.stdout.log
 ```
 
 **Linux:**
+
 ```bash
 # All logs
 journalctl --user -u vertex -f
@@ -523,6 +564,7 @@ journalctl --user -u vertex --since="1 hour ago"
 ```
 
 **Windows:**
+
 ```bash
 # View log files directly
 type %USERPROFILE%\.vertex\vertex.log
@@ -530,12 +572,12 @@ type %USERPROFILE%\.vertex\vertex.log
 
 #### Log Locations
 
-| Platform | Location |
-|----------|----------|
-| **macOS** | `~/.vertex/vertex.stderr.log`<br>`~/.vertex/vertex.stdout.log` |
-| **Linux** | `journalctl --user -u vertex` |
-| **Database** | `~/.vertex/vertex.db` |
-| **Config** | `~/.vertex/` |
+| Platform     | Location                                                       |
+| ------------ | -------------------------------------------------------------- |
+| **macOS**    | `~/.vertex/vertex.stderr.log`<br>`~/.vertex/vertex.stdout.log` |
+| **Linux**    | `journalctl --user -u vertex`                                  |
+| **Database** | `~/.vertex/vertex.db`                                          |
+| **Config**   | `~/.vertex/`                                                   |
 
 ## 📂 Directory Structure
 
@@ -583,6 +625,7 @@ Vertex supports both modern subcommand syntax and traditional flag syntax:
 | `vertex https` | `--https` | - | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
 
 #### Examples
+
 ```bash
 # 🚀 ONE-COMMAND INSTALLATION (modern subcommand syntax - recommended)
 ./vertex domain myapp.local          # HTTP installation
@@ -686,6 +729,7 @@ Vertex automatically detects Java installations in this order:
 This is a common macOS Gatekeeper security warning for unsigned binaries.
 
 **Quick Fix:**
+
 ```bash
 # Remove quarantine attribute
 xattr -d com.apple.quarantine ./vertex-darwin-arm64
@@ -695,6 +739,7 @@ xattr -d com.apple.quarantine ./vertex-darwin-arm64
 ```
 
 **Alternative Fix:**
+
 1. Try running the command and get the security warning
 2. Go to **System Preferences → Security & Privacy → General**
 3. Click **"Allow Anyway"** next to the vertex warning
@@ -706,15 +751,17 @@ Consider code signing your releases with an Apple Developer Certificate to elimi
 ### Service Won't Start
 
 1. **Check logs:**
+
    ```bash
    # macOS
    tail -n 100 ~/.vertex/vertex.stderr.log
-   
-   # Linux  
+
+   # Linux
    journalctl --user -u vertex --lines=100
    ```
 
 2. **Verify Java installation:**
+
    ```bash
    java -version
    echo $JAVA_HOME
@@ -730,6 +777,7 @@ Consider code signing your releases with an Apple Developer Certificate to elimi
 Since Vertex runs as your user account, it should have access to all your project files. If you encounter permission issues:
 
 1. **Verify directory ownership:**
+
    ```bash
    ls -la /path/to/your/projects
    ```
@@ -743,11 +791,13 @@ Since Vertex runs as your user account, it should have access to all your projec
 ### Java Detection Issues
 
 Run the built-in diagnostics:
+
 ```bash
 curl http://localhost:54321/api/system/java-diagnostics
 ```
 
 This will show:
+
 - Detected Java installations
 - PATH configuration
 - Available vs working Java versions
@@ -759,6 +809,7 @@ Vertex includes a built-in updater to simplify the process of updating the binar
 ### Recommended Update Method
 
 1. **Build the new binary:**
+
    ```bash
    go build -o vertex
    ```
@@ -770,6 +821,7 @@ Vertex includes a built-in updater to simplify the process of updating the binar
    ```
 
 This command will:
+
 - Stop the running Vertex service.
 - Replace the existing binary with the new one.
 - Restart the service.
@@ -779,15 +831,17 @@ This command will:
 **For Native Installation:**
 
 1. **Stop the service:**
+
    ```bash
    # macOS
    launchctl stop com.vertex.manager
-   
+
    # Linux
    systemctl --user stop vertex
    ```
 
 2. **Build new version:**
+
    ```bash
    git pull
    go build -o vertex
@@ -838,6 +892,7 @@ docker rmi zechtz/vertex:latest
 Or manually:
 
 **macOS:**
+
 ```bash
 launchctl stop com.vertex.manager
 launchctl unload ~/Library/LaunchAgents/com.vertex.manager.plist
@@ -847,6 +902,7 @@ rm -rf ~/.vertex
 ```
 
 **Linux:**
+
 ```bash
 systemctl --user stop vertex
 systemctl --user disable vertex
@@ -857,6 +913,7 @@ rm -rf ~/.vertex
 ```
 
 **Windows:**
+
 ```bash
 schtasks /delete /tn "VertexServiceManager" /f
 rm ~/.local/bin/vertex.exe
@@ -873,7 +930,7 @@ rm -rf ~/.vertex
 go build -o vertex
 
 # Frontend (if modified)
-cd frontend
+cd web
 npm install
 npm run build
 ```
@@ -906,6 +963,7 @@ This project is licensed under the MIT License.
 ## 🆘 Support
 
 For issues and questions:
+
 - Create an issue on GitHub
 - Check the troubleshooting section above
 - Review the logs for error messages
