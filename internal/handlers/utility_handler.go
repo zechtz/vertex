@@ -525,7 +525,15 @@ func (h *Handler) scanAutoDiscoveryHandler(w http.ResponseWriter, r *http.Reques
 
 	log.Printf("[INFO] Starting auto-discovery scan in profile directory: %s", scanDir)
 
-	discoveredServices, err := h.autoDiscoveryService.ScanDirectory(scanDir)
+	var discoveredServices []services.DiscoveredService
+
+	// Use profile-aware discovery if profile is available
+	if profile != nil {
+		discoveredServices, err = h.autoDiscoveryService.ScanDirectoryForProfile(scanDir, profile.Services)
+	} else {
+		discoveredServices, err = h.autoDiscoveryService.ScanDirectory(scanDir)
+	}
+	
 	if err != nil {
 		log.Printf("[ERROR] Auto-discovery scan failed: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to scan project directory: %v", err), http.StatusInternalServerError)
@@ -570,12 +578,40 @@ func (h *Handler) importDiscoveredServiceHandler(w http.ResponseWriter, r *http.
 
 	log.Printf("[INFO] Importing discovered service: %s from %s", discoveredService.Name, discoveredService.Path)
 
-	// Create the service first
-	service, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
-	if err != nil {
-		log.Printf("[ERROR] Failed to import discovered service %s: %v", discoveredService.Name, err)
-		http.Error(w, fmt.Sprintf("Failed to import service: %v", err), http.StatusInternalServerError)
-		return
+	// Check if a service with the same path already exists globally
+	var service *models.Service
+	allServices := h.serviceManager.GetServices()
+	for _, existingService := range allServices {
+		if existingService.Dir == discoveredService.Path || 
+		   strings.TrimPrefix(existingService.Dir, "/") == strings.TrimPrefix(discoveredService.Path, "/") {
+			log.Printf("[INFO] Found existing service '%s' (UUID: %s) with same path '%s' - reusing existing service without modification", 
+				existingService.Name, existingService.ID, existingService.Dir)
+			// Make a copy to avoid any modifications to the original
+			serviceCopy := existingService
+			service = &serviceCopy
+			break
+		}
+	}
+
+	// If no existing service found, create a new one
+	if service == nil {
+		log.Printf("[INFO] No existing service found with path '%s' - creating new service", discoveredService.Path)
+		
+		// Check for name conflicts and generate unique name if needed
+		originalName := discoveredService.Name
+		uniqueName := h.generateUniqueServiceName(originalName)
+		if uniqueName != originalName {
+			log.Printf("[INFO] Service name '%s' already exists, using unique name '%s'", originalName, uniqueName)
+			discoveredService.Name = uniqueName
+		}
+		
+		newService, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
+		if err != nil {
+			log.Printf("[ERROR] Failed to import discovered service %s: %v", discoveredService.Name, err)
+			http.Error(w, fmt.Sprintf("Failed to import service: %v", err), http.StatusInternalServerError)
+			return
+		}
+		service = newService
 	}
 
 	// Try to add the service to the user's active profile (if authenticated)
@@ -658,12 +694,40 @@ func (h *Handler) importDiscoveredServicesBulkHandler(w http.ResponseWriter, r *
 	for _, discoveredService := range request.Services {
 		log.Printf("[INFO] Importing discovered service: %s from %s", discoveredService.Name, discoveredService.Path)
 
-		// Create the service globally first
-		service, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
-		if err != nil {
-			log.Printf("[ERROR] Failed to import discovered service %s: %v", discoveredService.Name, err)
-			errors = append(errors, fmt.Sprintf("Failed to import %s: %v", discoveredService.Name, err))
-			continue
+		// Check if a service with the same path already exists globally
+		var service *models.Service
+		allServices := h.serviceManager.GetServices()
+		for _, existingService := range allServices {
+			if existingService.Dir == discoveredService.Path || 
+			   strings.TrimPrefix(existingService.Dir, "/") == strings.TrimPrefix(discoveredService.Path, "/") {
+				log.Printf("[INFO] Found existing service '%s' (UUID: %s) with same path '%s' - reusing existing service without modification", 
+					existingService.Name, existingService.ID, existingService.Dir)
+				// Make a copy to avoid any modifications to the original
+				serviceCopy := existingService
+				service = &serviceCopy
+				break
+			}
+		}
+
+		// If no existing service found, create a new one
+		if service == nil {
+			log.Printf("[INFO] No existing service found with path '%s' - creating new service", discoveredService.Path)
+			
+			// Check for name conflicts and generate unique name if needed
+			originalName := discoveredService.Name
+			uniqueName := h.generateUniqueServiceName(originalName)
+			if uniqueName != originalName {
+				log.Printf("[INFO] Service name '%s' already exists, using unique name '%s'", originalName, uniqueName)
+				discoveredService.Name = uniqueName
+			}
+			
+			newService, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
+			if err != nil {
+				log.Printf("[ERROR] Failed to import discovered service %s: %v", discoveredService.Name, err)
+				errors = append(errors, fmt.Sprintf("Failed to import %s: %v", discoveredService.Name, err))
+				continue
+			}
+			service = newService
 		}
 
 		importedServices = append(importedServices, service)
@@ -731,6 +795,33 @@ func (h *Handler) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+}
+
+// generateUniqueServiceName creates a unique service name by appending a suffix if needed
+func (h *Handler) generateUniqueServiceName(baseName string) string {
+	allServices := h.serviceManager.GetServices()
+	existingNames := make(map[string]bool)
+	
+	// Build map of existing service names
+	for _, service := range allServices {
+		existingNames[service.Name] = true
+	}
+	
+	// If base name is unique, return it
+	if !existingNames[baseName] {
+		return baseName
+	}
+	
+	// Generate unique name with suffix
+	for i := 2; i <= 100; i++ { // Limit to prevent infinite loop
+		candidateName := fmt.Sprintf("%s-%d", baseName, i)
+		if !existingNames[candidateName] {
+			return candidateName
+		}
+	}
+	
+	// Fallback: append timestamp if all numbered suffixes are taken
+	return fmt.Sprintf("%s-%d", baseName, time.Now().Unix())
 }
 
 // getJavaDiagnosticsHandler returns Java environment diagnostics
