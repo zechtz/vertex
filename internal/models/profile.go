@@ -9,7 +9,7 @@ type ServiceProfile struct {
 	UserID           string            `json:"userId" db:"user_id"`
 	Name             string            `json:"name" db:"name"`
 	Description      string            `json:"description" db:"description"`
-	Services         []string          `json:"services" db:"services_json"`
+	Services         []string          `json:"services" db:"services_json"` // service ids (UUID)
 	EnvVars          map[string]string `json:"envVars" db:"env_vars_json"`
 	ProjectsDir      string            `json:"projectsDir" db:"projects_dir"`
 	JavaHomeOverride string            `json:"javaHomeOverride" db:"java_home_override"`
@@ -21,6 +21,7 @@ type ServiceProfile struct {
 
 type ProfileService struct {
 	ServiceName string            `json:"serviceName"`
+	ServicePath string            `json:"servicePath"`
 	IsEnabled   bool              `json:"isEnabled"`
 	Order       int               `json:"order"`
 	EnvVars     map[string]string `json:"envVars"`

@@ -1,9 +1,10 @@
+// Package services provides functionality for auto-discovery of microservices
+// in a project directory.
 package services
 
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zechtz/vertex/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 type AutoDiscoveryService struct {
@@ -51,6 +53,11 @@ type MavenPOM struct {
 		SpringVersion  string `xml:"spring-boot.version"`
 		ProjectVersion string `xml:"project.version"`
 	} `xml:"properties"`
+	Parent struct {
+		GroupID    string `xml:"groupId"`
+		ArtifactID string `xml:"artifactId"`
+		Version    string `xml:"version"`
+	} `xml:"parent"`
 }
 
 func NewAutoDiscoveryService(manager *Manager) *AutoDiscoveryService {
@@ -64,19 +71,31 @@ func (ads *AutoDiscoveryService) ScanProjectDirectory() ([]DiscoveredService, er
 	return ads.ScanDirectory(ads.projectDir)
 }
 
+// ScanDirectory scans the specified directory for Maven and Gradle projects, returning discovered services.
 func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredService, error) {
+	if scanDir == "" {
+		return nil, fmt.Errorf("scan directory cannot be empty")
+	}
+	if _, err := os.Stat(scanDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("scan directory does not exist: %s", scanDir)
+	}
+
 	log.Printf("[INFO] Starting auto-discovery scan in directory: %s", scanDir)
 
 	var discoveredServices []DiscoveredService
 
 	err := filepath.Walk(scanDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Continue walking even if there are permission errors
+			log.Printf("[WARN] Error accessing path %s: %v", path, err)
+			return nil // Continue walking
 		}
 
 		// Look for Maven projects (pom.xml files)
 		if info.Name() == "pom.xml" {
-			service := ads.analyzeMavenProjectWithScanDir(path, scanDir)
+			service, err := ads.analyzeMavenProjectWithScanDir(path, scanDir)
+			if err != nil {
+				log.Printf("[WARN] Failed to analyze Maven project at %s: %v", path, err)
+			}
 			if service != nil {
 				discoveredServices = append(discoveredServices, *service)
 			}
@@ -84,7 +103,10 @@ func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredServ
 
 		// Look for Gradle projects (build.gradle files)
 		if info.Name() == "build.gradle" || info.Name() == "build.gradle.kts" {
-			service := ads.analyzeGradleProjectWithScanDir(path, scanDir)
+			service, err := ads.analyzeGradleProjectWithScanDir(path, scanDir)
+			if err != nil {
+				log.Printf("[WARN] Failed to analyze Gradle project at %s: %v", path, err)
+			}
 			if service != nil {
 				discoveredServices = append(discoveredServices, *service)
 			}
@@ -97,15 +119,81 @@ func (ads *AutoDiscoveryService) ScanDirectory(scanDir string) ([]DiscoveredServ
 	}
 
 	// Check if discovered services already exist in the system
-	ads.checkExistingServices(discoveredServices)
+	ads.checkExistingServices(&discoveredServices)
 
 	log.Printf("[INFO] Auto-discovery completed. Found %d potential services", len(discoveredServices))
 	return discoveredServices, nil
 }
 
-func (ads *AutoDiscoveryService) analyzeMavenProjectWithScanDir(pomPath, scanDir string) *DiscoveredService {
+// ScanDirectoryForProfile scans for services with profile-aware existence checking
+func (ads *AutoDiscoveryService) ScanDirectoryForProfile(scanDir string, profileServices []string) ([]DiscoveredService, error) {
+	if scanDir == "" {
+		return nil, fmt.Errorf("scan directory cannot be empty")
+	}
+	if _, err := os.Stat(scanDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("scan directory does not exist: %s", scanDir)
+	}
+
+	log.Printf("[INFO] Starting auto-discovery scan for profile in directory: %s", scanDir)
+
+	var discoveredServices []DiscoveredService
+
+	err := filepath.Walk(scanDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("[WARN] Error accessing path %s: %v", path, err)
+			return nil
+		}
+
+		// Skip hidden directories and files
+		if strings.HasPrefix(info.Name(), ".") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Look for Maven projects (pom.xml files)
+		if info.Name() == "pom.xml" {
+			service, err := ads.analyzeMavenProjectWithScanDir(path, scanDir)
+			if err != nil {
+				log.Printf("[WARN] Failed to analyze Maven project at %s: %v", path, err)
+			}
+			if service != nil {
+				discoveredServices = append(discoveredServices, *service)
+			}
+		}
+
+		// Look for Gradle projects (build.gradle files)
+		if info.Name() == "build.gradle" || info.Name() == "build.gradle.kts" {
+			service, err := ads.analyzeGradleProjectWithScanDir(path, scanDir)
+			if err != nil {
+				log.Printf("[WARN] Failed to analyze Gradle project at %s: %v", path, err)
+			}
+			if service != nil {
+				discoveredServices = append(discoveredServices, *service)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error walking project directory: %w", err)
+	}
+
+	// Check if discovered services already exist in the specific profile
+	ads.checkExistingServicesForProfile(&discoveredServices, profileServices)
+
+	log.Printf("[INFO] Profile-aware auto-discovery completed. Found %d potential services", len(discoveredServices))
+	return discoveredServices, nil
+}
+
+func (ads *AutoDiscoveryService) analyzeMavenProjectWithScanDir(pomPath, scanDir string) (*DiscoveredService, error) {
 	projectDir := filepath.Dir(pomPath)
-	relativePath, _ := filepath.Rel(scanDir, projectDir)
+	relativePath, err := filepath.Rel(scanDir, projectDir)
+	if err != nil {
+		log.Printf("[WARN] Failed to compute relative path for %s: %v", projectDir, err)
+		return nil, fmt.Errorf("failed to compute relative path: %w", err)
+	}
 
 	// Handle the case where project is in the scan directory itself
 	if relativePath == "." {
@@ -115,23 +203,23 @@ func (ads *AutoDiscoveryService) analyzeMavenProjectWithScanDir(pomPath, scanDir
 	log.Printf("[DEBUG] Maven project analysis: scanDir=%s, projectDir=%s, relativePath=%s", scanDir, projectDir, relativePath)
 
 	// Read pom.xml
-	pomContent, err := ioutil.ReadFile(pomPath)
+	pomContent, err := os.ReadFile(pomPath)
 	if err != nil {
 		log.Printf("[WARN] Failed to read pom.xml at %s: %v", pomPath, err)
-		return nil
+		return nil, fmt.Errorf("failed to read pom.xml: %w", err)
 	}
 
 	var pom MavenPOM
 	if err := xml.Unmarshal(pomContent, &pom); err != nil {
 		log.Printf("[WARN] Failed to parse pom.xml at %s: %v", pomPath, err)
-		return nil
+		return nil, fmt.Errorf("failed to parse pom.xml: %w", err)
 	}
 
 	// Check if this is a Spring Boot project
 	isSpringBoot := ads.isSpringBootProject(pom)
 	if !isSpringBoot {
 		log.Printf("[DEBUG] Project at %s is not a Spring Boot project, skipping", projectDir)
-		return nil
+		return nil, nil
 	}
 
 	service := &DiscoveredService{
@@ -151,22 +239,26 @@ func (ads *AutoDiscoveryService) analyzeMavenProjectWithScanDir(pomPath, scanDir
 	service.Properties["name"] = pom.Name
 
 	// Try to determine the port
-	service.Port = ads.extractPortFromProject(projectDir)
+	service.Port, err = ads.extractPortFromProject(projectDir)
+	if err != nil {
+		log.Printf("[DEBUG] No port found for project at %s, using default: %v", projectDir, err)
+		service.Port = 8080 // Fallback to default
+	}
 
 	// Determine service type based on dependencies and naming
 	service.Type = ads.determineServiceType(pom, service.Name)
 
 	log.Printf("[INFO] Discovered Spring Boot service: %s at %s (port: %d)", service.Name, service.Path, service.Port)
-	return service
+	return service, nil
 }
 
-func (ads *AutoDiscoveryService) analyzeGradleProject(buildPath string) *DiscoveredService {
-	return ads.analyzeGradleProjectWithScanDir(buildPath, ads.projectDir)
-}
-
-func (ads *AutoDiscoveryService) analyzeGradleProjectWithScanDir(buildPath, scanDir string) *DiscoveredService {
+func (ads *AutoDiscoveryService) analyzeGradleProjectWithScanDir(buildPath, scanDir string) (*DiscoveredService, error) {
 	projectDir := filepath.Dir(buildPath)
-	relativePath, _ := filepath.Rel(scanDir, projectDir)
+	relativePath, err := filepath.Rel(scanDir, projectDir)
+	if err != nil {
+		log.Printf("[WARN] Failed to compute relative path for %s: %v", projectDir, err)
+		return nil, fmt.Errorf("failed to compute relative path: %w", err)
+	}
 
 	// Handle the case where project is in the scan directory itself
 	if relativePath == "." {
@@ -176,10 +268,10 @@ func (ads *AutoDiscoveryService) analyzeGradleProjectWithScanDir(buildPath, scan
 	log.Printf("[DEBUG] Gradle project analysis: scanDir=%s, projectDir=%s, relativePath=%s", scanDir, projectDir, relativePath)
 
 	// Read build.gradle
-	buildContent, err := ioutil.ReadFile(buildPath)
+	buildContent, err := os.ReadFile(buildPath)
 	if err != nil {
 		log.Printf("[WARN] Failed to read build.gradle at %s: %v", buildPath, err)
-		return nil
+		return nil, fmt.Errorf("failed to read build.gradle: %w", err)
 	}
 
 	content := string(buildContent)
@@ -187,13 +279,14 @@ func (ads *AutoDiscoveryService) analyzeGradleProjectWithScanDir(buildPath, scan
 	// Check if this is a Spring Boot project
 	if !strings.Contains(content, "spring-boot") {
 		log.Printf("[DEBUG] Project at %s is not a Spring Boot project, skipping", projectDir)
-		return nil
+		return nil, nil
 	}
 
 	// Extract project name from directory or settings.gradle
 	projectName := filepath.Base(projectDir)
 	if settingsPath := filepath.Join(projectDir, "settings.gradle"); fileExists(settingsPath) {
-		if settingsContent, err := ioutil.ReadFile(settingsPath); err == nil {
+		settingsContent, err := os.ReadFile(settingsPath)
+		if err == nil {
 			if name := extractGradleProjectName(string(settingsContent)); name != "" {
 				projectName = name
 			}
@@ -210,49 +303,55 @@ func (ads *AutoDiscoveryService) analyzeGradleProjectWithScanDir(buildPath, scan
 	}
 
 	service.Properties["projectName"] = projectName
-	service.Port = ads.extractPortFromProject(projectDir)
+	service.Port, err = ads.extractPortFromProject(projectDir)
+	if err != nil {
+		log.Printf("[DEBUG] No port found for project at %s, using default: %v", projectDir, err)
+		service.Port = 8080 // Fallback to default
+	}
 	service.Type = ads.determineServiceType(MavenPOM{ArtifactID: projectName}, service.Name)
 
 	log.Printf("[INFO] Discovered Spring Boot (Gradle) service: %s at %s (port: %d)", service.Name, service.Path, service.Port)
-	return service
+	return service, nil
 }
 
 func (ads *AutoDiscoveryService) isSpringBootProject(pom MavenPOM) bool {
+	// Check for Spring Boot parent
+	if pom.Parent.GroupID == "org.springframework.boot" && pom.Parent.ArtifactID == "spring-boot-starter-parent" {
+		return true
+	}
 	// Check dependencies for Spring Boot starter
 	for _, dep := range pom.Dependencies.Dependency {
 		if dep.GroupID == "org.springframework.boot" && strings.HasPrefix(dep.ArtifactID, "spring-boot-starter") {
 			return true
 		}
 	}
-
-	// Check for Spring Boot parent
-	// Note: This is a simplified check, real implementation might need parent parsing
 	return false
 }
 
-func (ads *AutoDiscoveryService) extractPortFromProject(projectDir string) int {
+func (ads *AutoDiscoveryService) extractPortFromProject(projectDir string) (int, error) {
 	// Check application.properties
 	if port := ads.extractPortFromProperties(filepath.Join(projectDir, "src/main/resources/application.properties")); port > 0 {
-		return port
+		return port, nil
 	}
 
 	// Check bootstrap.properties
 	if port := ads.extractPortFromProperties(filepath.Join(projectDir, "src/main/resources/bootstrap.properties")); port > 0 {
-		return port
+		return port, nil
 	}
 
 	// Check application.yml
-	if port := ads.extractPortFromYaml(filepath.Join(projectDir, "src/main/resources/application.yml")); port > 0 {
-		return port
+	port, err := ads.extractPortFromYaml(filepath.Join(projectDir, "src/main/resources/application.yml"))
+	if err == nil && port > 0 {
+		return port, nil
 	}
 
 	// Check application-dev.properties
 	if port := ads.extractPortFromProperties(filepath.Join(projectDir, "src/main/resources/application-dev.properties")); port > 0 {
-		return port
+		return port, nil
 	}
 
-	// Default port for Spring Boot
-	return 8080
+	// No port found
+	return 0, fmt.Errorf("no port found in configuration files")
 }
 
 func (ads *AutoDiscoveryService) extractPortFromProperties(filePath string) int {
@@ -260,7 +359,7 @@ func (ads *AutoDiscoveryService) extractPortFromProperties(filePath string) int 
 		return 0
 	}
 
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return 0
 	}
@@ -277,71 +376,58 @@ func (ads *AutoDiscoveryService) extractPortFromProperties(filePath string) int 
 	return 0
 }
 
-func (ads *AutoDiscoveryService) extractPortFromYaml(filePath string) int {
+func (ads *AutoDiscoveryService) extractPortFromYaml(filePath string) (int, error) {
 	if !fileExists(filePath) {
-		return 0
+		return 0, nil
 	}
 
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return 0
+		return 0, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	// Simple YAML port extraction (simplified)
-	lines := strings.Split(string(content), "\n")
-	var inServerSection bool
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "server:" {
-			inServerSection = true
-			continue
-		}
-
-		if inServerSection && strings.HasPrefix(line, "port:") {
-			portStr := strings.TrimSpace(strings.TrimPrefix(line, "port:"))
-			if port, err := strconv.Atoi(portStr); err == nil {
-				return port
-			}
-		}
-
-		// Reset if we hit another top-level section
-		if inServerSection && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && line != "" && !strings.HasPrefix(line, "#") {
-			inServerSection = false
-		}
+	var config struct {
+		Server struct {
+			Port int `yaml:"port"`
+		} `yaml:"server"`
 	}
-
-	return 0
+	if err := yaml.Unmarshal(content, &config); err != nil {
+		return 0, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+	if config.Server.Port > 0 {
+		return config.Server.Port, nil
+	}
+	return 0, nil
 }
 
 func (ads *AutoDiscoveryService) determineServiceType(pom MavenPOM, serviceName string) string {
 	name := strings.ToLower(serviceName)
-	artifactId := strings.ToLower(pom.ArtifactID)
+	artifactID := strings.ToLower(pom.ArtifactID)
 
 	// Check for common service types
-	if strings.Contains(name, "registry") || strings.Contains(name, "eureka") || strings.Contains(artifactId, "registry") {
+	if strings.Contains(name, "registry") || strings.Contains(name, "eureka") || strings.Contains(artifactID, "registry") {
 		return "registry"
 	}
-	if strings.Contains(name, "config") || strings.Contains(artifactId, "config") {
+	if strings.Contains(name, "config") || strings.Contains(artifactID, "config") {
 		return "config-server"
 	}
-	if strings.Contains(name, "gateway") || strings.Contains(artifactId, "gateway") {
+	if strings.Contains(name, "gateway") || strings.Contains(artifactID, "gateway") {
 		return "api-gateway"
 	}
-	if strings.Contains(name, "auth") || strings.Contains(name, "uaa") || strings.Contains(artifactId, "auth") {
+	if strings.Contains(name, "auth") || strings.Contains(name, "uaa") || strings.Contains(artifactID, "auth") {
 		return "authentication"
 	}
-	if strings.Contains(name, "cache") || strings.Contains(artifactId, "cache") {
+	if strings.Contains(name, "cache") || strings.Contains(artifactID, "cache") {
 		return "cache"
 	}
 
 	return "microservice"
 }
 
-func (ads *AutoDiscoveryService) generateServiceName(artifactId, relativePath string) string {
+func (ads *AutoDiscoveryService) generateServiceName(artifactID, relativePath string) string {
 	// Use artifact ID if available, otherwise derive from path
-	if artifactId != "" {
-		return artifactId
+	if artifactID != "" {
+		return artifactID
 	}
 
 	// Use last directory name from path
@@ -353,25 +439,66 @@ func (ads *AutoDiscoveryService) generateServiceName(artifactId, relativePath st
 	return "unknown-service"
 }
 
-func (ads *AutoDiscoveryService) checkExistingServices(discoveredServices []DiscoveredService) {
-	for i := range discoveredServices {
+func (ads *AutoDiscoveryService) checkExistingServices(discoveredServices *[]DiscoveredService) {
+	for i := range *discoveredServices {
 		// Reset exists flag to ensure fresh check each time
-		discoveredServices[i].Exists = false
+		(*discoveredServices)[i].Exists = false
 
 		// Check for name conflicts
 		existingServices := ads.manager.GetServices()
 		for _, existing := range existingServices {
-			if existing.Name == discoveredServices[i].Name {
-				discoveredServices[i].Exists = true
+			if existing.Name == (*discoveredServices)[i].Name {
+				(*discoveredServices)[i].Exists = true
 				break
 			}
 		}
 
 		// If not already flagged as existing, check for path conflicts using system-wide validation
-		if !discoveredServices[i].Exists {
-			if err := ads.manager.ValidateServiceUniqueness(discoveredServices[i].Name, discoveredServices[i].Path); err != nil {
-				discoveredServices[i].Exists = true
+		if !(*discoveredServices)[i].Exists {
+			if err := ads.manager.ValidateServiceUniqueness((*discoveredServices)[i].Name, (*discoveredServices)[i].Path); err != nil {
+				(*discoveredServices)[i].Exists = true
 			}
+		}
+	}
+}
+
+// checkExistingServicesForProfile checks if discovered services exist in a specific profile
+func (ads *AutoDiscoveryService) checkExistingServicesForProfile(discoveredServices *[]DiscoveredService, profileServices []string) {
+	// Create a map of services in the profile for quick lookup
+	profileServiceMap := make(map[string]bool)
+
+	// Get all global services to check paths
+	allServices := ads.manager.GetServices()
+	globalServicePathMap := make(map[string]models.Service)
+
+	for _, service := range allServices {
+		normalizedPath := filepath.ToSlash(filepath.Clean(service.Dir))
+		globalServicePathMap[normalizedPath] = service
+	}
+
+	// Build profile service map using UUIDs
+	for _, serviceUUID := range profileServices {
+		profileServiceMap[serviceUUID] = true
+	}
+
+	for i := range *discoveredServices {
+		(*discoveredServices)[i].Exists = false
+
+		// Check if a service with this path exists globally
+		normalizedDiscoveredPath := filepath.ToSlash(filepath.Clean((*discoveredServices)[i].Path))
+		var matchingGlobalService *models.Service
+		if globalService, exists := globalServicePathMap[normalizedDiscoveredPath]; exists {
+			matchingGlobalService = &globalService
+		}
+
+		// If service exists globally, check if it's in this profile
+		if matchingGlobalService != nil {
+			if profileServiceMap[matchingGlobalService.ID] {
+				// Service exists in both global and profile
+				(*discoveredServices)[i].Exists = true
+			}
+			// If service exists globally but not in profile, leave Exists = false
+			// This allows it to be "re-imported" to the profile
 		}
 	}
 }
