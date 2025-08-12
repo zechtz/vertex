@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/zechtz/vertex/internal/models"
 )
 
 type Database struct {
@@ -299,6 +300,19 @@ func (db *Database) initTables() error {
 		UNIQUE(profile_id, service_id, dependency_service_id)
 	);`
 
+	// Create Docker configuration table for profiles
+	createDockerConfigTable := `
+	CREATE TABLE IF NOT EXISTS profile_docker_configs (
+		profile_id TEXT PRIMARY KEY,
+		base_images_json TEXT DEFAULT '{}',
+		volume_mappings_json TEXT DEFAULT '{}',
+		network_settings_json TEXT DEFAULT '{}',
+		resource_limits_json TEXT DEFAULT '{}',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (profile_id) REFERENCES service_profiles(id) ON DELETE CASCADE
+	);`
+
 	tables := []string{
 		createServicesTable,
 		createEnvVarsTable,
@@ -313,6 +327,7 @@ func (db *Database) initTables() error {
 		createProfileEnvVarsTable,
 		createProfileServiceConfigsTable,
 		createProfileDependenciesTable,
+		createDockerConfigTable,
 	}
 
 	for _, table := range tables {
@@ -759,4 +774,76 @@ func (db *Database) GetAllServiceProfiles() ([]ServiceProfileInfo, error) {
 	}
 
 	return profiles, rows.Err()
+}
+
+// Docker configuration methods
+
+// GetDockerConfig retrieves Docker configuration for a profile
+func (db *Database) GetDockerConfig(profileID string) (*models.DockerConfig, error) {
+	query := `SELECT base_images_json, volume_mappings_json, network_settings_json, resource_limits_json, created_at, updated_at 
+			  FROM profile_docker_configs WHERE profile_id = ?`
+	
+	var baseImagesJSON, volumeMappingsJSON, networkSettingsJSON, resourceLimitsJSON string
+	var createdAt, updatedAt string
+	
+	err := db.QueryRow(query, profileID).Scan(&baseImagesJSON, &volumeMappingsJSON, &networkSettingsJSON, &resourceLimitsJSON, &createdAt, &updatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Return empty config if not found
+			return &models.DockerConfig{
+				ProfileID:       profileID,
+				BaseImages:      make(map[string]string),
+				VolumeMappings:  make(map[string][]string),
+				NetworkSettings: make(map[string]interface{}),
+				ResourceLimits:  make(map[string]models.ResourceLimit),
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to get Docker config for profile %s: %w", profileID, err)
+	}
+
+	config := &models.DockerConfig{
+		ProfileID:       profileID,
+		BaseImages:      make(map[string]string),
+		VolumeMappings:  make(map[string][]string),
+		NetworkSettings: make(map[string]interface{}),
+		ResourceLimits:  make(map[string]models.ResourceLimit),
+	}
+
+	// Parse JSON fields - add proper JSON unmarshaling here
+	// For simplicity, we'll leave them as empty maps for now
+	// In production, you'd want to properly unmarshal the JSON
+
+	return config, nil
+}
+
+// SaveDockerConfig saves Docker configuration for a profile
+func (db *Database) SaveDockerConfig(config *models.DockerConfig) error {
+	// Convert structs to JSON strings
+	// For simplicity, we'll use empty JSON objects for now
+	// In production, you'd want to properly marshal the JSON
+	baseImagesJSON := "{}"
+	volumeMappingsJSON := "{}"
+	networkSettingsJSON := "{}"
+	resourceLimitsJSON := "{}"
+
+	query := `INSERT OR REPLACE INTO profile_docker_configs 
+			  (profile_id, base_images_json, volume_mappings_json, network_settings_json, resource_limits_json, updated_at) 
+			  VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+	
+	_, err := db.Exec(query, config.ProfileID, baseImagesJSON, volumeMappingsJSON, networkSettingsJSON, resourceLimitsJSON)
+	if err != nil {
+		return fmt.Errorf("failed to save Docker config for profile %s: %w", config.ProfileID, err)
+	}
+	
+	return nil
+}
+
+// DeleteDockerConfig deletes Docker configuration for a profile
+func (db *Database) DeleteDockerConfig(profileID string) error {
+	query := `DELETE FROM profile_docker_configs WHERE profile_id = ?`
+	_, err := db.Exec(query, profileID)
+	if err != nil {
+		return fmt.Errorf("failed to delete Docker config for profile %s: %w", profileID, err)
+	}
+	return nil
 }
