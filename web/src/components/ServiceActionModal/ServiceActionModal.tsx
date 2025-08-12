@@ -1,12 +1,6 @@
-import { 
-  AlertTriangle, 
-  X, 
-  Trash2, 
-  UserMinus,
-  Info
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Service, ServiceProfile } from '@/types';
+import { AlertTriangle, X, Trash2, UserMinus, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Service, ServiceProfile } from "@/types";
 
 interface ServiceActionModalProps {
   isOpen: boolean;
@@ -17,23 +11,23 @@ interface ServiceActionModalProps {
   onDeleteGlobally: (serviceName: string) => Promise<void>;
 }
 
-export function ServiceActionModal({ 
-  isOpen, 
-  onClose, 
-  service, 
+export function ServiceActionModal({
+  isOpen,
+  onClose,
+  service,
   activeProfile,
   onRemoveFromProfile,
-  onDeleteGlobally 
+  onDeleteGlobally,
 }: ServiceActionModalProps) {
   if (!isOpen || !service) return null;
 
   const handleRemoveFromProfile = async () => {
-    await onRemoveFromProfile(service.name);
+    await onRemoveFromProfile(service.id);
     onClose();
   };
 
   const handleDeleteGlobally = async () => {
-    await onDeleteGlobally(service.name);
+    await onDeleteGlobally(service.id);
     onClose();
   };
 
@@ -76,8 +70,9 @@ export function ServiceActionModal({
                       Remove from Profile
                     </h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Remove "{service.name}" from the "{activeProfile.name}" profile only. 
-                      The service will still exist and can be added to other profiles.
+                      Remove "{service.name}" from the "{activeProfile.name}"
+                      profile only. The service will still exist and can be
+                      added to other profiles.
                     </p>
                     <Button
                       onClick={handleRemoveFromProfile}
@@ -101,7 +96,7 @@ export function ServiceActionModal({
                     Delete Service Completely
                   </h4>
                   <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                    Permanently delete "{service.name}" from the entire system. 
+                    Permanently delete "{service.name}" from the entire system.
                     This will remove it from all profiles and cannot be undone.
                   </p>
                   <Button
@@ -123,8 +118,9 @@ export function ServiceActionModal({
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                <strong>Tip:</strong> If you're unsure, choose "Remove from Profile" first. 
-                You can always delete the service completely later if needed.
+                <strong>Tip:</strong> If you're unsure, choose "Remove from
+                Profile" first. You can always delete the service completely
+                later if needed.
               </p>
             </div>
           </div>
