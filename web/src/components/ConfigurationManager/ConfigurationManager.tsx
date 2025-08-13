@@ -82,9 +82,7 @@ export function ConfigurationManager({
 
     // Add any missing services as disabled
     const missingServices = services
-      .filter(
-        (service) => !existingServices.find((es) => es.id === service.id),
-      )
+      .filter((service) => !existingServices.find((es) => es.id === service.id))
       .map((service) => ({
         id: service.id,
         name: service.name,

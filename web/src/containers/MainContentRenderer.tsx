@@ -20,6 +20,7 @@ interface MainContentRendererProps {
   serviceOps: any;
   serviceManagement: any;
   activeProfile: any;
+  onboarding?: any;
 }
 
 export function MainContentRenderer({
@@ -28,6 +29,7 @@ export function MainContentRenderer({
   servicesData,
   serviceOps,
   serviceManagement,
+  onboarding,
 }: MainContentRendererProps) {
   const { refreshProfiles } = useProfile();
   const renderMainContent = () => {
@@ -158,6 +160,7 @@ export function MainContentRenderer({
             isOpen={true}
             onClose={() => onSectionChange("services")}
             onConfigUpdated={servicesData.fetchServices}
+            onboarding={onboarding}
           />
         );
       default:

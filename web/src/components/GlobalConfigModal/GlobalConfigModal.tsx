@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Save, Folder, Coffee, RefreshCw } from "lucide-react";
+import { X, Save, Folder, Coffee, RefreshCw, Star, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,12 +18,14 @@ interface GlobalConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfigUpdated?: () => void;
+  onboarding?: any;
 }
 
 export function GlobalConfigModal({
   isOpen,
   onClose,
   onConfigUpdated,
+  onboarding,
 }: GlobalConfigModalProps) {
   const [config, setConfig] = useState<GlobalConfig>({
     projectsDir: "",
@@ -245,6 +247,43 @@ export function GlobalConfigModal({
                     </code>
                   </div>
                 </div>
+
+                {/* Onboarding Section */}
+                {onboarding && (
+                  <div className="space-y-2">
+                    <Label className="text-base font-medium">Getting Started</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Need help setting up your workspace? Run the setup wizard again.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          onboarding.forceShowOnboarding();
+                          onClose();
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Star className="h-4 w-4" />
+                        Run Setup Wizard
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onboarding.resetOnboarding();
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                        Reset Onboarding
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      The setup wizard will help you create profiles, discover services, and configure startup order.
+                    </p>
+                  </div>
+                )}
 
                 {/* Configuration Status */}
                 <div className="p-4 bg-muted/50 rounded-lg">
