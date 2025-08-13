@@ -3,7 +3,9 @@ import { ServiceFilesModal } from "@/components/ServiceConfigModal/ServiceFilesM
 import { ServiceEnvModal } from "@/components/ServiceEnvModal/ServiceEnvModal";
 import { ServiceActionModal } from "@/components/ServiceActionModal/ServiceActionModal";
 import { LibraryInstallModal } from "@/components/LibraryInstallModal";
+import WrapperManagementModal from "@/components/WrapperManagementModal/WrapperManagementModal";
 import { useProfile } from "@/contexts/ProfileContext";
+import { ServiceOperations } from "@/services/serviceOperations";
 
 interface ServiceModalsProps {
   serviceManagement: any;
@@ -53,6 +55,20 @@ export function ServiceModals({ serviceManagement }: ServiceModalsProps) {
         serviceName={serviceManagement.libraryInstallData?.name || ""}
         isOpen={serviceManagement.isLibraryInstallOpen}
         onClose={serviceManagement.closeLibraryInstall}
+      />
+
+      <WrapperManagementModal
+        serviceId={serviceManagement.wrapperManagementData?.id || ""}
+        serviceName={serviceManagement.wrapperManagementData?.name || ""}
+        isOpen={serviceManagement.isWrapperManagementOpen}
+        onClose={serviceManagement.closeWrapperManagement}
+        onValidateWrapper={() => ServiceOperations.validateWrapper(serviceManagement.wrapperManagementData?.id || "")}
+        onGenerateWrapper={async () => {
+          await ServiceOperations.generateWrapper(serviceManagement.wrapperManagementData?.id || "");
+        }}
+        onRepairWrapper={async () => {
+          await ServiceOperations.repairWrapper(serviceManagement.wrapperManagementData?.id || "");
+        }}
       />
     </>
   );

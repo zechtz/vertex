@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -168,53 +169,90 @@ func ValidateBuildSystem(serviceDir string, buildSystem BuildSystemType) bool {
 	return false
 }
 
-// GenerateMavenWrapper creates Maven wrapper files using the recommended takari plugin
+// GenerateMavenWrapper generates Maven wrapper files in the specified service directory
 func GenerateMavenWrapper(serviceDir string) error {
-	log.Printf("[INFO] Generating Maven wrapper in %s", serviceDir)
-	
-	// Use the recommended mvn -N io.takari:maven:wrapper command
-	cmd := exec.Command("mvn", "-N", "io.takari:maven:wrapper")
+	// Validate service directory
+	log.Printf("[DEBUG] Generating Maven wrapper in directory: %s", serviceDir)
+	if _, err := os.Stat(serviceDir); os.IsNotExist(err) {
+		return fmt.Errorf("service directory %s does not exist", serviceDir)
+	}
+
+	// Validate pom.xml presence
+	pomPath := filepath.Join(serviceDir, "pom.xml")
+	if _, err := os.Stat(pomPath); os.IsNotExist(err) {
+		return fmt.Errorf("no pom.xml found in %s, not a valid Maven project", serviceDir)
+	}
+
+	// Determine the Maven executable name based on OS
+	mvnExecutable := "mvn"
+	if runtime.GOOS == "windows" {
+		mvnExecutable = "mvn.cmd" // Windows uses mvn.cmd
+	}
+	log.Printf("[DEBUG] Looking for Maven executable: %s", mvnExecutable)
+
+	// Attempt to find mvn in PATH (mimics `command -v mvn` or `where mvn`)
+	mvnPath, err := exec.LookPath(mvnExecutable)
+	if err != nil {
+		// Log the PATH for debugging
+		currentPath := os.Getenv("PATH")
+		log.Printf("[DEBUG] PATH environment variable: %s", currentPath)
+
+		// Check MAVEN_HOME environment variable
+		mavenHome := os.Getenv("MAVEN_HOME")
+		if mavenHome != "" {
+			potentialPath := filepath.Join(mavenHome, "bin", mvnExecutable)
+			if _, err := os.Stat(potentialPath); err == nil {
+				mvnPath = potentialPath
+				log.Printf("[DEBUG] Found %s via MAVEN_HOME at: %s", mvnExecutable, mvnPath)
+			} else {
+				log.Printf("[DEBUG] MAVEN_HOME set to %s, but %s not found", mavenHome, potentialPath)
+			}
+		}
+
+		// If still not found, return error
+		if mvnPath == "" {
+			return fmt.Errorf("%s not found in PATH or MAVEN_HOME; please install Maven or add it to PATH (e.g., /opt/homebrew/bin for Homebrew on macOS) or set MAVEN_HOME", mvnExecutable)
+		}
+	}
+	log.Printf("[DEBUG] Using %s path: %s", mvnExecutable, mvnPath)
+
+	// Verify executable permissions
+	if info, err := os.Stat(mvnPath); err != nil || info.Mode().Perm()&0111 == 0 {
+		return fmt.Errorf("%s path %s is not executable or inaccessible: %v", mvnExecutable, mvnPath, err)
+	}
+
+	// Execute mvn -N wrapper:wrapper
+	cmd := exec.Command(mvnPath, "-N", "wrapper:wrapper")
 	cmd.Dir = serviceDir
-	
-	// Capture output for debugging
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Printf("[WARN] Failed to generate Maven wrapper: %v - output: %s", err, string(output))
-		return fmt.Errorf("failed to generate Maven wrapper: %w", err)
+		return fmt.Errorf("failed to generate Maven wrapper in %s: %v, output: %s", serviceDir, err, string(output))
 	}
-	
-	// Make mvnw executable on Unix systems
-	mvnwPath := filepath.Join(serviceDir, "mvnw")
-	if err := os.Chmod(mvnwPath, 0755); err != nil {
-		log.Printf("[WARN] Failed to make mvnw executable: %v", err)
-	}
-	
-	log.Printf("[INFO] Successfully generated Maven wrapper in %s", serviceDir)
-	log.Printf("[DEBUG] Maven wrapper output: %s", string(output))
+	log.Printf("[DEBUG] Maven wrapper generated successfully in %s, output: %s", serviceDir, string(output))
 	return nil
 }
 
 // GenerateGradleWrapper creates Gradle wrapper files
 func GenerateGradleWrapper(serviceDir string) error {
 	log.Printf("[INFO] Generating Gradle wrapper in %s", serviceDir)
-	
+
 	// Use gradle wrapper command to generate wrapper files
 	cmd := exec.Command("gradle", "wrapper")
 	cmd.Dir = serviceDir
-	
+
 	// Capture output for debugging
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("[WARN] Failed to generate Gradle wrapper: %v - output: %s", err, string(output))
 		return fmt.Errorf("failed to generate Gradle wrapper: %w", err)
 	}
-	
+
 	// Make gradlew executable on Unix systems
 	gradlewPath := filepath.Join(serviceDir, "gradlew")
 	if err := os.Chmod(gradlewPath, 0755); err != nil {
 		log.Printf("[WARN] Failed to make gradlew executable: %v", err)
 	}
-	
+
 	log.Printf("[INFO] Successfully generated Gradle wrapper in %s", serviceDir)
 	log.Printf("[DEBUG] Gradle wrapper output: %s", string(output))
 	return nil
@@ -235,13 +273,13 @@ func ValidateWrapperIntegrity(serviceDir string, buildSystem BuildSystemType) (b
 // validateMavenWrapperIntegrity checks Maven wrapper files
 func validateMavenWrapperIntegrity(serviceDir string) (bool, error) {
 	requiredFiles := []string{"mvnw", ".mvn/wrapper/maven-wrapper.properties"}
-	
+
 	for _, file := range requiredFiles {
 		path := filepath.Join(serviceDir, file)
 		if _, err := os.Stat(path); err != nil {
 			return false, fmt.Errorf("missing or corrupted wrapper file: %s", file)
 		}
-		
+
 		// Check if mvnw is executable and not empty
 		if file == "mvnw" {
 			info, err := os.Stat(path)
@@ -253,7 +291,7 @@ func validateMavenWrapperIntegrity(serviceDir string) (bool, error) {
 			}
 		}
 	}
-	
+
 	// Try to run wrapper to test if it works
 	cmd := exec.Command("./mvnw", "--version")
 	cmd.Dir = serviceDir
@@ -261,20 +299,20 @@ func validateMavenWrapperIntegrity(serviceDir string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("wrapper execution test failed: %w", err)
 	}
-	
+
 	return true, nil
 }
 
 // validateGradleWrapperIntegrity checks Gradle wrapper files
 func validateGradleWrapperIntegrity(serviceDir string) (bool, error) {
 	requiredFiles := []string{"gradlew", "gradle/wrapper/gradle-wrapper.properties"}
-	
+
 	for _, file := range requiredFiles {
 		path := filepath.Join(serviceDir, file)
 		if _, err := os.Stat(path); err != nil {
 			return false, fmt.Errorf("missing or corrupted wrapper file: %s", file)
 		}
-		
+
 		// Check if gradlew is executable and not empty
 		if file == "gradlew" {
 			info, err := os.Stat(path)
@@ -286,7 +324,7 @@ func validateGradleWrapperIntegrity(serviceDir string) (bool, error) {
 			}
 		}
 	}
-	
+
 	// Try to run wrapper to test if it works
 	cmd := exec.Command("./gradlew", "--version")
 	cmd.Dir = serviceDir
@@ -294,14 +332,14 @@ func validateGradleWrapperIntegrity(serviceDir string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("wrapper execution test failed: %w", err)
 	}
-	
+
 	return true, nil
 }
 
 // RepairWrapper generates/repairs wrapper files for the detected build system
 func RepairWrapper(serviceDir string) error {
 	buildSystem := DetectBuildSystem(serviceDir)
-	
+
 	switch buildSystem {
 	case BuildSystemMaven:
 		return GenerateMavenWrapper(serviceDir)

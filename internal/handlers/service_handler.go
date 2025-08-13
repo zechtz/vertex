@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -42,7 +44,6 @@ func registerServiceRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/services/logs/clear", h.clearAllLogsHandler).Methods("DELETE")
 	r.HandleFunc("/api/services/{id}/metrics", h.getServiceMetricsHandler).Methods("GET")
 
-	// Wrapper management endpoints
 	r.HandleFunc("/api/services/{id}/wrapper/validate", h.validateWrapperHandler).Methods("GET")
 	r.HandleFunc("/api/services/{id}/wrapper/generate", h.generateWrapperHandler).Methods("POST")
 	r.HandleFunc("/api/services/{id}/wrapper/repair", h.repairWrapperHandler).Methods("POST")
@@ -456,7 +457,7 @@ func (h *Handler) installLibrariesHandler(w http.ResponseWriter, r *http.Request
 
 	// Get the correct projects directory using profile-aware logic
 	projectsDir := h.getServiceProjectsDir(serviceUUID)
-	
+
 	log.Printf("[INFO] Installing libraries for service %s (auto-discovery from .gitlab-ci.yml) using projects dir: %s", serviceUUID, projectsDir)
 
 	// Call InstallLibrariesWithProjectsDir to use the correct directory
@@ -658,7 +659,7 @@ func (h *Handler) clearAllLogsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := h.serviceManager.ClearAllLogs(request.ServiceNames)
-	
+
 	successCount := 0
 	errorCount := 0
 	for _, result := range results {
@@ -817,7 +818,7 @@ func (h *Handler) previewLibrariesHandler(w http.ResponseWriter, r *http.Request
 
 	// Get the correct projects directory using profile-aware logic
 	projectsDir := h.getServiceProjectsDir(serviceUUID)
-	
+
 	log.Printf("[INFO] Previewing libraries for service %s using projects dir: %s", serviceUUID, projectsDir)
 
 	// Get library preview
@@ -870,8 +871,8 @@ func (h *Handler) installSelectedLibrariesHandler(w http.ResponseWriter, r *http
 
 	// Get the correct projects directory using profile-aware logic
 	projectsDir := h.getServiceProjectsDir(serviceUUID)
-	
-	log.Printf("[INFO] Installing libraries for service %s in environments %v using projects dir: %s", 
+
+	log.Printf("[INFO] Installing libraries for service %s in environments %v using projects dir: %s",
 		serviceUUID, request.Environments, projectsDir)
 
 	// Get library preview to understand what needs to be installed
@@ -903,7 +904,7 @@ func (h *Handler) installSelectedLibrariesHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	log.Printf("[INFO] Installing %d libraries for service %s from %d environments", 
+	log.Printf("[INFO] Installing %d libraries for service %s from %d environments",
 		len(librariesToInstall), serviceUUID, len(request.Environments))
 
 	// Install the selected libraries
@@ -914,11 +915,11 @@ func (h *Handler) installSelectedLibrariesHandler(w http.ResponseWriter, r *http
 	}
 
 	response := map[string]interface{}{
-		"status":      "success",
-		"message":     fmt.Sprintf("Successfully installed libraries for service %s", service.Name),
-		"serviceName": service.Name,
-		"serviceId":   serviceUUID,
-		"environments": request.Environments,
+		"status":             "success",
+		"message":            fmt.Sprintf("Successfully installed libraries for service %s", service.Name),
+		"serviceName":        service.Name,
+		"serviceId":          serviceUUID,
+		"environments":       request.Environments,
 		"librariesInstalled": len(librariesToInstall),
 	}
 
@@ -956,12 +957,12 @@ func (h *Handler) validateWrapperHandler(w http.ResponseWriter, r *http.Request)
 	isValid, err := h.serviceManager.ValidateWrapperIntegrity(serviceDir, buildSystem)
 
 	response := map[string]interface{}{
-		"serviceId":     serviceUUID,
-		"serviceName":   service.Name,
-		"buildSystem":   string(buildSystem),
-		"isValid":       isValid,
-		"hasWrapper":    false,
-		"wrapperFiles":  []string{},
+		"serviceId":    serviceUUID,
+		"serviceName":  service.Name,
+		"buildSystem":  string(buildSystem),
+		"isValid":      isValid,
+		"hasWrapper":   false,
+		"wrapperFiles": []string{},
 	}
 
 	if err != nil {
@@ -1002,25 +1003,32 @@ func (h *Handler) generateWrapperHandler(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Check if service exists
 	service, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
 	if !exists {
 		http.Error(w, fmt.Sprintf("Service with UUID %s not found", serviceUUID), http.StatusNotFound)
 		return
 	}
 
-	// Get the service directory using profile-aware logic
 	projectsDir := h.getServiceProjectsDir(serviceUUID)
 	serviceDir := fmt.Sprintf("%s/%s", projectsDir, service.Dir)
 
+	// Log the PATH environment variable
+	path := os.Getenv("PATH")
+	log.Printf("[DEBUG] PATH environment variable: %s", path)
+
 	log.Printf("[INFO] Generating wrapper for service %s in directory: %s", service.Name, serviceDir)
 
-	// Detect build system and generate appropriate wrapper
 	buildSystem := h.serviceManager.DetectBuildSystem(serviceDir)
 	var err error
 
 	switch buildSystem {
 	case "maven":
+		// Check if mvn is in PATH
+		if _, err := exec.LookPath("mvn"); err != nil {
+			log.Printf("[ERROR] mvn not found in PATH: %v", err)
+			http.Error(w, "Maven (mvn) not found in PATH", http.StatusInternalServerError)
+			return
+		}
 		err = h.serviceManager.GenerateMavenWrapper(serviceDir)
 	case "gradle":
 		err = h.serviceManager.GenerateGradleWrapper(serviceDir)
