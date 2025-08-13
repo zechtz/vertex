@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   X,
   Search,
@@ -9,15 +9,15 @@ import {
   Server,
   RefreshCw,
   FolderOpen,
-  Plus
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast, toast } from '@/components/ui/toast';
+  Plus,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast, toast } from "@/components/ui/toast";
 
 interface DiscoveredService {
   name: string;
@@ -40,105 +40,117 @@ interface AutoDiscoveryModalProps {
 export function AutoDiscoveryModal({
   isOpen,
   onClose,
-  onServiceImported
+  onServiceImported,
 }: AutoDiscoveryModalProps) {
   const { token } = useAuth();
   const { addToast } = useToast();
-  const [discoveredServices, setDiscoveredServices] = useState<DiscoveredService[]>([]);
+  const [discoveredServices, setDiscoveredServices] = useState<
+    DiscoveredService[]
+  >([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isImporting, setIsImporting] = useState<Record<string, boolean>>({});
   const [isBulkImporting, setIsBulkImporting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [hasScanned, setHasScanned] = useState(false);
-  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(
+    new Set(),
+  );
 
-  const filteredServices = discoveredServices.filter(service =>
-    service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    service.framework.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredServices = discoveredServices.filter(
+    (service) =>
+      service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      service.framework.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const scanForServices = async () => {
     setIsScanning(true);
     try {
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       };
-      
+
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch('/api/auto-discovery/scan', {
-        method: 'POST',
-        headers
+      const response = await fetch("/api/auto-discovery/scan", {
+        method: "POST",
+        headers,
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to scan: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Failed to scan: ${response.status} ${response.statusText}`,
+        );
       }
 
       const result = await response.json();
       setDiscoveredServices(result.discoveredServices || []);
       setHasScanned(true);
     } catch (error) {
-      console.error('Failed to scan for services:', error);
-      alert('Failed to scan for services: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      console.error("Failed to scan for services:", error);
+      alert(
+        "Failed to scan for services: " +
+          (error instanceof Error ? error.message : "Unknown error"),
+      );
     } finally {
       setIsScanning(false);
     }
   };
 
   const importService = async (service: DiscoveredService) => {
-    setIsImporting(prev => ({ ...prev, [service.name]: true }));
+    setIsImporting((prev) => ({ ...prev, [service.name]: true }));
     try {
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       };
 
       // Add Authorization header if token exists
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch('/api/auto-discovery/import', {
-        method: 'POST',
+      const response = await fetch("/api/auto-discovery/import", {
+        method: "POST",
         headers,
-        body: JSON.stringify(service)
+        body: JSON.stringify(service),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to import service: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Failed to import service: ${response.status} ${response.statusText}`,
+        );
       }
 
       const result = await response.json();
-      console.log('Service imported successfully:', result);
-      
+      console.log("Service imported successfully:", result);
+
       // Mark service as existing in our local state
-      setDiscoveredServices(prev =>
-        prev.map(s => s.name === service.name ? { ...s, exists: true } : s)
+      setDiscoveredServices((prev) =>
+        prev.map((s) => (s.name === service.name ? { ...s, exists: true } : s)),
       );
 
       // Show success toast
       addToast(
         toast.success(
-          'Service imported',
-          `${service.name} has been imported and added to active profile`
-        )
+          "Service imported",
+          `${service.name} has been imported and added to active profile`,
+        ),
       );
 
       // Notify parent component
       onServiceImported();
     } catch (error) {
-      console.error('Failed to import service:', error);
+      console.error("Failed to import service:", error);
       addToast(
         toast.error(
-          'Failed to import service',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+          "Failed to import service",
+          error instanceof Error ? error.message : "Unknown error",
+        ),
       );
     } finally {
-      setIsImporting(prev => ({ ...prev, [service.name]: false }));
+      setIsImporting((prev) => ({ ...prev, [service.name]: false }));
     }
   };
 
@@ -146,60 +158,64 @@ export function AutoDiscoveryModal({
     if (selectedServices.size === 0) {
       addToast(
         toast.warning(
-          'No services selected',
-          'Please select services to import'
-        )
+          "No services selected",
+          "Please select services to import",
+        ),
       );
       return;
     }
 
     setIsBulkImporting(true);
     try {
-      const servicesToImport = discoveredServices.filter(service => 
-        selectedServices.has(service.name) && !service.exists
+      const servicesToImport = discoveredServices.filter(
+        (service) => selectedServices.has(service.name) && !service.exists,
       );
 
       if (servicesToImport.length === 0) {
         addToast(
           toast.info(
-            'Services already imported',
-            'All selected services are already imported'
-          )
+            "Services already imported",
+            "All selected services are already imported",
+          ),
         );
         return;
       }
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       };
 
       // Add Authorization header if token exists
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch('/api/auto-discovery/import-bulk', {
-        method: 'POST',
+      const response = await fetch("/api/auto-discovery/import-bulk", {
+        method: "POST",
         headers,
-        body: JSON.stringify({ services: servicesToImport })
+        body: JSON.stringify({ services: servicesToImport }),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to bulk import services: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Failed to bulk import services: ${response.status} ${response.statusText}`,
+        );
       }
 
       const result = await response.json();
-      console.log('Bulk import completed:', result);
-      
+      console.log("Bulk import completed:", result);
+
       // Mark only successfully imported services as existing in our local state
-      const importedServiceNames = new Set(result.importedServices?.map((s: any) => s.name) || []);
-      setDiscoveredServices(prev =>
-        prev.map(service => {
+      const importedServiceNames = new Set(
+        result.importedServices?.map((s: any) => s.name) || [],
+      );
+      setDiscoveredServices((prev) =>
+        prev.map((service) => {
           if (importedServiceNames.has(service.name)) {
             return { ...service, exists: true };
           }
           return service;
-        })
+        }),
       );
 
       // Clear selection
@@ -212,25 +228,25 @@ export function AutoDiscoveryModal({
       if (result.errors && result.errors.length > 0) {
         addToast(
           toast.warning(
-            'Bulk import completed with errors',
-            `${result.totalImported} services imported successfully, but ${result.errors.length} failed. Check logs for details.`
-          )
+            "Bulk import completed with errors",
+            `${result.totalImported} services imported successfully, but ${result.errors.length} failed. Check logs for details.`,
+          ),
         );
       } else {
         addToast(
           toast.success(
-            'Bulk import successful',
-            `Successfully imported ${result.totalImported} service(s) and added to active profile`
-          )
+            "Bulk import successful",
+            `Successfully imported ${result.totalImported} service(s) and added to active profile`,
+          ),
         );
       }
     } catch (error) {
-      console.error('Failed to bulk import services:', error);
+      console.error("Failed to bulk import services:", error);
       addToast(
         toast.error(
-          'Failed to bulk import services',
-          error instanceof Error ? error.message : 'Unknown error'
-        )
+          "Failed to bulk import services",
+          error instanceof Error ? error.message : "Unknown error",
+        ),
       );
     } finally {
       setIsBulkImporting(false);
@@ -238,7 +254,7 @@ export function AutoDiscoveryModal({
   };
 
   const toggleServiceSelection = (serviceName: string) => {
-    setSelectedServices(prev => {
+    setSelectedServices((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(serviceName)) {
         newSet.delete(serviceName);
@@ -250,29 +266,35 @@ export function AutoDiscoveryModal({
   };
 
   const toggleSelectAll = () => {
-    const availableServices = filteredServices.filter(service => !service.exists);
-    const allSelected = availableServices.every(service => selectedServices.has(service.name));
-    
+    const availableServices = filteredServices.filter(
+      (service) => !service.exists,
+    );
+    const allSelected = availableServices.every((service) =>
+      selectedServices.has(service.name),
+    );
+
     if (allSelected) {
       // Deselect all
       setSelectedServices(new Set());
     } else {
       // Select all available services
-      setSelectedServices(new Set(availableServices.map(service => service.name)));
+      setSelectedServices(
+        new Set(availableServices.map((service) => service.name)),
+      );
     }
   };
 
   const getServiceTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'registry':
+      case "registry":
         return <Server className="w-4 h-4 text-blue-600" />;
-      case 'config-server':
+      case "config-server":
         return <FileCode className="w-4 h-4 text-green-600" />;
-      case 'api-gateway':
+      case "api-gateway":
         return <Server className="w-4 h-4 text-purple-600" />;
-      case 'authentication':
+      case "authentication":
         return <Server className="w-4 h-4 text-orange-600" />;
-      case 'cache':
+      case "cache":
         return <Server className="w-4 h-4 text-yellow-600" />;
       default:
         return <Server className="w-4 h-4 text-gray-600" />;
@@ -281,18 +303,18 @@ export function AutoDiscoveryModal({
 
   const getServiceTypeBadgeColor = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'registry':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200';
-      case 'config-server':
-        return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200';
-      case 'api-gateway':
-        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200';
-      case 'authentication':
-        return 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200';
-      case 'cache':
-        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200';
+      case "registry":
+        return "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200";
+      case "config-server":
+        return "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200";
+      case "api-gateway":
+        return "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200";
+      case "authentication":
+        return "bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200";
+      case "cache":
+        return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200";
       default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
+        return "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200";
     }
   };
 
@@ -303,7 +325,7 @@ export function AutoDiscoveryModal({
       <div className="flex min-h-screen items-center justify-center p-4">
         {/* Backdrop */}
         <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-        
+
         {/* Modal */}
         <div className="relative w-full max-w-6xl max-h-[95vh] overflow-y-auto">
           <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl">
@@ -318,7 +340,8 @@ export function AutoDiscoveryModal({
                     Auto-Discovery
                   </h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Automatically detect Spring Boot services in your project directory
+                    Automatically detect Spring Boot services in your project
+                    directory
                   </p>
                 </div>
               </div>
@@ -328,8 +351,10 @@ export function AutoDiscoveryModal({
                   disabled={isScanning}
                   className="bg-green-600 hover:bg-green-700"
                 >
-                  <Search className={`w-4 h-4 mr-2 ${isScanning ? 'animate-spin' : ''}`} />
-                  {isScanning ? 'Scanning...' : 'Scan Directory'}
+                  <Search
+                    className={`w-4 h-4 mr-2 ${isScanning ? "animate-spin" : ""}`}
+                  />
+                  {isScanning ? "Scanning..." : "Scan Directory"}
                 </Button>
                 <Button variant="ghost" onClick={onClose}>
                   <X className="w-5 h-5" />
@@ -345,7 +370,8 @@ export function AutoDiscoveryModal({
                     Ready to discover services
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400 mb-6">
-                    Click "Scan Directory" to automatically detect Spring Boot services in your project directory.
+                    Click "Scan Directory" to automatically detect Spring Boot
+                    services in your project directory.
                   </p>
                   <Button
                     onClick={scanForServices}
@@ -364,7 +390,8 @@ export function AutoDiscoveryModal({
                     Scanning for services...
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">
-                    Looking for Maven and Gradle projects with Spring Boot dependencies.
+                    Looking for Maven and Gradle projects with Spring Boot
+                    dependencies.
                   </p>
                 </div>
               )}
@@ -383,7 +410,8 @@ export function AutoDiscoveryModal({
                           className="w-64"
                         />
                         <Badge variant="outline" className="text-sm">
-                          {filteredServices.length} of {discoveredServices.length} services
+                          {filteredServices.length} of{" "}
+                          {discoveredServices.length} services
                         </Badge>
                       </div>
                       <Button
@@ -404,7 +432,9 @@ export function AutoDiscoveryModal({
                             <Search className="w-4 h-4 text-blue-600" />
                             <span className="text-sm font-medium">Found</span>
                           </div>
-                          <p className="text-2xl font-bold text-blue-600">{discoveredServices.length}</p>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {discoveredServices.length}
+                          </p>
                         </CardContent>
                       </Card>
                       <Card>
@@ -414,7 +444,7 @@ export function AutoDiscoveryModal({
                             <span className="text-sm font-medium">New</span>
                           </div>
                           <p className="text-2xl font-bold text-green-600">
-                            {discoveredServices.filter(s => !s.exists).length}
+                            {discoveredServices.filter((s) => !s.exists).length}
                           </p>
                         </CardContent>
                       </Card>
@@ -422,10 +452,12 @@ export function AutoDiscoveryModal({
                         <CardContent className="p-3">
                           <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-gray-600" />
-                            <span className="text-sm font-medium">Existing</span>
+                            <span className="text-sm font-medium">
+                              Existing
+                            </span>
                           </div>
                           <p className="text-2xl font-bold text-gray-600">
-                            {discoveredServices.filter(s => s.exists).length}
+                            {discoveredServices.filter((s) => s.exists).length}
                           </p>
                         </CardContent>
                       </Card>
@@ -436,7 +468,10 @@ export function AutoDiscoveryModal({
                             <span className="text-sm font-medium">Invalid</span>
                           </div>
                           <p className="text-2xl font-bold text-orange-600">
-                            {discoveredServices.filter(s => !s.isValid).length}
+                            {
+                              discoveredServices.filter((s) => !s.isValid)
+                                .length
+                            }
                           </p>
                         </CardContent>
                       </Card>
@@ -444,18 +479,28 @@ export function AutoDiscoveryModal({
                   </div>
 
                   {/* Bulk Actions */}
-                  {filteredServices.filter(s => !s.exists).length > 0 && (
+                  {filteredServices.filter((s) => !s.exists).length > 0 && (
                     <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-4">
                         <Checkbox
                           id="select-all"
-                          checked={filteredServices.filter(s => !s.exists).length > 0 && 
-                                  filteredServices.filter(s => !s.exists).every(s => selectedServices.has(s.name))}
+                          checked={
+                            filteredServices.filter((s) => !s.exists).length >
+                              0 &&
+                            filteredServices
+                              .filter((s) => !s.exists)
+                              .every((s) => selectedServices.has(s.name))
+                          }
                           onCheckedChange={toggleSelectAll}
                           aria-label="Select all services"
                         />
-                        <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
-                          Select All ({filteredServices.filter(s => !s.exists).length} services)
+                        <label
+                          htmlFor="select-all"
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          Select All (
+                          {filteredServices.filter((s) => !s.exists).length}{" "}
+                          services)
                         </label>
                         {selectedServices.size > 0 && (
                           <Badge variant="secondary">
@@ -465,7 +510,9 @@ export function AutoDiscoveryModal({
                       </div>
                       <Button
                         onClick={importSelectedServices}
-                        disabled={selectedServices.size === 0 || isBulkImporting}
+                        disabled={
+                          selectedServices.size === 0 || isBulkImporting
+                        }
                         className="ml-4"
                       >
                         {isBulkImporting ? (
@@ -484,23 +531,33 @@ export function AutoDiscoveryModal({
                   )}
 
                   {/* Services List */}
-                  {filteredServices.length === 0 && discoveredServices.length > 0 && (
-                    <div className="text-center py-8">
-                      <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 dark:text-gray-400">No services match your search criteria.</p>
-                    </div>
-                  )}
+                  {filteredServices.length === 0 &&
+                    discoveredServices.length > 0 && (
+                      <div className="text-center py-8">
+                        <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600 dark:text-gray-400">
+                          No services match your search criteria.
+                        </p>
+                      </div>
+                    )}
 
-                  {filteredServices.length === 0 && discoveredServices.length === 0 && (
-                    <div className="text-center py-8">
-                      <FileCode className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-600 dark:text-gray-400">No Spring Boot services found in the project directory.</p>
-                    </div>
-                  )}
+                  {filteredServices.length === 0 &&
+                    discoveredServices.length === 0 && (
+                      <div className="text-center py-8">
+                        <FileCode className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600 dark:text-gray-400">
+                          No Spring Boot services found in the project
+                          directory.
+                        </p>
+                      </div>
+                    )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredServices.map((service) => (
-                      <Card key={service.name} className={`border ${service.exists ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50' : 'border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20'}`}>
+                      <Card
+                        key={service.name}
+                        className={`border ${service.exists ? "border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50" : "border-green-300 dark:border-green-600 bg-green-50 dark:bg-green-900/20"}`}
+                      >
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-2">
@@ -508,15 +565,23 @@ export function AutoDiscoveryModal({
                                 <Checkbox
                                   id={`service-${service.name}`}
                                   checked={selectedServices.has(service.name)}
-                                  onCheckedChange={() => toggleServiceSelection(service.name)}
+                                  onCheckedChange={() =>
+                                    toggleServiceSelection(service.name)
+                                  }
                                   aria-label={`Select ${service.name}`}
                                 />
                               )}
                               {getServiceTypeIcon(service.type)}
-                              <CardTitle className="text-lg">{service.name}</CardTitle>
+                              <CardTitle className="text-lg">
+                                {service.name}
+                              </CardTitle>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Badge className={getServiceTypeBadgeColor(service.type)}>
+                              <Badge
+                                className={getServiceTypeBadgeColor(
+                                  service.type,
+                                )}
+                              >
                                 {service.type}
                               </Badge>
                               {service.exists && (
@@ -532,11 +597,15 @@ export function AutoDiscoveryModal({
                           <div className="space-y-2 text-sm">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Framework:</span>
-                              <Badge variant="outline">{service.framework}</Badge>
+                              <Badge variant="outline">
+                                {service.framework}
+                              </Badge>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Path:</span>
-                              <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">{service.path}</span>
+                              <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
+                                {service.path}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium">Port:</span>
@@ -544,8 +613,12 @@ export function AutoDiscoveryModal({
                             </div>
                             {service.description && (
                               <div>
-                                <span className="font-medium">Description:</span>
-                                <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">{service.description}</p>
+                                <span className="font-medium">
+                                  Description:
+                                </span>
+                                <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                                  {service.description}
+                                </p>
                               </div>
                             )}
                           </div>
@@ -562,8 +635,12 @@ export function AutoDiscoveryModal({
                                 disabled={isImporting[service.name]}
                                 className="bg-blue-600 hover:bg-blue-700"
                               >
-                                <Download className={`w-4 h-4 mr-2 ${isImporting[service.name] ? 'animate-spin' : ''}`} />
-                                {isImporting[service.name] ? 'Importing...' : 'Import Service'}
+                                <Download
+                                  className={`w-4 h-4 mr-2 ${isImporting[service.name] ? "animate-spin" : ""}`}
+                                />
+                                {isImporting[service.name]
+                                  ? "Importing..."
+                                  : "Import Service"}
                               </Button>
                             )}
                           </div>

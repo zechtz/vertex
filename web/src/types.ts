@@ -196,6 +196,7 @@ export interface CreateProfileRequest {
   projectsDir: string;
   javaHomeOverride: string;
   isDefault: boolean;
+  isActive?: boolean;
 }
 
 export interface UpdateProfileRequest {

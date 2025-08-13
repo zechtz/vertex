@@ -8,8 +8,10 @@ import { useServices } from "@/hooks/useServices";
 import { useServiceOperations } from "@/hooks/useServiceOperations";
 import { useServiceManagement } from "@/hooks/useServiceManagement";
 import { useLogsOperations } from "@/hooks/useLogsOperations";
+import { useOnboarding } from "@/hooks/useOnboarding";
 import { MainContentRenderer } from "./MainContentRenderer";
 import { ServiceModals } from "./ServiceModals";
+import { OnboardingStepper } from "@/components/Onboarding/OnboardingStepper";
 
 export function AuthenticatedApp() {
   const { user, logout } = useAuth();
@@ -20,6 +22,7 @@ export function AuthenticatedApp() {
   const serviceOps = useServiceOperations();
   const serviceManagement = useServiceManagement(servicesData.fetchServices);
   const logsOps = useLogsOperations();
+  const onboarding = useOnboarding();
 
   // UI State
   const [activeSection, setActiveSection] = useState("services");
@@ -69,6 +72,7 @@ export function AuthenticatedApp() {
             serviceOps={serviceOps}
             serviceManagement={serviceManagement}
             activeProfile={activeProfile}
+            onboarding={onboarding}
           />
         </div>
       </div>
@@ -97,6 +101,13 @@ export function AuthenticatedApp() {
       <ServiceModals
         serviceManagement={serviceManagement}
         onServiceSaved={servicesData.fetchServices}
+      />
+
+      {/* Onboarding Stepper */}
+      <OnboardingStepper
+        isOpen={onboarding.isOnboardingOpen}
+        onClose={onboarding.closeOnboarding}
+        onComplete={onboarding.completeOnboarding}
       />
     </div>
   );

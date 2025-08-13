@@ -239,6 +239,13 @@ func (ps *ProfileService) CreateServiceProfile(userID string, req *models.Create
 		}
 	}
 
+	// Handle active profile logic
+	if req.IsActive {
+		if err := ps.clearActiveProfiles(userID); err != nil {
+			return nil, fmt.Errorf("failed to clear existing active profiles: %w", err)
+		}
+	}
+
 	// Validate services exist (temporarily disabled for debugging)
 	log.Printf("[DEBUG] Skipping service validation for debugging purposes")
 	// if err := ps.validateServices(req.Services); err != nil {
@@ -261,10 +268,10 @@ func (ps *ProfileService) CreateServiceProfile(userID string, req *models.Create
 		return nil, fmt.Errorf("failed to marshal env vars: %w", err)
 	}
 
-	query := `INSERT INTO service_profiles (id, user_id, name, description, services_json, env_vars_json, projects_dir, java_home_override, is_default, created_at, updated_at)
-			  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+	query := `INSERT INTO service_profiles (id, user_id, name, description, services_json, env_vars_json, projects_dir, java_home_override, is_default, is_active, created_at, updated_at)
+			  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 
-	_, err = ps.db.Exec(query, profileID, userID, req.Name, req.Description, string(servicesJSON), string(envVarsJSON), req.ProjectsDir, req.JavaHomeOverride, req.IsDefault)
+	_, err = ps.db.Exec(query, profileID, userID, req.Name, req.Description, string(servicesJSON), string(envVarsJSON), req.ProjectsDir, req.JavaHomeOverride, req.IsDefault, req.IsActive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service profile: %w", err)
 	}
@@ -715,6 +722,12 @@ func (ps *ProfileService) createDefaultUserProfile(userID string) (*models.UserP
 
 func (ps *ProfileService) clearDefaultProfiles(userID string) error {
 	query := `UPDATE service_profiles SET is_default = FALSE WHERE user_id = ? AND is_default = TRUE`
+	_, err := ps.db.Exec(query, userID)
+	return err
+}
+
+func (ps *ProfileService) clearActiveProfiles(userID string) error {
+	query := `UPDATE service_profiles SET is_active = FALSE WHERE user_id = ? AND is_active = TRUE`
 	_, err := ps.db.Exec(query, userID)
 	return err
 }

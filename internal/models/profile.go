@@ -35,6 +35,7 @@ type CreateProfileRequest struct {
 	ProjectsDir      string            `json:"projectsDir"`
 	JavaHomeOverride string            `json:"javaHomeOverride"`
 	IsDefault        bool              `json:"isDefault"`
+	IsActive         bool              `json:"isActive"`
 }
 
 type UpdateProfileRequest struct {
