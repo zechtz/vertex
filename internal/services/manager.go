@@ -727,6 +727,15 @@ func (sm *Manager) StartService(serviceUUID string) error {
 		return fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
+	// Check if service is enabled
+	service.Mutex.RLock()
+	isEnabled := service.IsEnabled
+	service.Mutex.RUnlock()
+
+	if !isEnabled {
+		return fmt.Errorf("service %s is disabled and cannot be started", service.Name)
+	}
+
 	log.Printf("[INFO] Starting service UUID: %s", serviceUUID)
 
 	return sm.startService(service)
@@ -755,6 +764,15 @@ func (sm *Manager) RestartService(serviceUUID string) error {
 
 	if !exists {
 		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Check if service is enabled
+	service.Mutex.RLock()
+	isEnabled := service.IsEnabled
+	service.Mutex.RUnlock()
+
+	if !isEnabled {
+		return fmt.Errorf("service %s is disabled and cannot be restarted", service.Name)
 	}
 
 	log.Printf("[INFO] Restarting service UUID: %s (port %d)", serviceUUID, service.Port)
@@ -800,6 +818,15 @@ func (sm *Manager) StartServiceWithProjectsDir(serviceUUID, projectsDir string) 
 		return fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
+	// Check if service is enabled
+	service.Mutex.RLock()
+	isEnabled := service.IsEnabled
+	service.Mutex.RUnlock()
+
+	if !isEnabled {
+		return fmt.Errorf("service %s is disabled and cannot be started", service.Name)
+	}
+
 	log.Printf("[INFO] Starting service UUID %s from projects directory: %s", serviceUUID, projectsDir)
 
 	return sm.startServiceWithProjectsDir(service, projectsDir)
@@ -813,6 +840,15 @@ func (sm *Manager) RestartServiceWithProjectsDir(serviceUUID, projectsDir string
 
 	if !exists {
 		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Check if service is enabled
+	service.Mutex.RLock()
+	isEnabled := service.IsEnabled
+	service.Mutex.RUnlock()
+
+	if !isEnabled {
+		return fmt.Errorf("service %s is disabled and cannot be restarted", service.Name)
 	}
 
 	log.Printf("[INFO] Restarting service UUID %s from projects directory: %s (port %d)", serviceUUID, projectsDir, service.Port)
