@@ -17,6 +17,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     "serviceEnv",
     "serviceAction",
     "libraryInstall",
+    "wrapperManagement",
   ]);
 
   // Service creation state
@@ -98,6 +99,13 @@ export function useServiceManagement(onServiceUpdated: () => void) {
   const openLibraryInstall = useCallback(
     (service: Service) => {
       modalManager.openModal("libraryInstall", service);
+    },
+    [modalManager],
+  );
+
+  const openWrapperManagement = useCallback(
+    (service: Service) => {
+      modalManager.openModal("wrapperManagement", service);
     },
     [modalManager],
   );
@@ -191,11 +199,13 @@ export function useServiceManagement(onServiceUpdated: () => void) {
           port: service.port || 8080,
           order: service.order || 0,
           description: service.description || "",
-          isEnabled: service.isEnabled || true,
+          isEnabled: service.isEnabled,
           buildSystem: service.buildSystem || "auto",
           envVars: service.envVars || {},
           startupDelay: service.startupDelay || 0,
         };
+
+        console.log("Payload to save service:", payload);
 
         const response = await fetch(url, {
           method: method,
@@ -281,6 +291,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     isServiceEnvOpen: modalManager.isModalOpen("serviceEnv"),
     isServiceActionOpen: modalManager.isModalOpen("serviceAction"),
     isLibraryInstallOpen: modalManager.isModalOpen("libraryInstall"),
+    isWrapperManagementOpen: modalManager.isModalOpen("wrapperManagement"),
 
     // Modal data
     serviceConfigData: modalManager.getModalData<Service>("serviceConfig"),
@@ -288,6 +299,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     serviceEnvData: modalManager.getModalData<Service>("serviceEnv"),
     serviceActionData: modalManager.getModalData<Service>("serviceAction"),
     libraryInstallData: modalManager.getModalData<Service>("libraryInstall"),
+    wrapperManagementData: modalManager.getModalData<Service>("wrapperManagement"),
 
     // Actions
     openCreateService,
@@ -295,6 +307,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     openViewFiles,
     openEditEnv,
     openLibraryInstall,
+    openWrapperManagement,
     deleteService,
     handleRemoveFromProfile,
     handleDeleteGlobally,
@@ -309,5 +322,6 @@ export function useServiceManagement(onServiceUpdated: () => void) {
     closeServiceEnv: () => modalManager.closeModal("serviceEnv"),
     closeServiceActionModal: () => modalManager.closeModal("serviceAction"),
     closeLibraryInstall: () => modalManager.closeModal("libraryInstall"),
+    closeWrapperManagement: () => modalManager.closeModal("wrapperManagement"),
   };
 }
