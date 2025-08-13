@@ -277,9 +277,11 @@ func (sm *Manager) StartAllServicesForProfile(profileServicesJSON string, projec
 		for _, service := range profileServices {
 			service.Mutex.RLock()
 			status := service.Status
+			isEnabled := service.IsEnabled
 			service.Mutex.RUnlock()
 
-			if status != "running" {
+			if status != "running" && isEnabled {
+				log.Printf("[INFO] Starting service %s (order %d) in profile", service.Name, service.Order)
 				// Use profile-aware starting if projectsDir is different from global
 				globalConfig := sm.GetConfig()
 				if projectsDir != globalConfig.ProjectsDir {
@@ -294,6 +296,10 @@ func (sm *Manager) StartAllServicesForProfile(profileServicesJSON string, projec
 					}
 				}
 				time.Sleep(2 * time.Second) // Brief wait between starts
+			} else if status == "running" {
+				log.Printf("[INFO] Service %s (order %d) is already running, skipping", service.Name, service.Order)
+			} else {
+				log.Printf("[INFO] Service %s (order %d) is disabled, skipping", service.Name, service.Order)
 			}
 		}
 	}()
