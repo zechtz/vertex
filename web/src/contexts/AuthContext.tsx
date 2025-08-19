@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 
 interface User {
   id: string;
@@ -24,7 +30,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
@@ -43,20 +49,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = (userData: User, authToken: string) => {
     setUser(userData);
     setToken(authToken);
-    localStorage.setItem('authToken', authToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("authToken", authToken);
+    localStorage.setItem("user", JSON.stringify(userData));
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
   };
 
   const checkAuth = async (): Promise<boolean> => {
-    const storedToken = localStorage.getItem('authToken');
-    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem("authToken");
+    const storedUser = localStorage.getItem("user");
 
     if (!storedToken || !storedUser) {
       setIsLoading(false);
@@ -65,10 +71,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       // Verify token is still valid
-      const response = await fetch('/api/auth/user', {
+      const response = await fetch("/api/auth/user", {
         headers: {
-          'Authorization': `Bearer ${storedToken}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${storedToken}`,
+          "Content-Type": "application/json",
         },
       });
 
@@ -85,7 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false;
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.error("Auth check failed:", error);
       logout();
       setIsLoading(false);
       return false;
@@ -106,9 +112,5 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

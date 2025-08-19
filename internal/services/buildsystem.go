@@ -221,8 +221,11 @@ func GenerateMavenWrapper(serviceDir string) error {
 		return fmt.Errorf("%s path %s is not executable or inaccessible: %v", mvnExecutable, mvnPath, err)
 	}
 
-	// Execute mvn -N wrapper:wrapper
-	cmd := exec.Command(mvnPath, "-N", "wrapper:wrapper")
+	// Execute mvn -N io.takari:maven:wrapper
+	cmd := exec.Command(mvnPath, "-N", "io.takari:maven:wrapper")
+
+	fmt.Printf("[DEBUG] Executing command: %s\n", strings.Join(cmd.Args, " "))
+
 	cmd.Dir = serviceDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
