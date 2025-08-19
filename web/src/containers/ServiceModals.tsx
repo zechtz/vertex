@@ -62,12 +62,20 @@ export function ServiceModals({ serviceManagement }: ServiceModalsProps) {
         serviceName={serviceManagement.wrapperManagementData?.name || ""}
         isOpen={serviceManagement.isWrapperManagementOpen}
         onClose={serviceManagement.closeWrapperManagement}
-        onValidateWrapper={() => ServiceOperations.validateWrapper(serviceManagement.wrapperManagementData?.id || "")}
+        onValidateWrapper={() =>
+          ServiceOperations.validateWrapper(
+            serviceManagement.wrapperManagementData?.id || "",
+          )
+        }
         onGenerateWrapper={async () => {
-          await ServiceOperations.generateWrapper(serviceManagement.wrapperManagementData?.id || "");
+          await ServiceOperations.generateWrapper(
+            serviceManagement.wrapperManagementData?.id || "",
+          );
         }}
         onRepairWrapper={async () => {
-          await ServiceOperations.repairWrapper(serviceManagement.wrapperManagementData?.id || "");
+          await ServiceOperations.repairWrapper(
+            serviceManagement.wrapperManagementData?.id || "",
+          );
         }}
       />
     </>
