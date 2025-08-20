@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -356,14 +355,15 @@ func (ni *NginxInstaller) createNginxDirectories() error {
 		}
 
 		// Remove existing PID file if it exists and is owned by root
-		if stat, err := os.Stat(pidFile); err == nil {
-			// Check if file is owned by root (UID 0)
-			if sys := stat.Sys(); sys != nil {
-				if stat, ok := sys.(*syscall.Stat_t); ok && stat.Uid == 0 {
-					cmd := exec.Command("sudo", "rm", "-f", pidFile)
-					if err := cmd.Run(); err == nil {
-						fmt.Printf("✅ Removed root-owned PID file %s\n", pidFile)
-					}
+		if _, err := os.Stat(pidFile); err == nil {
+			// Check if file is owned by root using ls command
+			cmd := exec.Command("ls", "-la", pidFile)
+			output, err := cmd.Output()
+			if err == nil && strings.Contains(string(output), " root ") {
+				// File is owned by root, remove it
+				cmd := exec.Command("sudo", "rm", "-f", pidFile)
+				if err := cmd.Run(); err == nil {
+					fmt.Printf("✅ Removed root-owned PID file %s\n", pidFile)
 				}
 			}
 		}
@@ -700,13 +700,15 @@ func (ni *NginxInstaller) startNginxService() error {
 			pidFile = "/usr/local/var/run/nginx.pid"
 		}
 		
-		if stat, err := os.Stat(pidFile); err == nil {
-			if sys := stat.Sys(); sys != nil {
-				if stat, ok := sys.(*syscall.Stat_t); ok && stat.Uid == 0 {
-					cmd := exec.Command("sudo", "rm", "-f", pidFile)
-					if err := cmd.Run(); err == nil {
-						fmt.Printf("✅ Cleaned root-owned PID file before start\n")
-					}
+		if _, err := os.Stat(pidFile); err == nil {
+			// Check if file is owned by root using ls command
+			cmd := exec.Command("ls", "-la", pidFile)
+			output, err := cmd.Output()
+			if err == nil && strings.Contains(string(output), " root ") {
+				// File is owned by root, remove it
+				cmd := exec.Command("sudo", "rm", "-f", pidFile)
+				if err := cmd.Run(); err == nil {
+					fmt.Printf("✅ Cleaned root-owned PID file before start\n")
 				}
 			}
 		}
