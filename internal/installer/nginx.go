@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // NginxInstaller handles nginx configuration for Vertex
@@ -30,15 +32,21 @@ func NewNginxInstaller(domain, port string) *NginxInstaller {
 	// Set platform-specific paths
 	switch runtime.GOOS {
 	case "darwin":
-		// Detect homebrew installation path
-		if _, err := os.Stat("/opt/homebrew/etc/nginx"); err == nil {
-			// Apple Silicon homebrew path
+		// Detect homebrew installation path by checking where nginx is installed
+		if nginxPath, err := exec.LookPath("nginx"); err == nil {
+			if strings.Contains(nginxPath, "/opt/homebrew/") {
+				// Apple Silicon homebrew path
+				ni.ConfigPath = "/opt/homebrew/etc/nginx/nginx.conf"
+				ni.SitesPath = "/opt/homebrew/etc/nginx/servers"
+			} else {
+				// Intel homebrew path
+				ni.ConfigPath = "/usr/local/etc/nginx/nginx.conf"
+				ni.SitesPath = "/usr/local/etc/nginx/servers"
+			}
+		} else {
+			// Default to Apple Silicon if nginx not found yet (will be installed)
 			ni.ConfigPath = "/opt/homebrew/etc/nginx/nginx.conf"
 			ni.SitesPath = "/opt/homebrew/etc/nginx/servers"
-		} else {
-			// Intel homebrew path
-			ni.ConfigPath = "/usr/local/etc/nginx/nginx.conf"
-			ni.SitesPath = "/usr/local/etc/nginx/servers"
 		}
 	case "linux":
 		// Standard Linux nginx paths
@@ -205,6 +213,8 @@ func (ni *NginxInstaller) createSitesDirectory() error {
 // createNginxDirectories creates nginx log and run directories with proper permissions
 func (ni *NginxInstaller) createNginxDirectories() error {
 	var directories []string
+	var logFiles []string
+	var pidFiles []string
 	
 	switch runtime.GOOS {
 	case "darwin":
@@ -214,16 +224,37 @@ func (ni *NginxInstaller) createNginxDirectories() error {
 				"/opt/homebrew/var/log/nginx",
 				"/opt/homebrew/var/run",
 			}
+			logFiles = []string{
+				"/opt/homebrew/var/log/nginx/access.log",
+				"/opt/homebrew/var/log/nginx/error.log",
+			}
+			pidFiles = []string{
+				"/opt/homebrew/var/run/nginx.pid",
+			}
 		} else {
 			directories = []string{
 				"/usr/local/var/log/nginx",
 				"/usr/local/var/run",
+			}
+			logFiles = []string{
+				"/usr/local/var/log/nginx/access.log",
+				"/usr/local/var/log/nginx/error.log",
+			}
+			pidFiles = []string{
+				"/usr/local/var/run/nginx.pid",
 			}
 		}
 	case "linux":
 		directories = []string{
 			"/var/log/nginx",
 			"/var/run/nginx",
+		}
+		logFiles = []string{
+			"/var/log/nginx/access.log",
+			"/var/log/nginx/error.log",
+		}
+		pidFiles = []string{
+			"/var/run/nginx/nginx.pid",
 		}
 	default:
 		// Skip directory creation for unsupported platforms
@@ -267,6 +298,74 @@ func (ni *NginxInstaller) createNginxDirectories() error {
 		cmd := exec.Command("sudo", "chmod", "755", dir)
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("⚠️  Could not set permissions on %s: %v\n", dir, err)
+		}
+	}
+
+	// Create and fix log files with proper ownership
+	for _, logFile := range logFiles {
+		// Create log file if it doesn't exist
+		if _, err := os.Stat(logFile); os.IsNotExist(err) {
+			// Create empty log file
+			cmd := exec.Command("sudo", "touch", logFile)
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("⚠️  Could not create log file %s: %v\n", logFile, err)
+				continue
+			}
+		}
+
+		// Fix ownership of existing log files
+		if runtime.GOOS == "darwin" {
+			currentUser := os.Getenv("USER")
+			if currentUser != "" {
+				cmd := exec.Command("sudo", "chown", currentUser+":admin", logFile)
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("⚠️  Could not fix ownership of %s: %v\n", logFile, err)
+				} else {
+					fmt.Printf("✅ Fixed ownership of %s\n", logFile)
+				}
+			}
+		}
+
+		// Set proper permissions on log file
+		cmd := exec.Command("sudo", "chmod", "644", logFile)
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("⚠️  Could not set permissions on %s: %v\n", logFile, err)
+		}
+	}
+
+	// Clean up and fix PID files and directories
+	for _, pidFile := range pidFiles {
+		// Ensure the parent directory has correct ownership first
+		pidDir := filepath.Dir(pidFile)
+		if runtime.GOOS == "darwin" {
+			currentUser := os.Getenv("USER")
+			if currentUser != "" {
+				cmd := exec.Command("sudo", "chown", currentUser+":admin", pidDir)
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("⚠️  Could not fix ownership of %s: %v\n", pidDir, err)
+				} else {
+					fmt.Printf("✅ Fixed ownership of %s\n", pidDir)
+				}
+			}
+		}
+
+		// Set proper permissions on PID directory
+		cmd := exec.Command("sudo", "chmod", "755", pidDir)
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("⚠️  Could not set permissions on %s: %v\n", pidDir, err)
+		}
+
+		// Remove existing PID file if it exists and is owned by root
+		if stat, err := os.Stat(pidFile); err == nil {
+			// Check if file is owned by root (UID 0)
+			if sys := stat.Sys(); sys != nil {
+				if stat, ok := sys.(*syscall.Stat_t); ok && stat.Uid == 0 {
+					cmd := exec.Command("sudo", "rm", "-f", pidFile)
+					if err := cmd.Run(); err == nil {
+						fmt.Printf("✅ Removed root-owned PID file %s\n", pidFile)
+					}
+				}
+			}
 		}
 	}
 
@@ -591,13 +690,47 @@ func (ni *NginxInstaller) testNginxConfig() error {
 func (ni *NginxInstaller) startNginxService() error {
 	switch runtime.GOOS {
 	case "darwin":
-		// Use brew services on macOS
-		cmd := exec.Command("brew", "services", "restart", "nginx")
-		if err := cmd.Run(); err != nil {
-			return err
+		// Stop nginx first to ensure clean restart
+		stopCmd := exec.Command("brew", "services", "stop", "nginx")
+		stopCmd.Run() // Ignore errors if service wasn't running
+		
+		// Clean up any root-owned PID files before starting
+		pidFile := "/opt/homebrew/var/run/nginx.pid"
+		if strings.Contains(ni.ConfigPath, "/usr/local/") {
+			pidFile = "/usr/local/var/run/nginx.pid"
 		}
-		fmt.Printf("✅ Nginx service started\n")
-		return nil
+		
+		if stat, err := os.Stat(pidFile); err == nil {
+			if sys := stat.Sys(); sys != nil {
+				if stat, ok := sys.(*syscall.Stat_t); ok && stat.Uid == 0 {
+					cmd := exec.Command("sudo", "rm", "-f", pidFile)
+					if err := cmd.Run(); err == nil {
+						fmt.Printf("✅ Cleaned root-owned PID file before start\n")
+					}
+				}
+			}
+		}
+		
+		// Start nginx service
+		cmd := exec.Command("brew", "services", "start", "nginx")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to start nginx: %s", string(output))
+		}
+		
+		// Wait a moment for service to fully start
+		time.Sleep(2 * time.Second)
+		
+		// Verify nginx is actually running by checking the service status
+		statusCmd := exec.Command("brew", "services", "list")
+		statusOutput, err := statusCmd.Output()
+		if err == nil && strings.Contains(string(statusOutput), "nginx") && strings.Contains(string(statusOutput), "started") {
+			fmt.Printf("✅ Nginx service started\n")
+			return nil
+		}
+		
+		return fmt.Errorf("nginx service appears to have failed to start properly")
+		
 	case "linux":
 		// Use systemctl on Linux
 		cmd := exec.Command("sudo", "systemctl", "enable", "nginx")
