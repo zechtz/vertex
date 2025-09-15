@@ -25,6 +25,7 @@ type Manager struct {
 	clients           map[*websocket.Conn]bool
 	clientsMutex      sync.RWMutex
 	dependencyManager *DependencyManager
+	Id                int64
 }
 
 type WebSocketMessage struct {
