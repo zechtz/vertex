@@ -39,7 +39,7 @@ export function UptimeStatisticsDashboard() {
   const [uptimeData, setUptimeData] = useState<UptimeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [selectedService, setSelectedService] = useState<{ id: string; name: string } | null>(null);
   
   // Filter state
@@ -270,20 +270,20 @@ export function UptimeStatisticsDashboard() {
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <Button
-              onClick={() => setViewMode('grid')}
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-8 px-2"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </Button>
-            <Button
               onClick={() => setViewMode('table')}
               variant={viewMode === 'table' ? 'default' : 'ghost'}
               size="sm"
               className="h-8 px-2"
             >
               <List className="w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => setViewMode('grid')}
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-8 px-2"
+            >
+              <LayoutGrid className="w-4 h-4" />
             </Button>
           </div>
           <Button onClick={fetchUptimeStats} variant="outline" size="sm">
@@ -356,19 +356,6 @@ export function UptimeStatisticsDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Service Statistics - Grid View */}
-      {viewMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredServices.map((service) => (
-            <ServiceUptimeCard
-              key={service.serviceId}
-              service={service}
-              onClick={() => setSelectedService({ id: service.serviceId, name: service.serviceName })}
-            />
-          ))}
-        </div>
-      )}
 
       {/* Service Statistics - Table View */}
       {viewMode === 'table' && (
@@ -465,6 +452,19 @@ export function UptimeStatisticsDashboard() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Service Statistics - Grid View */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredServices.map((service) => (
+            <ServiceUptimeCard
+              key={service.serviceId}
+              service={service}
+              onClick={() => setSelectedService({ id: service.serviceId, name: service.serviceName })}
+            />
+          ))}
+        </div>
       )}
 
       {/* Service Detail Modal */}
