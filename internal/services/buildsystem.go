@@ -275,6 +275,12 @@ func ValidateWrapperIntegrity(serviceDir string, buildSystem BuildSystemType) (b
 
 // validateMavenWrapperIntegrity checks Maven wrapper files
 func validateMavenWrapperIntegrity(serviceDir string) (bool, error) {
+	// Check if JAVA_HOME is set
+	javaHome := os.Getenv("JAVA_HOME")
+	if javaHome == "" {
+		return false, fmt.Errorf("JAVA_HOME environment variable is not set. Please set JAVA_HOME to fix wrapper validation.\n\nTo set JAVA_HOME:\n• For bash (~/.bashrc): export JAVA_HOME=/path/to/java\n• For zsh (~/.zshrc): export JAVA_HOME=/path/to/java\n• For fish (~/.config/fish/config.fish): set -x JAVA_HOME /path/to/java\n• Then restart your terminal or run: source ~/.bashrc (or ~/.zshrc)\n\nTo find Java location:\n• macOS: /usr/libexec/java_home\n• Linux: which java or whereis java")
+	}
+
 	requiredFiles := []string{"mvnw", ".mvn/wrapper/maven-wrapper.properties"}
 
 	for _, file := range requiredFiles {
@@ -308,6 +314,12 @@ func validateMavenWrapperIntegrity(serviceDir string) (bool, error) {
 
 // validateGradleWrapperIntegrity checks Gradle wrapper files
 func validateGradleWrapperIntegrity(serviceDir string) (bool, error) {
+	// Check if JAVA_HOME is set
+	javaHome := os.Getenv("JAVA_HOME")
+	if javaHome == "" {
+		return false, fmt.Errorf("JAVA_HOME environment variable is not set. Please set JAVA_HOME to fix wrapper validation.\n\nTo set JAVA_HOME:\n• For bash (~/.bashrc): export JAVA_HOME=/path/to/java\n• For zsh (~/.zshrc): export JAVA_HOME=/path/to/java\n• For fish (~/.config/fish/config.fish): set -x JAVA_HOME /path/to/java\n• Then restart your terminal or run: source ~/.bashrc (or ~/.zshrc)\n\nTo find Java location:\n• macOS: /usr/libexec/java_home\n• Linux: which java or whereis java")
+	}
+
 	requiredFiles := []string{"gradlew", "gradle/wrapper/gradle-wrapper.properties"}
 
 	for _, file := range requiredFiles {
