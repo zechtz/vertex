@@ -382,10 +382,16 @@ export class ServiceOperations {
     serviceNames?: string[],
   ): Promise<ServiceOperationResult> {
     try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No authentication token");
+      }
+
       const response = await fetch("/api/services/logs/clear", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           serviceNames: serviceNames || [],

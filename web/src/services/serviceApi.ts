@@ -84,7 +84,17 @@ export class ServiceApi {
    * Get service logs
    */
   static async getServiceLogs(serviceName: string): Promise<string[]> {
-    const response = await fetch(`/api/services/${serviceName}/logs`);
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      throw new Error("No authentication token");
+    }
+
+    const response = await fetch(`/api/services/${serviceName}/logs`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
     if (!response.ok) {
       throw new Error(`Failed to fetch logs: ${response.status} ${response.statusText}`);
     }
@@ -109,8 +119,17 @@ export class ServiceApi {
    * Clear service logs
    */
   static async clearServiceLogs(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/logs/clear`, {
-      method: 'POST',
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      throw new Error("No authentication token");
+    }
+
+    const response = await fetch(`/api/services/${serviceName}/logs`, {
+      method: 'DELETE',
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
     });
     
     if (!response.ok) {

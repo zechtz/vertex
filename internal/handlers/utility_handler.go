@@ -133,6 +133,21 @@ func (h *Handler) searchLogsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
+	// Check authentication
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user's active profile
+	profile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get active profile for log search: %v", err)
+		http.Error(w, "Failed to get active profile", http.StatusInternalServerError)
+		return
+	}
+
 	var criteria struct {
 		ServiceIDs []string `json:"serviceIds"`
 		Levels     []string `json:"levels"`
@@ -148,22 +163,56 @@ func (h *Handler) searchLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter ServiceIDs to only include services from the current profile
+	// If no specific services requested, use all services from the profile
+	if len(criteria.ServiceIDs) == 0 {
+		// Use all services from the current profile
+		criteria.ServiceIDs = profile.Services
+	} else {
+		// Filter requested services to only include those in the current profile
+		var filteredServiceIDs []string
+		profileServiceMap := make(map[string]bool)
+		for _, serviceID := range profile.Services {
+			profileServiceMap[serviceID] = true
+		}
+		
+		for _, serviceID := range criteria.ServiceIDs {
+			if profileServiceMap[serviceID] {
+				filteredServiceIDs = append(filteredServiceIDs, serviceID)
+			}
+		}
+		criteria.ServiceIDs = filteredServiceIDs
+	}
+
+	// If no services remain after filtering, return empty results
+	if len(criteria.ServiceIDs) == 0 {
+		response := map[string]interface{}{
+			"results":    []interface{}{},
+			"totalCount": 0,
+			"limit":      criteria.Limit,
+			"offset":     criteria.Offset,
+		}
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Parse time strings
 	var startTime, endTime time.Time
-	var err error
 
 	if criteria.StartTime != "" {
-		startTime, err = time.Parse(time.RFC3339, criteria.StartTime)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid start time format: %v", err), http.StatusBadRequest)
+		var parseErr error
+		startTime, parseErr = time.Parse(time.RFC3339, criteria.StartTime)
+		if parseErr != nil {
+			http.Error(w, fmt.Sprintf("Invalid start time format: %v", parseErr), http.StatusBadRequest)
 			return
 		}
 	}
 
 	if criteria.EndTime != "" {
-		endTime, err = time.Parse(time.RFC3339, criteria.EndTime)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid end time format: %v", err), http.StatusBadRequest)
+		var parseErr error
+		endTime, parseErr = time.Parse(time.RFC3339, criteria.EndTime)
+		if parseErr != nil {
+			http.Error(w, fmt.Sprintf("Invalid end time format: %v", parseErr), http.StatusBadRequest)
 			return
 		}
 	}
@@ -205,17 +254,78 @@ func (h *Handler) getLogStatisticsHandler(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	stats, err := h.serviceManager.GetDatabase().GetLogStatistics()
+	// Check authentication
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user's active profile
+	profile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get active profile for log statistics: %v", err)
+		http.Error(w, "Failed to get active profile", http.StatusInternalServerError)
+		return
+	}
+
+	// Get full statistics first
+	allStats, err := h.serviceManager.GetDatabase().GetLogStatistics()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get log statistics: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Filter statistics to only include services from the current profile
+	profileServiceMap := make(map[string]bool)
+	for _, serviceID := range profile.Services {
+		profileServiceMap[serviceID] = true
+	}
+
+	// Filter logsByService to only include profile services
+	profileLogsByService := make(map[string]int64)
+	if logsByService, ok := allStats["logsByService"].(map[string]int64); ok {
+		for serviceID, logCount := range logsByService {
+			if profileServiceMap[serviceID] {
+				profileLogsByService[serviceID] = logCount
+			}
+		}
+	}
+
+	// Calculate profile-specific total logs
+	var profileTotalLogs int64
+	for _, logCount := range profileLogsByService {
+		profileTotalLogs += logCount
+	}
+
+	// Create profile-scoped statistics
+	stats := make(map[string]interface{})
+	stats["totalLogs"] = profileTotalLogs
+	stats["logsByService"] = profileLogsByService
+	stats["logsByLevel"] = allStats["logsByLevel"] // Keep level stats global as they're informational
+	stats["oldestLog"] = allStats["oldestLog"]     // Keep date range global as they're informational
+	stats["newestLog"] = allStats["newestLog"]     // Keep date range global as they're informational
 
 	json.NewEncoder(w).Encode(stats)
 }
 
 func (h *Handler) exportLogsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Check authentication
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user's active profile
+	profile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get active profile for log export: %v", err)
+		http.Error(w, "Failed to get active profile", http.StatusInternalServerError)
+		return
+	}
 
 	var exportRequest struct {
 		ServiceIDs []string `json:"serviceIds"`
@@ -231,22 +341,69 @@ func (h *Handler) exportLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter ServiceIDs to only include services from the current profile
+	// If no specific services requested, use all services from the profile
+	if len(exportRequest.ServiceIDs) == 0 {
+		// Use all services from the current profile
+		exportRequest.ServiceIDs = profile.Services
+	} else {
+		// Filter requested services to only include those in the current profile
+		var filteredServiceIDs []string
+		profileServiceMap := make(map[string]bool)
+		for _, serviceID := range profile.Services {
+			profileServiceMap[serviceID] = true
+		}
+		
+		for _, serviceID := range exportRequest.ServiceIDs {
+			if profileServiceMap[serviceID] {
+				filteredServiceIDs = append(filteredServiceIDs, serviceID)
+			}
+		}
+		exportRequest.ServiceIDs = filteredServiceIDs
+	}
+
+	// If no services remain after filtering, return empty export
+	if len(exportRequest.ServiceIDs) == 0 {
+		// Generate filename
+		timestamp := time.Now().Format("20060102_150405")
+		filename := fmt.Sprintf("vertex_logs_%s", timestamp)
+		
+		// Return empty export based on format
+		switch exportRequest.Format {
+		case "json":
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.json\"", filename))
+			json.NewEncoder(w).Encode([]interface{}{})
+		case "csv":
+			w.Header().Set("Content-Type", "text/csv")
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.csv\"", filename))
+			w.Write([]byte("Timestamp,Service,Level,Message\n"))
+		case "txt":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.txt\"", filename))
+		default:
+			http.Error(w, "Invalid export format. Supported formats: json, csv, txt", http.StatusBadRequest)
+		}
+		return
+	}
+
 	// Parse time strings
 	var startTime, endTime time.Time
-	var err error
 
 	if exportRequest.StartTime != "" {
-		startTime, err = time.Parse(time.RFC3339, exportRequest.StartTime)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid start time format: %v", err), http.StatusBadRequest)
+		var parseErr error
+		startTime, parseErr = time.Parse(time.RFC3339, exportRequest.StartTime)
+		if parseErr != nil {
+			http.Error(w, fmt.Sprintf("Invalid start time format: %v", parseErr), http.StatusBadRequest)
 			return
 		}
 	}
 
 	if exportRequest.EndTime != "" {
-		endTime, err = time.Parse(time.RFC3339, exportRequest.EndTime)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid end time format: %v", err), http.StatusBadRequest)
+		var parseErr error
+		endTime, parseErr = time.Parse(time.RFC3339, exportRequest.EndTime)
+		if parseErr != nil {
+			http.Error(w, fmt.Sprintf("Invalid end time format: %v", parseErr), http.StatusBadRequest)
 			return
 		}
 	}
