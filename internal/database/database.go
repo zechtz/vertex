@@ -3,9 +3,11 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -108,7 +110,7 @@ func (db *Database) initTables() error {
 	createServicesTable := `
 	CREATE TABLE IF NOT EXISTS services (
 		id TEXT PRIMARY KEY, -- UUID
-		name TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
 		dir TEXT NOT NULL,
 		extra_env TEXT,
 		java_opts TEXT,
@@ -342,6 +344,11 @@ func (db *Database) initTables() error {
 		return fmt.Errorf("failed to migrate services to UUID: %w", err)
 	}
 
+	// Remove global UNIQUE constraint on service names to allow profile-scoped uniqueness
+	if err := db.migrateRemoveServiceNameUniqueConstraint(); err != nil {
+		return fmt.Errorf("failed to migrate service name constraint: %w", err)
+	}
+
 	return nil
 }
 
@@ -379,6 +386,95 @@ func (db *Database) migrateServicesToUUID() error {
 	}
 
 	return rows.Err()
+}
+
+// migrateRemoveServiceNameUniqueConstraint removes the global UNIQUE constraint on service names
+// to allow profile-scoped uniqueness instead of global uniqueness
+func (db *Database) migrateRemoveServiceNameUniqueConstraint() error {
+	// First, check if the services table has the UNIQUE constraint on name
+	var hasUniqueConstraint bool
+	
+	// Query the table schema to check for UNIQUE constraint
+	var sql string
+	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='services'").Scan(&sql)
+	if err != nil {
+		return fmt.Errorf("failed to get services table schema: %w", err)
+	}
+	
+	// Check if the schema contains "name TEXT UNIQUE"
+	hasUniqueConstraint = strings.Contains(sql, "name TEXT UNIQUE")
+	
+	if !hasUniqueConstraint {
+		// Migration already applied or not needed
+		return nil
+	}
+	
+	log.Println("[INFO] Migrating services table to remove global UNIQUE constraint on name")
+	
+	// Begin transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	
+	// Create new services table without UNIQUE constraint
+	createNewServicesTable := `
+	CREATE TABLE services_new (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		dir TEXT NOT NULL,
+		extra_env TEXT,
+		java_opts TEXT,
+		status TEXT DEFAULT 'stopped',
+		health_status TEXT DEFAULT 'unknown',
+		health_url TEXT,
+		port INTEGER,
+		pid INTEGER DEFAULT 0,
+		service_order INTEGER,
+		last_started DATETIME,
+		description TEXT,
+		is_enabled BOOLEAN DEFAULT TRUE,
+		build_system TEXT DEFAULT 'auto',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+	
+	if _, err := tx.Exec(createNewServicesTable); err != nil {
+		return fmt.Errorf("failed to create new services table: %w", err)
+	}
+	
+	// Copy data from old table to new table
+	copyData := `
+	INSERT INTO services_new (id, name, dir, extra_env, java_opts, status, health_status, 
+		health_url, port, pid, service_order, last_started, description, is_enabled, 
+		build_system, created_at, updated_at)
+	SELECT id, name, dir, extra_env, java_opts, status, health_status, 
+		health_url, port, pid, service_order, last_started, description, is_enabled, 
+		build_system, created_at, updated_at
+	FROM services;`
+	
+	if _, err := tx.Exec(copyData); err != nil {
+		return fmt.Errorf("failed to copy services data: %w", err)
+	}
+	
+	// Drop the old table
+	if _, err := tx.Exec("DROP TABLE services"); err != nil {
+		return fmt.Errorf("failed to drop old services table: %w", err)
+	}
+	
+	// Rename new table to original name
+	if _, err := tx.Exec("ALTER TABLE services_new RENAME TO services"); err != nil {
+		return fmt.Errorf("failed to rename new services table: %w", err)
+	}
+	
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration transaction: %w", err)
+	}
+	
+	log.Println("[INFO] Successfully migrated services table - service names are now profile-scoped")
+	return nil
 }
 
 // GetGlobalEnvVars retrieves all global environment variables
