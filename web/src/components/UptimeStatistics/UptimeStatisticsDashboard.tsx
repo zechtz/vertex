@@ -38,7 +38,20 @@ export function UptimeStatisticsDashboard() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/uptime/statistics");
+      
+      // Get auth token for API call
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No authentication token");
+      }
+
+      const response = await fetch("/api/uptime/statistics", {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
       if (!response.ok) {
         throw new Error(
           `Failed to fetch uptime statistics: ${response.statusText}`,
