@@ -22,24 +22,63 @@ export const JavaHomeErrorDisplay: React.FC<JavaHomeErrorDisplayProps> = ({ erro
     );
   }
 
-  // Parse the error message for different shell configurations
-  const shellConfigs = [
+  // Platform-specific configurations
+  const macOSConfigs = [
     {
       shell: 'Bash',
       file: '~/.bashrc',
-      command: 'export JAVA_HOME=/path/to/java',
+      commands: [
+        'export JAVA_HOME=$(/usr/libexec/java_home)',
+        'export PATH=$JAVA_HOME/bin:$PATH'
+      ],
       reload: 'source ~/.bashrc'
     },
     {
       shell: 'Zsh',
       file: '~/.zshrc', 
-      command: 'export JAVA_HOME=/path/to/java',
+      commands: [
+        'export JAVA_HOME=$(/usr/libexec/java_home)',
+        'export PATH=$JAVA_HOME/bin:$PATH'
+      ],
       reload: 'source ~/.zshrc'
     },
     {
       shell: 'Fish',
       file: '~/.config/fish/config.fish',
-      command: 'set -x JAVA_HOME /path/to/java',
+      commands: [
+        'set -x JAVA_HOME (/usr/libexec/java_home)',
+        'set -x PATH $JAVA_HOME/bin $PATH'
+      ],
+      reload: 'source ~/.config/fish/config.fish'
+    }
+  ];
+
+  const linuxConfigs = [
+    {
+      shell: 'Bash',
+      file: '~/.bashrc',
+      commands: [
+        'export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))',
+        'export PATH=$JAVA_HOME/bin:$PATH'
+      ],
+      reload: 'source ~/.bashrc'
+    },
+    {
+      shell: 'Zsh',
+      file: '~/.zshrc',
+      commands: [
+        'export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))',
+        'export PATH=$JAVA_HOME/bin:$PATH'
+      ],
+      reload: 'source ~/.zshrc'
+    },
+    {
+      shell: 'Fish',
+      file: '~/.config/fish/config.fish',
+      commands: [
+        'set -x JAVA_HOME (dirname (dirname (readlink -f (which java))))',
+        'set -x PATH $JAVA_HOME/bin $PATH'
+      ],
       reload: 'source ~/.config/fish/config.fish'
     }
   ];
@@ -47,15 +86,23 @@ export const JavaHomeErrorDisplay: React.FC<JavaHomeErrorDisplayProps> = ({ erro
   const findJavaCommands = [
     {
       os: 'macOS',
+      description: 'Find Java installation',
       command: '/usr/libexec/java_home'
     },
     {
-      os: 'Linux',
-      command: 'which java'
+      os: 'macOS',
+      description: 'Find specific Java version (e.g., Java 21)',
+      command: '/usr/libexec/java_home -v 21'
     },
     {
-      os: 'Linux (alternative)',
-      command: 'whereis java'
+      os: 'Linux',
+      description: 'Find Java installation',
+      command: 'dirname $(dirname $(readlink -f $(which java)))'
+    },
+    {
+      os: 'Linux',
+      description: 'Alternative: List Java installations',
+      command: 'sudo update-alternatives --list java'
     }
   ];
 
@@ -79,9 +126,12 @@ export const JavaHomeErrorDisplay: React.FC<JavaHomeErrorDisplayProps> = ({ erro
           <div className="space-y-2">
             {findJavaCommands.map((cmd, index) => (
               <div key={index} className="flex items-center justify-between bg-amber-100 dark:bg-amber-900/40 p-2 rounded">
-                <div>
-                  <span className="text-xs font-medium text-amber-700 dark:text-amber-400">{cmd.os}:</span>
-                  <code className="ml-2 text-sm font-mono text-amber-800 dark:text-amber-200">{cmd.command}</code>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-400">{cmd.os}:</span>
+                    <span className="text-xs text-amber-600 dark:text-amber-400">{cmd.description}</span>
+                  </div>
+                  <code className="text-sm font-mono text-amber-800 dark:text-amber-200 block mt-1">{cmd.command}</code>
                 </div>
                 <CopyButton text={cmd.command} size="sm" variant="ghost" label="Copy" />
               </div>
@@ -90,33 +140,76 @@ export const JavaHomeErrorDisplay: React.FC<JavaHomeErrorDisplayProps> = ({ erro
         </div>
 
         <div>
-          <h4 className="font-medium text-amber-800 dark:text-amber-400 mb-2">
-            2. Set JAVA_HOME in your shell configuration
+          <h4 className="font-medium text-amber-800 dark:text-amber-400 mb-3">
+            2. Add to your shell configuration
           </h4>
-          <div className="space-y-3">
-            {shellConfigs.map((config, index) => (
-              <div key={index} className="bg-amber-100 dark:bg-amber-900/40 p-3 rounded">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                    {config.shell} ({config.file})
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <code className="text-sm font-mono text-amber-800 dark:text-amber-200">
-                      {config.command}
-                    </code>
-                    <CopyButton text={config.command} size="sm" variant="ghost" label="Copy" />
+          
+          {/* macOS Section */}
+          <div className="mb-4">
+            <h5 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
+              🍎 macOS (recommended)
+            </h5>
+            <div className="space-y-2">
+              {macOSConfigs.map((config, index) => (
+                <div key={index} className="bg-amber-100 dark:bg-amber-900/40 p-3 rounded">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      {config.shell} ({config.file})
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <code className="text-xs font-mono text-amber-700 dark:text-amber-300">
-                      {config.reload}
-                    </code>
-                    <CopyButton text={config.reload} size="sm" variant="ghost" label="Copy" />
+                  <div className="space-y-2">
+                    {config.commands.map((command, cmdIndex) => (
+                      <div key={cmdIndex} className="flex items-center justify-between">
+                        <code className="text-sm font-mono text-amber-800 dark:text-amber-200 flex-1">
+                          {command}
+                        </code>
+                        <CopyButton text={command} size="sm" variant="ghost" label="Copy" />
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-1">
+                      <code className="text-xs font-mono text-amber-700 dark:text-amber-300">
+                        {config.reload}
+                      </code>
+                      <CopyButton text={config.reload} size="sm" variant="ghost" label="Copy" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          {/* Linux Section */}
+          <div>
+            <h5 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-2">
+              🐧 Linux
+            </h5>
+            <div className="space-y-2">
+              {linuxConfigs.map((config, index) => (
+                <div key={index} className="bg-amber-100 dark:bg-amber-900/40 p-3 rounded">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      {config.shell} ({config.file})
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {config.commands.map((command, cmdIndex) => (
+                      <div key={cmdIndex} className="flex items-center justify-between">
+                        <code className="text-sm font-mono text-amber-800 dark:text-amber-200 flex-1">
+                          {command}
+                        </code>
+                        <CopyButton text={command} size="sm" variant="ghost" label="Copy" />
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-1">
+                      <code className="text-xs font-mono text-amber-700 dark:text-amber-300">
+                        {config.reload}
+                      </code>
+                      <CopyButton text={config.reload} size="sm" variant="ghost" label="Copy" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -131,20 +224,68 @@ export const JavaHomeErrorDisplay: React.FC<JavaHomeErrorDisplayProps> = ({ erro
         </div>
 
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded">
-          <h4 className="font-medium text-blue-800 dark:text-blue-400 mb-1">💡 Example</h4>
-          <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-            If Java is installed at <code>/usr/lib/jvm/java-17-openjdk</code>:
-          </p>
-          <div className="flex items-center justify-between bg-blue-100 dark:bg-blue-900/40 p-2 rounded">
-            <code className="text-sm font-mono text-blue-800 dark:text-blue-200">
-              export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
-            </code>
-            <CopyButton 
-              text="export JAVA_HOME=/usr/lib/jvm/java-17-openjdk" 
-              size="sm" 
-              variant="ghost" 
-              label="Copy" 
-            />
+          <h4 className="font-medium text-blue-800 dark:text-blue-400 mb-2">💡 Examples</h4>
+          
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                <strong>macOS with latest Java:</strong>
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between bg-blue-100 dark:bg-blue-900/40 p-2 rounded">
+                  <code className="text-sm font-mono text-blue-800 dark:text-blue-200 flex-1">
+                    export JAVA_HOME=$(/usr/libexec/java_home)
+                  </code>
+                  <CopyButton 
+                    text="export JAVA_HOME=$(/usr/libexec/java_home)" 
+                    size="sm" 
+                    variant="ghost" 
+                    label="Copy" 
+                  />
+                </div>
+                <div className="flex items-center justify-between bg-blue-100 dark:bg-blue-900/40 p-2 rounded">
+                  <code className="text-sm font-mono text-blue-800 dark:text-blue-200 flex-1">
+                    export PATH=$JAVA_HOME/bin:$PATH
+                  </code>
+                  <CopyButton 
+                    text="export PATH=$JAVA_HOME/bin:$PATH" 
+                    size="sm" 
+                    variant="ghost" 
+                    label="Copy" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                <strong>macOS with specific Java version (e.g., Java 21):</strong>
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between bg-blue-100 dark:bg-blue-900/40 p-2 rounded">
+                  <code className="text-sm font-mono text-blue-800 dark:text-blue-200 flex-1">
+                    export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+                  </code>
+                  <CopyButton 
+                    text="export JAVA_HOME=$(/usr/libexec/java_home -v 21)" 
+                    size="sm" 
+                    variant="ghost" 
+                    label="Copy" 
+                  />
+                </div>
+                <div className="flex items-center justify-between bg-blue-100 dark:bg-blue-900/40 p-2 rounded">
+                  <code className="text-sm font-mono text-blue-800 dark:text-blue-200 flex-1">
+                    export PATH=$JAVA_HOME/bin:$PATH
+                  </code>
+                  <CopyButton 
+                    text="export PATH=$JAVA_HOME/bin:$PATH" 
+                    size="sm" 
+                    variant="ghost" 
+                    label="Copy" 
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
