@@ -608,6 +608,35 @@ func (h *Handler) getLogsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
+	// Check authentication
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user's active profile
+	profile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get active profile for logs: %v", err)
+		http.Error(w, "Failed to get active profile", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if the service belongs to the current profile
+	serviceInProfile := false
+	for _, profileServiceID := range profile.Services {
+		if profileServiceID == serviceUUID {
+			serviceInProfile = true
+			break
+		}
+	}
+
+	if !serviceInProfile {
+		http.Error(w, "Service not found in current profile", http.StatusForbidden)
+		return
+	}
+
 	service, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
 	if !exists {
 		http.Error(w, "Service not found", http.StatusNotFound)
@@ -627,6 +656,35 @@ func (h *Handler) clearLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Check authentication
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user's active profile
+	profile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get active profile for clear logs: %v", err)
+		http.Error(w, "Failed to get active profile", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if the service belongs to the current profile
+	serviceInProfile := false
+	for _, profileServiceID := range profile.Services {
+		if profileServiceID == serviceUUID {
+			serviceInProfile = true
+			break
+		}
+	}
+
+	if !serviceInProfile {
+		http.Error(w, "Service not found in current profile", http.StatusForbidden)
+		return
+	}
 
 	service, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
 	if !exists {
@@ -649,16 +707,70 @@ func (h *Handler) clearAllLogsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
+	// Check authentication
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Authentication required", http.StatusUnauthorized)
+		return
+	}
+
+	// Get user's active profile
+	profile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get active profile for clear all logs: %v", err)
+		http.Error(w, "Failed to get active profile", http.StatusInternalServerError)
+		return
+	}
+
 	var request struct {
 		ServiceNames []string `json:"serviceNames,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		// If no body or invalid JSON, clear all logs
+		// If no body or invalid JSON, clear logs for all services in the profile
 		request.ServiceNames = []string{}
 	}
 
-	results := h.serviceManager.ClearAllLogs(request.ServiceNames)
+	// If no specific services requested, use all services from the current profile
+	// If specific services requested, filter them to only include those in the current profile
+	var targetServiceIDs []string
+	
+	if len(request.ServiceNames) == 0 {
+		// Clear logs for all services in the current profile
+		targetServiceIDs = profile.Services
+	} else {
+		// Filter requested service names to only include those in the current profile
+		profileServiceMap := make(map[string]bool)
+		for _, serviceID := range profile.Services {
+			profileServiceMap[serviceID] = true
+		}
+		
+		// Convert service names to service IDs and filter by profile
+		allServices := h.serviceManager.GetServices()
+		for _, service := range allServices {
+			// Check if this service name was requested AND is in the current profile
+			for _, requestedName := range request.ServiceNames {
+				if service.Name == requestedName && profileServiceMap[service.ID] {
+					targetServiceIDs = append(targetServiceIDs, service.ID)
+					break
+				}
+			}
+		}
+	}
+
+	// Convert service IDs back to names for the ClearAllLogs function
+	var targetServiceNames []string
+	allServices := h.serviceManager.GetServices()
+	for _, serviceID := range targetServiceIDs {
+		for _, service := range allServices {
+			if service.ID == serviceID {
+				targetServiceNames = append(targetServiceNames, service.Name)
+				break
+			}
+		}
+	}
+
+	results := h.serviceManager.ClearAllLogs(targetServiceNames)
 
 	successCount := 0
 	errorCount := 0
@@ -678,9 +790,9 @@ func (h *Handler) clearAllLogsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(request.ServiceNames) == 0 {
-		response["message"] = fmt.Sprintf("Cleared logs for all %d services", successCount)
+		response["message"] = fmt.Sprintf("Cleared logs for all %d services in current profile", successCount)
 	} else {
-		response["message"] = fmt.Sprintf("Cleared logs for %d of %d specified services", successCount, len(request.ServiceNames))
+		response["message"] = fmt.Sprintf("Cleared logs for %d of %d specified services in current profile", successCount, len(request.ServiceNames))
 	}
 
 	json.NewEncoder(w).Encode(response)

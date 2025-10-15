@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Wrench, Package, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { JavaHomeErrorDisplay } from './JavaHomeErrorDisplay';
 
 interface WrapperValidation {
   serviceId: string;
@@ -180,13 +181,7 @@ const WrapperManagementModal: React.FC<WrapperManagementModalProps> = ({
               <span className="ml-2 text-gray-600 dark:text-gray-400">Validating wrapper...</span>
             </div>
           ) : error ? (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-500" />
-                <span className="font-medium text-red-700 dark:text-red-400">Error</span>
-              </div>
-              <p className="mt-2 text-sm text-red-600 dark:text-red-300">{error}</p>
-            </div>
+            <JavaHomeErrorDisplay error={error} />
           ) : (
             <>
               {renderWrapperStatus()}

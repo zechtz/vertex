@@ -129,6 +129,8 @@ export function ServiceEnvModal({
           `Successfully updated ${Object.keys(envVarsObject).length} environment variables for ${serviceName}`,
         ),
       );
+      // Close the modal after successful save
+      onClose();
     } catch (error) {
       console.error("Failed to save service env vars:", error);
       addToast(

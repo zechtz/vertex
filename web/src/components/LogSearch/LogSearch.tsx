@@ -84,8 +84,15 @@ export function LogSearch({ services = [], className = "" }: LogSearchProps) {
       setIsSearching(true);
       setError(null);
 
+      // Convert service names to service IDs
+      const selectedServiceIds = selectedServices.length > 0 
+        ? safeServices
+            .filter(service => selectedServices.includes(service.name))
+            .map(service => service.id)
+        : [];
+
       const searchCriteria = {
-        serviceNames: selectedServices,
+        serviceIds: selectedServiceIds,
         levels: selectedLevels,
         searchText: searchText,
         startTime: startDate ? new Date(startDate).toISOString() : "",
@@ -94,10 +101,16 @@ export function LogSearch({ services = [], className = "" }: LogSearchProps) {
         offset: (currentPage - 1) * resultsPerPage,
       };
 
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No authentication token");
+      }
+
       const response = await fetch("/api/logs/search", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(searchCriteria),
       });
@@ -125,8 +138,15 @@ export function LogSearch({ services = [], className = "" }: LogSearchProps) {
     try {
       setIsExporting(true);
 
+      // Convert service names to service IDs
+      const selectedServiceIds = selectedServices.length > 0 
+        ? safeServices
+            .filter(service => selectedServices.includes(service.name))
+            .map(service => service.id)
+        : [];
+
       const exportRequest = {
-        serviceNames: selectedServices,
+        serviceIds: selectedServiceIds,
         levels: selectedLevels,
         searchText: searchText,
         startTime: startDate ? new Date(startDate).toISOString() : "",
@@ -134,10 +154,16 @@ export function LogSearch({ services = [], className = "" }: LogSearchProps) {
         format: format,
       };
 
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No authentication token");
+      }
+
       const response = await fetch("/api/logs/export", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(exportRequest),
       });

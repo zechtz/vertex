@@ -610,9 +610,21 @@ func (ps *ProfileService) AddServiceToProfile(userID, profileID, serviceUUID str
 	}
 
 	// Verify that the service exists globally
-	if _, exists := ps.sm.GetServiceByUUID(serviceUUID); !exists {
+	service, exists := ps.sm.GetServiceByUUID(serviceUUID)
+	if !exists {
 		ps.mutex.Unlock()
 		return fmt.Errorf("service '%s' does not exist", serviceUUID)
+	}
+
+	// Check for name conflicts within this profile
+	for _, existingServiceUUID := range profile.Services {
+		if existingService, exists := ps.sm.GetServiceByUUID(existingServiceUUID); exists {
+			if existingService.Name == service.Name {
+				ps.mutex.Unlock()
+				return fmt.Errorf("service name '%s' already exists in profile '%s' (existing service UUID: %s)", 
+					service.Name, profile.Name, existingServiceUUID)
+			}
+		}
 	}
 
 	// Add the service to the profile's services list

@@ -34,8 +34,17 @@ export class LogsOperations {
 
   static async clearServiceLogs(serviceName: string): Promise<{ success: boolean; error?: string }> {
     try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No authentication token");
+      }
+
       const response = await fetch(`/api/services/${serviceName}/logs`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
       
       if (!response.ok) {

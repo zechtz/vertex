@@ -15,17 +15,43 @@ func registerUptimeRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/uptime/statistics/{id}", h.getServiceUptimeStatisticsHandler).Methods("GET")
 }
 
-// getUptimeStatisticsHandler returns uptime statistics for all services
+// getUptimeStatisticsHandler returns uptime statistics for services in the current active profile
 func (h *Handler) getUptimeStatisticsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
+	// Get user from JWT token to determine active profile
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	uptimeTracker := services.GetUptimeTracker()
 	allStats := uptimeTracker.GetAllUptimeStats()
 
+	// Get services from active profile, fallback to all services if no active profile
+	var services []models.Service
+	activeProfile, err := h.profileService.GetActiveProfile(claims.UserID)
+	if err != nil || activeProfile == nil {
+		// No active profile, show all services (fallback for backward compatibility)
+		services = h.serviceManager.GetServices()
+	} else {
+		// Filter services by active profile
+		allServices := h.serviceManager.GetServices()
+		for _, service := range allServices {
+			// Check if service is in the active profile
+			for _, serviceUUID := range activeProfile.Services {
+				if service.ID == serviceUUID {
+					services = append(services, service)
+					break
+				}
+			}
+		}
+	}
+
 	// Enhance with service names
 	serviceStats := make(map[string]interface{})
-	services := h.serviceManager.GetServices()
 
 	for _, service := range services {
 		if stats, exists := allStats[service.ID]; exists {

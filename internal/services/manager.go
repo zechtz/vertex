@@ -25,6 +25,7 @@ type Manager struct {
 	clients           map[*websocket.Conn]bool
 	clientsMutex      sync.RWMutex
 	dependencyManager *DependencyManager
+	Id                int64
 }
 
 type WebSocketMessage struct {
@@ -463,11 +464,9 @@ func (sm *Manager) RenameService(serviceUUID, newName string) error {
 		return fmt.Errorf("service UUID %s not found", serviceUUID)
 	}
 
-	// Check if new name is already taken
-	for _, s := range sm.services {
-		if s.Name == newName && s.ID != serviceUUID {
-			return fmt.Errorf("service name %s already exists", newName)
-		}
+	// Check if new name is already taken within profiles that contain this service
+	if err := sm.ValidateServiceNameUniquenessInProfile(serviceUUID, newName); err != nil {
+		return err
 	}
 
 	// If names are the same, no rename needed
@@ -501,6 +500,54 @@ func (sm *Manager) GetSystemResourceSummary() map[string]interface{} {
 // CleanupPort cleans up processes using the specified port
 func (sm *Manager) CleanupPort(port int) *PortCleanupResult {
 	return KillProcessesOnPort(port)
+}
+
+// ValidateServiceNameUniquenessInProfile checks if a service name is unique within the profiles it belongs to
+// This replaces the global service name uniqueness validation with profile-scoped validation
+func (sm *Manager) ValidateServiceNameUniquenessInProfile(serviceUUID, serviceName string) error {
+	// Get all profiles that contain services
+	profiles, err := sm.db.GetAllServiceProfiles()
+	if err != nil {
+		return fmt.Errorf("failed to get profiles for validation: %w", err)
+	}
+
+	// Check each profile for name conflicts
+	for _, profile := range profiles {
+		// Parse services JSON to get list of service UUIDs in this profile
+		var serviceUUIDs []string
+		if err := json.Unmarshal([]byte(profile.ServicesJSON), &serviceUUIDs); err != nil {
+			log.Printf("[WARN] Failed to parse services JSON for profile %s: %v", profile.ID, err)
+			continue
+		}
+
+		// Check if the service we're validating is in this profile
+		serviceInProfile := false
+		for _, uuid := range serviceUUIDs {
+			if uuid == serviceUUID {
+				serviceInProfile = true
+				break
+			}
+		}
+
+		// If service is in this profile, check for name conflicts with other services in the same profile
+		if serviceInProfile {
+			for _, uuid := range serviceUUIDs {
+				if uuid == serviceUUID {
+					continue // Skip self
+				}
+				
+				// Get the other service
+				if otherService, exists := sm.services[uuid]; exists {
+					if otherService.Name == serviceName {
+						return fmt.Errorf("service name '%s' already exists in profile '%s' (service UUID: %s)", 
+							serviceName, profile.Name, uuid)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // ValidateServiceUniqueness checks if a service would conflict with existing services
