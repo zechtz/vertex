@@ -113,55 +113,57 @@ export function Sidebar({
       {/* Sidebar */}
       <div
         className={`
-        fixed left-0 top-16 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 z-30
+        fixed left-0 top-16 h-[calc(100vh-4rem)] bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 z-30 flex flex-col
         ${isCollapsed ? "w-16" : "w-64"}
       `}
       >
-        {/* Navigation */}
-        <nav className="p-4 space-y-2">
-          {navigationItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onSectionChange(item.id)}
-              className={`
-                w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200
-                ${
-                  activeSection === item.id
-                    ? "bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
-                }
-                ${isCollapsed ? "justify-center" : "justify-start"}
-              `}
-              title={isCollapsed ? item.label : undefined}
-            >
-              <div
+        {/* Navigation - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <nav className="p-4 space-y-2">
+            {navigationItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => onSectionChange(item.id)}
                 className={`
-                flex-shrink-0 transition-colors
-                ${activeSection === item.id ? "text-blue-600" : "text-gray-500"}
-              `}
+                  w-full flex items-center gap-3 p-3 rounded-lg transition-all duration-200
+                  ${
+                    activeSection === item.id
+                      ? "bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                  }
+                  ${isCollapsed ? "justify-center" : "justify-start"}
+                `}
+                title={isCollapsed ? item.label : undefined}
               >
-                {item.icon}
-              </div>
-              {!isCollapsed && (
-                <div className="flex-1 text-left">
-                  <div className="font-medium text-sm">{item.label}</div>
-                  {item.description && (
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {item.description}
-                    </div>
-                  )}
+                <div
+                  className={`
+                  flex-shrink-0 transition-colors
+                  ${activeSection === item.id ? "text-blue-600" : "text-gray-500"}
+                `}
+                >
+                  {item.icon}
                 </div>
-              )}
-              {!isCollapsed && activeSection === item.id && (
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              )}
-            </button>
-          ))}
-        </nav>
+                {!isCollapsed && (
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-sm">{item.label}</div>
+                    {item.description && (
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {item.description}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!isCollapsed && activeSection === item.id && (
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
 
-        {/* Footer */}
+        {/* Footer - Fixed at bottom */}
         {!isCollapsed && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
             <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
               <div className="font-medium">Vertex Service Manager</div>
               <div>v2.0.0</div>
