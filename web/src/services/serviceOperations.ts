@@ -353,8 +353,17 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        throw new Error("No authentication token");
+      }
+
       const response = await fetch(`/api/services/${serviceId}/logs`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (!response.ok) {
         throw new Error(
