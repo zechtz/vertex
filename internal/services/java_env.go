@@ -27,6 +27,18 @@ func DetectJavaEnvironment() *JavaEnvironment {
 	
 	// Method 1: Check JAVA_HOME environment variable
 	if javaHome := os.Getenv("JAVA_HOME"); javaHome != "" {
+		// Check if JAVA_HOME points to asdf shims directory and resolve it
+		if strings.Contains(javaHome, "/.asdf/shims") {
+			log.Printf("[DEBUG] JAVA_HOME points to asdf shims, attempting to resolve: %s", javaHome)
+			// Try to resolve using asdf
+			cmd := exec.Command("asdf", "which", "java")
+			if output, err := cmd.Output(); err == nil && len(output) > 0 {
+				realJavaPath := strings.TrimSpace(string(output))
+				javaHome = inferJavaHome(realJavaPath)
+				log.Printf("[DEBUG] Resolved JAVA_HOME from asdf to: %s", javaHome)
+			}
+		}
+
 		javaPath := filepath.Join(javaHome, "bin", getJavaExecutable())
 		if isExecutable(javaPath) && isWorkingJava(javaPath) {
 			env.JavaHome = javaHome
@@ -198,7 +210,40 @@ func isWorkingJava(javaPath string) bool {
 }
 
 func inferJavaHome(javaPath string) string {
-	// Remove /bin/java to get JAVA_HOME
+	// Check if this is an asdf shim and resolve it to the real Java path
+	if strings.Contains(javaPath, "/.asdf/shims/") {
+		log.Printf("[DEBUG] Detected asdf shim, attempting to resolve actual Java path: %s", javaPath)
+
+		// Try to use 'asdf which java' to get the real path
+		cmd := exec.Command("asdf", "which", "java")
+		if output, err := cmd.Output(); err == nil && len(output) > 0 {
+			realJavaPath := strings.TrimSpace(string(output))
+			log.Printf("[DEBUG] Resolved asdf shim to: %s", realJavaPath)
+			// Use the real Java path for inference
+			binDir := filepath.Dir(realJavaPath)
+			if filepath.Base(binDir) == "bin" {
+				resolvedHome := filepath.Dir(binDir)
+				log.Printf("[DEBUG] Inferred JAVA_HOME from resolved path: %s", resolvedHome)
+				return resolvedHome
+			}
+		} else {
+			log.Printf("[WARN] Failed to resolve asdf shim: %v", err)
+		}
+	}
+
+	// Check if this is an SDKMAN installation and use the current symlink
+	if strings.Contains(javaPath, "/.sdkman/candidates/java/") && strings.Contains(javaPath, "/current/") {
+		log.Printf("[DEBUG] Detected SDKMAN Java installation: %s", javaPath)
+		// For SDKMAN, we can use the path as-is since 'current' is already resolved
+		binDir := filepath.Dir(javaPath)
+		if filepath.Base(binDir) == "bin" {
+			resolvedHome := filepath.Dir(binDir)
+			log.Printf("[DEBUG] Using SDKMAN Java home: %s", resolvedHome)
+			return resolvedHome
+		}
+	}
+
+	// Standard inference: Remove /bin/java to get JAVA_HOME
 	binDir := filepath.Dir(javaPath)
 	if filepath.Base(binDir) == "bin" {
 		return filepath.Dir(binDir)
