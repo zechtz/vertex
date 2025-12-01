@@ -379,19 +379,19 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	// Start with the current environment
 	cmd.Env = os.Environ()
 
-	// Apply Java Home override
-	if sm.config.JavaHomeOverride != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
-		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
-	}
-
 	// Build environment variables with proper precedence
-	// Priority: Service-specific env vars > Global env vars
+	// Priority: Service-specific env vars > Profile Java Home override > Global env vars
 
 	// Create a map to track which variables are set by service
 	serviceEnvKeys := make(map[string]bool)
 	for key := range service.EnvVars {
 		serviceEnvKeys[key] = true
+	}
+
+	// Apply Java Home override if set (only if not overridden by service)
+	if sm.config.JavaHomeOverride != "" && !serviceEnvKeys["JAVA_HOME"] {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
 	}
 
 	// Add global environment variables (only if not overridden by service)
@@ -404,6 +404,10 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	// Add service-specific environment variables (these take precedence)
 	for key, envVar := range service.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, envVar.Value))
+		// If service sets JAVA_HOME, also update PATH to use that Java
+		if key == "JAVA_HOME" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", envVar.Value, os.Getenv("PATH")))
+		}
 		// Also set SPRING_PROFILES_ACTIVE for Spring Boot if ACTIVE_PROFILE is set
 		if key == "ACTIVE_PROFILE" {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", envVar.Value))
@@ -564,19 +568,19 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Set environment variables for the process
 	cmd.Env = os.Environ() // Start with current environment
 
-	// Apply Java Home override if set
-	if sm.config.JavaHomeOverride != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
-		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
-	}
-
 	// Build environment variables with proper precedence
-	// Priority: Service-specific env vars > Global env vars
+	// Priority: Service-specific env vars > Profile Java Home override > Global env vars
 
 	// Create a map to track which variables are set by service
 	serviceEnvKeys := make(map[string]bool)
 	for key := range service.EnvVars {
 		serviceEnvKeys[key] = true
+	}
+
+	// Apply Java Home override if set (only if not overridden by service)
+	if sm.config.JavaHomeOverride != "" && !serviceEnvKeys["JAVA_HOME"] {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
 	}
 
 	// Add global environment variables (only if not overridden by service)
@@ -589,6 +593,10 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Add service-specific environment variables (these take precedence)
 	for key, envVar := range service.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, envVar.Value))
+		// If service sets JAVA_HOME, also update PATH to use that Java
+		if key == "JAVA_HOME" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", envVar.Value, os.Getenv("PATH")))
+		}
 		// Also set SPRING_PROFILES_ACTIVE for Spring Boot if ACTIVE_PROFILE is set
 		if key == "ACTIVE_PROFILE" {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", envVar.Value))
