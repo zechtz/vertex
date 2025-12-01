@@ -359,7 +359,7 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	}
 
 	// Get start command
-	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
+	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging)
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
@@ -379,19 +379,19 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	// Start with the current environment
 	cmd.Env = os.Environ()
 
-	// Apply Java Home override
-	if sm.config.JavaHomeOverride != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
-		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
-	}
-
 	// Build environment variables with proper precedence
-	// Priority: Service-specific env vars > Global env vars
+	// Priority: Service-specific env vars > Profile Java Home override > Global env vars
 
 	// Create a map to track which variables are set by service
 	serviceEnvKeys := make(map[string]bool)
 	for key := range service.EnvVars {
 		serviceEnvKeys[key] = true
+	}
+
+	// Apply Java Home override if set (only if not overridden by service)
+	if sm.config.JavaHomeOverride != "" && !serviceEnvKeys["JAVA_HOME"] {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
 	}
 
 	// Add global environment variables (only if not overridden by service)
@@ -404,6 +404,10 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	// Add service-specific environment variables (these take precedence)
 	for key, envVar := range service.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, envVar.Value))
+		// If service sets JAVA_HOME, also update PATH to use that Java
+		if key == "JAVA_HOME" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", envVar.Value, os.Getenv("PATH")))
+		}
 		// Also set SPRING_PROFILES_ACTIVE for Spring Boot if ACTIVE_PROFILE is set
 		if key == "ACTIVE_PROFILE" {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", envVar.Value))
@@ -417,6 +421,9 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
 		}
 	}
+
+	// Detect and log Java version being used
+	logJavaVersion(cmd.Env, service.Name)
 
 	// Log the final command and environment variables for profile services
 	log.Printf("[DEBUG] Starting profile service %s with command: %s", service.Name, cmdString)
@@ -538,7 +545,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	}
 
 	// Get the start command for the detected build system
-	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
+	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging)
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
@@ -564,19 +571,19 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Set environment variables for the process
 	cmd.Env = os.Environ() // Start with current environment
 
-	// Apply Java Home override if set
-	if sm.config.JavaHomeOverride != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
-		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
-	}
-
 	// Build environment variables with proper precedence
-	// Priority: Service-specific env vars > Global env vars
+	// Priority: Service-specific env vars > Profile Java Home override > Global env vars
 
 	// Create a map to track which variables are set by service
 	serviceEnvKeys := make(map[string]bool)
 	for key := range service.EnvVars {
 		serviceEnvKeys[key] = true
+	}
+
+	// Apply Java Home override if set (only if not overridden by service)
+	if sm.config.JavaHomeOverride != "" && !serviceEnvKeys["JAVA_HOME"] {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("JAVA_HOME=%s", sm.config.JavaHomeOverride))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", sm.config.JavaHomeOverride, os.Getenv("PATH")))
 	}
 
 	// Add global environment variables (only if not overridden by service)
@@ -589,6 +596,10 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Add service-specific environment variables (these take precedence)
 	for key, envVar := range service.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, envVar.Value))
+		// If service sets JAVA_HOME, also update PATH to use that Java
+		if key == "JAVA_HOME" {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("PATH=%s/bin:%s", envVar.Value, os.Getenv("PATH")))
+		}
 		// Also set SPRING_PROFILES_ACTIVE for Spring Boot if ACTIVE_PROFILE is set
 		if key == "ACTIVE_PROFILE" {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", envVar.Value))
@@ -602,6 +613,9 @@ func (sm *Manager) startService(service *models.Service) error {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
 		}
 	}
+
+	// Detect and log Java version being used
+	logJavaVersion(cmd.Env, service.Name)
 
 	// Log the final command and environment variables
 	// log.Printf("[DEBUG] Starting service %s with command: %s", service.Name, cmdString)
@@ -895,4 +909,58 @@ func isPortEnvironmentVariable(key string) bool {
 		}
 	}
 	return false
+}
+
+// logJavaVersion detects and logs the Java version being used for a service
+func logJavaVersion(env []string, serviceName string) {
+	// Extract JAVA_HOME from environment
+	var javaHome string
+	for _, envVar := range env {
+		if strings.HasPrefix(envVar, "JAVA_HOME=") {
+			javaHome = strings.TrimPrefix(envVar, "JAVA_HOME=")
+			break
+		}
+	}
+
+	if javaHome == "" {
+		log.Printf("[INFO] Service %s: No JAVA_HOME set, using system default Java", serviceName)
+		return
+	}
+
+	// Try to get Java version
+	javaPath := filepath.Join(javaHome, "bin", "java")
+	cmd := exec.Command(javaPath, "-version")
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Printf("[WARN] Service %s: JAVA_HOME=%s but failed to detect version: %v", serviceName, javaHome, err)
+		return
+	}
+
+	// Parse version from output
+	version := "unknown"
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 0 {
+		line := lines[0]
+		if strings.Contains(line, "version") {
+			// Extract version string between quotes
+			start := strings.Index(line, `"`)
+			if start != -1 {
+				end := strings.Index(line[start+1:], `"`)
+				if end != -1 {
+					version = line[start+1 : start+1+end]
+				}
+			}
+		}
+	}
+
+	// Determine source of JAVA_HOME
+	source := "system"
+	if strings.Contains(javaHome, "/.asdf/installs/java/") {
+		source = "asdf"
+	} else if strings.Contains(javaHome, "/.sdkman/candidates/java/") {
+		source = "sdkman"
+	}
+
+	log.Printf("[INFO] Service %s: Using Java %s from %s (%s)", serviceName, version, source, javaHome)
 }

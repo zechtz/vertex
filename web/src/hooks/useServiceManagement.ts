@@ -41,6 +41,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
       description: "",
       isEnabled: true,
       buildSystem: "auto",
+      verboseLogging: false,
       envVars: {},
       logs: [],
       uptime: "",

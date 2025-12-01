@@ -315,6 +315,22 @@ export function ServiceConfigModal({
               <Label htmlFor="isEnabled">Enable this service</Label>
             </div>
 
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="verboseLogging"
+                checked={editingService.verboseLogging || false}
+                onCheckedChange={(checked) =>
+                  setEditingService({
+                    ...editingService,
+                    verboseLogging: checked === true,
+                  })
+                }
+              />
+              <Label htmlFor="verboseLogging" className="text-sm">
+                Enable verbose logging (Maven: -X, Gradle: -i)
+              </Label>
+            </div>
+
             {/* Environment Variables */}
             <div>
               <div className="flex items-center justify-between mb-3">

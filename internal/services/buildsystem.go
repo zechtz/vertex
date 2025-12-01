@@ -107,7 +107,7 @@ func HasGradleWrapper(serviceDir string) bool {
 }
 
 // GetStartCommand returns the appropriate start command for the service
-func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv string) (string, error) {
+func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv string, verboseLogging bool) (string, error) {
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, buildSystem)
 	commands := GetBuildSystemCommands(effectiveBuildSystem)
 
@@ -122,6 +122,17 @@ func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv s
 		}
 	} else {
 		baseCommand = commands.Start
+	}
+
+	// Add verbose/debug logging flags if enabled
+	if verboseLogging {
+		if effectiveBuildSystem == BuildSystemMaven {
+			// Maven: use -X for debug output
+			baseCommand = strings.Replace(baseCommand, "spring-boot:run", "spring-boot:run -X", 1)
+		} else if effectiveBuildSystem == BuildSystemGradle {
+			// Gradle: use -i for info level logging
+			baseCommand = strings.Replace(baseCommand, "bootRun", "bootRun -i", 1)
+		}
 	}
 
 	// Construct the full command with directory change and environment

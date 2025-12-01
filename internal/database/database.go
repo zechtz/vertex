@@ -349,6 +349,11 @@ func (db *Database) initTables() error {
 		return fmt.Errorf("failed to migrate service name constraint: %w", err)
 	}
 
+	// Add verbose_logging column for build tool verbose/debug output
+	if err := db.migrateAddVerboseLoggingColumn(); err != nil {
+		return fmt.Errorf("failed to add verbose_logging column: %w", err)
+	}
+
 	return nil
 }
 
@@ -941,5 +946,34 @@ func (db *Database) DeleteDockerConfig(profileID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete Docker config for profile %s: %w", profileID, err)
 	}
+	return nil
+}
+
+// migrateAddVerboseLoggingColumn adds the verbose_logging column to the services table
+func (db *Database) migrateAddVerboseLoggingColumn() error {
+	// Check if column already exists
+	var columnExists bool
+	var sql string
+	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='services'").Scan(&sql)
+	if err != nil {
+		return fmt.Errorf("failed to query services table schema: %w", err)
+	}
+
+	columnExists = strings.Contains(sql, "verbose_logging")
+
+	if columnExists {
+		log.Println("[INFO] Column 'verbose_logging' already exists in services table")
+		return nil
+	}
+
+	log.Println("[INFO] Adding 'verbose_logging' column to services table")
+
+	// Add the column with default value of FALSE
+	_, err = db.Exec(`ALTER TABLE services ADD COLUMN verbose_logging BOOLEAN DEFAULT FALSE`)
+	if err != nil {
+		return fmt.Errorf("failed to add verbose_logging column: %w", err)
+	}
+
+	log.Println("[INFO] Successfully added 'verbose_logging' column to services table")
 	return nil
 }
