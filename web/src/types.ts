@@ -88,6 +88,8 @@ export interface ServiceConfigRequest {
   order: number;
   description: string;
   isEnabled: boolean;
+  buildSystem: string;
+  verboseLogging: boolean;
   envVars: Record<string, EnvVar>;
 }
 
