@@ -46,29 +46,31 @@ func (sm *Manager) loadServices(config models.Config) error {
 		// Try to load existing service from database
 		var dbService models.Service
 		row := sm.db.QueryRow(`
-			SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system
+			SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system, verbose_logging
 			FROM services WHERE id = ?`, service.ID)
 
 		var description sql.NullString
 		var isEnabled sql.NullBool
 		var buildSystem sql.NullString
+		var verboseLogging sql.NullBool
 		err := row.Scan(&dbService.ID, &dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
 			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
-			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem)
+			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem, &verboseLogging)
 
 		if err == sql.ErrNoRows {
 			// Service doesn't exist in DB, insert it
 			_, err = sm.db.Exec(`
-				INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+				INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, verbose_logging, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 				service.ID, service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
-				service.HealthStatus, service.HealthURL, service.Port, service.Order, "", true, "auto")
+				service.HealthStatus, service.HealthURL, service.Port, service.Order, "", true, "auto", false)
 			if err != nil {
 				return fmt.Errorf("failed to insert service UUID %s: %w", service.ID, err)
 			}
 			service.EnvVars = make(map[string]models.EnvVar)
 			service.Logs = []models.LogEntry{}
 			service.BuildSystem = "auto"
+			service.VerboseLogging = false
 			sm.services[service.ID] = service
 		} else if err != nil {
 			return fmt.Errorf("failed to query service UUID %s: %w", service.ID, err)
@@ -105,6 +107,11 @@ func (sm *Manager) loadServices(config models.Config) error {
 				dbService.BuildSystem = buildSystem.String
 			} else {
 				dbService.BuildSystem = "auto"
+			}
+			if verboseLogging.Valid {
+				dbService.VerboseLogging = verboseLogging.Bool
+			} else {
+				dbService.VerboseLogging = false
 			}
 
 			// Load environment variables for this service
@@ -368,11 +375,11 @@ func (sm *Manager) loadDynamicServices() error {
 
 func (sm *Manager) insertServiceInDB(service *models.Service) error {
 	_, err := sm.db.Exec(`
-		INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, verbose_logging, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 		service.ID, service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
 		service.HealthStatus, service.HealthURL, service.Port, service.Order,
-		service.Description, service.IsEnabled, service.BuildSystem)
+		service.Description, service.IsEnabled, service.BuildSystem, service.VerboseLogging)
 
 	return err
 }
@@ -418,12 +425,12 @@ func (sm *Manager) UpdateServiceInDB(service *models.Service) error {
 
 func (sm *Manager) UpdateServiceConfigInDB(service *models.Service) error {
 	_, err := sm.db.Exec(`
-		UPDATE services 
-		SET name = ?, java_opts = ?, health_url = ?, port = ?, service_order = ?, description = ?, 
-		    is_enabled = ?, build_system = ?, updated_at = CURRENT_TIMESTAMP
+		UPDATE services
+		SET name = ?, java_opts = ?, health_url = ?, port = ?, service_order = ?, description = ?,
+		    is_enabled = ?, build_system = ?, verbose_logging = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`,
 		service.Name, service.JavaOpts, service.HealthURL, service.Port, service.Order,
-		service.Description, service.IsEnabled, service.BuildSystem, service.ID)
+		service.Description, service.IsEnabled, service.BuildSystem, service.VerboseLogging, service.ID)
 
 	return err
 }

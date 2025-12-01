@@ -359,7 +359,7 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	}
 
 	// Get start command
-	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
+	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging)
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
@@ -545,7 +545,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	}
 
 	// Get the start command for the detected build system
-	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv)
+	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging)
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}

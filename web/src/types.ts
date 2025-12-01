@@ -56,6 +56,7 @@ export interface Service {
   description: string;
   isEnabled: boolean;
   buildSystem: string; // "maven", "gradle", or "auto"
+  verboseLogging: boolean; // Enable verbose/debug logging for build tools
   envVars: { [key: string]: EnvVar };
   logs: LogEntry[];
   // Resource monitoring fields
