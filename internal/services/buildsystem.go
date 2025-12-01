@@ -128,10 +128,15 @@ func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv s
 	if verboseLogging {
 		if effectiveBuildSystem == BuildSystemMaven {
 			// Maven: use -X for debug output
-			baseCommand = strings.Replace(baseCommand, "spring-boot:run", "spring-boot:run -X", 1)
+			// Check if the command contains the wrapper, then add -X after it
+			if strings.Contains(baseCommand, "./mvnw") {
+				baseCommand = strings.Replace(baseCommand, "./mvnw", "./mvnw -X", 1)
+			}
 		} else if effectiveBuildSystem == BuildSystemGradle {
 			// Gradle: use -i for info level logging
-			baseCommand = strings.Replace(baseCommand, "bootRun", "bootRun -i", 1)
+			if strings.Contains(baseCommand, "./gradlew") {
+				baseCommand = strings.Replace(baseCommand, "./gradlew", "./gradlew -i", 1)
+			}
 		}
 	}
 
