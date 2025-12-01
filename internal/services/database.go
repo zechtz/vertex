@@ -303,7 +303,7 @@ func (sm *Manager) loadGlobalConfigFromDB() error {
 func (sm *Manager) loadDynamicServices() error {
 	// Query all services from database
 	rows, err := sm.db.Query(`
-		SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system
+		SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system, verbose_logging
 		FROM services`)
 	if err != nil {
 		return fmt.Errorf("failed to query dynamic services: %w", err)
@@ -315,10 +315,11 @@ func (sm *Manager) loadDynamicServices() error {
 		var description sql.NullString
 		var isEnabled sql.NullBool
 		var buildSystem sql.NullString
+		var verboseLogging sql.NullBool
 
 		err := rows.Scan(&dbService.ID, &dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
 			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
-			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem)
+			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem, &verboseLogging)
 		if err != nil {
 			log.Printf("[WARN] Failed to scan dynamic service: %v", err)
 			continue
@@ -342,6 +343,11 @@ func (sm *Manager) loadDynamicServices() error {
 			dbService.BuildSystem = buildSystem.String
 		} else {
 			dbService.BuildSystem = "auto"
+		}
+		if verboseLogging.Valid {
+			dbService.VerboseLogging = verboseLogging.Bool
+		} else {
+			dbService.VerboseLogging = false
 		}
 
 		// Initialize required fields

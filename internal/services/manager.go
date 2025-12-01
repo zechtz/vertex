@@ -440,6 +440,7 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 	service.Description = serviceConfig.Description
 	service.IsEnabled = serviceConfig.IsEnabled
 	service.BuildSystem = serviceConfig.BuildSystem
+	service.VerboseLogging = serviceConfig.VerboseLogging
 	service.EnvVars = serviceConfig.EnvVars
 
 	// Save to database

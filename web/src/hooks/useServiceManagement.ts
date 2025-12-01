@@ -202,6 +202,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
           description: service.description || "",
           isEnabled: service.isEnabled,
           buildSystem: service.buildSystem || "auto",
+          verboseLogging: service.verboseLogging || false,
           envVars: service.envVars || {},
           startupDelay: service.startupDelay || 0,
         };
