@@ -422,6 +422,9 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 		}
 	}
 
+	// Detect and log Java version being used
+	logJavaVersion(cmd.Env, service.Name)
+
 	// Log the final command and environment variables for profile services
 	log.Printf("[DEBUG] Starting profile service %s with command: %s", service.Name, cmdString)
 	log.Printf("[DEBUG] Working directory: %s", serviceDir)
@@ -610,6 +613,9 @@ func (sm *Manager) startService(service *models.Service) error {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
 		}
 	}
+
+	// Detect and log Java version being used
+	logJavaVersion(cmd.Env, service.Name)
 
 	// Log the final command and environment variables
 	// log.Printf("[DEBUG] Starting service %s with command: %s", service.Name, cmdString)
@@ -903,4 +909,58 @@ func isPortEnvironmentVariable(key string) bool {
 		}
 	}
 	return false
+}
+
+// logJavaVersion detects and logs the Java version being used for a service
+func logJavaVersion(env []string, serviceName string) {
+	// Extract JAVA_HOME from environment
+	var javaHome string
+	for _, envVar := range env {
+		if strings.HasPrefix(envVar, "JAVA_HOME=") {
+			javaHome = strings.TrimPrefix(envVar, "JAVA_HOME=")
+			break
+		}
+	}
+
+	if javaHome == "" {
+		log.Printf("[INFO] Service %s: No JAVA_HOME set, using system default Java", serviceName)
+		return
+	}
+
+	// Try to get Java version
+	javaPath := filepath.Join(javaHome, "bin", "java")
+	cmd := exec.Command(javaPath, "-version")
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Printf("[WARN] Service %s: JAVA_HOME=%s but failed to detect version: %v", serviceName, javaHome, err)
+		return
+	}
+
+	// Parse version from output
+	version := "unknown"
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 0 {
+		line := lines[0]
+		if strings.Contains(line, "version") {
+			// Extract version string between quotes
+			start := strings.Index(line, `"`)
+			if start != -1 {
+				end := strings.Index(line[start+1:], `"`)
+				if end != -1 {
+					version = line[start+1 : start+1+end]
+				}
+			}
+		}
+	}
+
+	// Determine source of JAVA_HOME
+	source := "system"
+	if strings.Contains(javaHome, "/.asdf/installs/java/") {
+		source = "asdf"
+	} else if strings.Contains(javaHome, "/.sdkman/candidates/java/") {
+		source = "sdkman"
+	}
+
+	log.Printf("[INFO] Service %s: Using Java %s from %s (%s)", serviceName, version, source, javaHome)
 }
