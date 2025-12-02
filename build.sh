@@ -3,7 +3,23 @@
 # Cross-platform build script for Vertex
 set -e
 
-VERSION=${VERSION:-"dev"}
+# Try to get version from git tag
+if [ -z "$VERSION" ]; then
+    GIT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "")
+    if [ -n "$GIT_TAG" ]; then
+        # If we're on a tag, use it (strip 'v' prefix if present)
+        VERSION=$(echo "$GIT_TAG" | sed 's/^v//')
+    else
+        # Otherwise, try to get the latest tag + commit count
+        GIT_DESCRIBE=$(git describe --tags --always 2>/dev/null || echo "")
+        if [ -n "$GIT_DESCRIBE" ]; then
+            VERSION="$GIT_DESCRIBE"
+        else
+            VERSION="dev"
+        fi
+    fi
+fi
+
 COMMIT=${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")}
 DATE=${DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
 
