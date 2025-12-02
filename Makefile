@@ -1,4 +1,4 @@
-.PHONY: build build-release version install clean help
+.PHONY: build build-release build-frontend version install clean clean-all help
 
 # Version information
 # Try to get version from git tag, fallback to dev
@@ -28,12 +28,17 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-build: ## Build vertex with version information
+build-frontend: ## Build the frontend web application
+	@echo "Building frontend..."
+	@cd web && yarn install --frozen-lockfile && yarn build
+	@echo "✓ Frontend built: web/dist/"
+
+build: build-frontend ## Build vertex with version information (includes frontend)
 	@echo "Building Vertex $(VERSION) ($(COMMIT)) ..."
 	@go build -ldflags="$(LDFLAGS)" -o vertex .
 	@echo "✓ Build complete: ./vertex"
 
-build-release: ## Build release version (set VERSION=x.x.x)
+build-release: build-frontend ## Build release version (set VERSION=x.x.x)
 	@if [ "$(VERSION)" = "dev" ]; then \
 		echo "Error: VERSION must be set for release builds"; \
 		echo "Usage: make build-release VERSION=1.0.0"; \
@@ -49,9 +54,13 @@ version: build ## Build and show version information
 install: build ## Build and install vertex
 	@./vertex install
 
-clean: ## Remove build artifacts
+clean: ## Remove Go build artifacts
 	@rm -f vertex vertex-*
 	@echo "✓ Build artifacts removed"
+
+clean-all: clean ## Remove all build artifacts (including frontend)
+	@rm -rf web/dist web/node_modules
+	@echo "✓ All build artifacts removed"
 
 # Quick development build (alias)
 dev: build ## Alias for build
