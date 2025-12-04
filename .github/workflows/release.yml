@@ -84,6 +84,21 @@ jobs:
             echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           fi
 
+      - name: Get version from tag
+        id: version
+        run: |
+          # Get version from tag or use git describe
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+          fi
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -94,7 +109,9 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY_NAME="${BINARY_NAME}.exe"
           fi
-          go build -ldflags="-s -w" -o "${BINARY_NAME}"
+
+          LDFLAGS="-s -w -X main.version=${{ steps.version.outputs.version }} -X main.commit=${{ steps.version.outputs.commit }} -X main.date=${{ steps.version.outputs.date }}"
+          go build -ldflags="$LDFLAGS" -o "${BINARY_NAME}"
 
           if [[ "${{ matrix.os }}" == macos* ]]; then
             shasum -a 256 "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
@@ -103,7 +120,7 @@ jobs:
           fi
 
       - name: Upload artifacts
-        if: github.event_name != 'pull_request' # don't upload artifacts for PRs
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -174,6 +191,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -189,14 +208,60 @@ jobs:
 
       - name: Generate release notes
         run: |
-          echo "# Vertex Service Manager ${GITHUB_REF#refs/tags/}" > release-notes.md
+          # Get version from tag
+          VERSION=${GITHUB_REF#refs/tags/}
+
+          echo "# Vertex Service Manager $VERSION" > release-notes.md
+          echo "" >> release-notes.md
+
+          # Get commits since last tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "## Changes since $PREVIOUS_TAG" >> release-notes.md
+            echo "" >> release-notes.md
+            git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" >> release-notes.md
+            echo "" >> release-notes.md
+          fi
+
           echo "" >> release-notes.md
           echo "## 🚀 Features" >> release-notes.md
           echo "- Complete microservice management platform" >> release-notes.md
           echo "- Embedded React web interface" >> release-notes.md
           echo "- Cross-platform support" >> release-notes.md
           echo "- Real-time monitoring and logs" >> release-notes.md
+          echo "- Profile-based service management" >> release-notes.md
+          echo "- Environment variable management" >> release-notes.md
           echo "" >> release-notes.md
+          echo "## 📦 Installation" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Download Binary" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "Download the appropriate binary for your platform:" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "- **Linux (amd64)**: \`vertex-linux-amd64\`" >> release-notes.md
+          echo "- **Linux (arm64)**: \`vertex-linux-arm64\`" >> release-notes.md
+          echo "- **macOS (Intel)**: \`vertex-darwin-amd64\`" >> release-notes.md
+          echo "- **macOS (Apple Silicon)**: \`vertex-darwin-arm64\`" >> release-notes.md
+          echo "- **Windows (amd64)**: \`vertex-windows-amd64.exe\`" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "\`\`\`bash" >> release-notes.md
+          echo "# Make executable and install" >> release-notes.md
+          echo "chmod +x vertex-*" >> release-notes.md
+          echo "sudo mv vertex-* /usr/local/bin/vertex" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "# Verify installation" >> release-notes.md
+          echo "vertex version" >> release-notes.md
+          echo "\`\`\`" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### Docker" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "\`\`\`bash" >> release-notes.md
+          echo "docker pull \${{ secrets.DOCKERHUB_USERNAME }}/vertex:$VERSION" >> release-notes.md
+          echo "# or" >> release-notes.md
+          echo "docker pull \${{ secrets.DOCKERHUB_USERNAME }}/vertex:latest" >> release-notes.md
+          echo "\`\`\`" >> release-notes.md
+
+          cat release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

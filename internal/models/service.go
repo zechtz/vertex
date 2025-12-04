@@ -25,6 +25,7 @@ type Service struct {
 	IsEnabled      bool                `json:"isEnabled"`
 	BuildSystem    string              `json:"buildSystem"`    // "maven", "gradle", or "auto"
 	VerboseLogging bool                `json:"verboseLogging"` // Enable verbose/debug logging for build tools
+	GitBranch      string              `json:"gitBranch"`      // Current git branch (if service is a git repo)
 	EnvVars        map[string]EnvVar   `json:"envVars"`
 	Cmd            *exec.Cmd           `json:"-"`
 	Logs           []LogEntry          `json:"logs"`

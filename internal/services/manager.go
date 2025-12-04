@@ -1000,3 +1000,154 @@ func (sm *Manager) HasMavenWrapper(serviceDir string) bool {
 func (sm *Manager) HasGradleWrapper(serviceDir string) bool {
 	return HasGradleWrapper(serviceDir)
 }
+
+// Git-related methods
+
+// GetGitInfo returns git information for a service
+func (sm *Manager) GetGitInfo(serviceUUID string) (*GitInfo, error) {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Get the full service directory path
+	projectsDir := sm.getServiceProjectsDirectory(serviceUUID)
+	if projectsDir == "" {
+		projectsDir = sm.config.ProjectsDir
+	}
+
+	fullPath := filepath.Join(projectsDir, service.Dir)
+	return GetGitInfo(fullPath)
+}
+
+// GetGitBranches returns all branches (local and remote) for a service
+func (sm *Manager) GetGitBranches(serviceUUID string) ([]string, error) {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Get the full service directory path
+	projectsDir := sm.getServiceProjectsDirectory(serviceUUID)
+	if projectsDir == "" {
+		projectsDir = sm.config.ProjectsDir
+	}
+
+	fullPath := filepath.Join(projectsDir, service.Dir)
+
+	if !IsGitRepository(fullPath) {
+		return nil, fmt.Errorf("service is not a git repository")
+	}
+
+	// Get local branches
+	localBranches, err := GetBranches(fullPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get remote branches
+	remoteBranches, err := GetRemoteBranches(fullPath)
+	if err != nil {
+		// If remote fetch fails, just return local branches
+		return localBranches, nil
+	}
+
+	// Combine and deduplicate
+	branchMap := make(map[string]bool)
+	for _, b := range localBranches {
+		branchMap[b] = true
+	}
+	for _, b := range remoteBranches {
+		branchMap[b] = true
+	}
+
+	branches := []string{}
+	for b := range branchMap {
+		branches = append(branches, b)
+	}
+
+	return branches, nil
+}
+
+// SwitchGitBranch switches a service to a different git branch
+func (sm *Manager) SwitchGitBranch(serviceUUID, branch string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Check if service is running
+	if service.Status == "running" {
+		return fmt.Errorf("cannot switch branches while service is running. Please stop the service first")
+	}
+
+	// Get the full service directory path
+	projectsDir := sm.getServiceProjectsDirectory(serviceUUID)
+	if projectsDir == "" {
+		projectsDir = sm.config.ProjectsDir
+	}
+
+	fullPath := filepath.Join(projectsDir, service.Dir)
+
+	// Switch branch
+	if err := SwitchBranch(fullPath, branch); err != nil {
+		return err
+	}
+
+	// Update the service's git branch info
+	currentBranch, err := GetCurrentBranch(fullPath)
+	if err == nil {
+		sm.mutex.Lock()
+		service.GitBranch = currentBranch
+		sm.mutex.Unlock()
+
+		// Broadcast update
+		sm.broadcastUpdate(service)
+	}
+
+	log.Printf("[INFO] Successfully switched service %s (UUID: %s) to branch %s", service.Name, serviceUUID, branch)
+	return nil
+}
+
+// UpdateServiceGitBranch updates the git branch information for a service
+func (sm *Manager) UpdateServiceGitBranch(serviceUUID string) error {
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("service UUID %s not found", serviceUUID)
+	}
+
+	// Get the full service directory path
+	projectsDir := sm.getServiceProjectsDirectory(serviceUUID)
+	if projectsDir == "" {
+		projectsDir = sm.config.ProjectsDir
+	}
+
+	fullPath := filepath.Join(projectsDir, service.Dir)
+
+	if !IsGitRepository(fullPath) {
+		return nil
+	}
+
+	currentBranch, err := GetCurrentBranch(fullPath)
+	if err != nil {
+		return err
+	}
+
+	sm.mutex.Lock()
+	service.GitBranch = currentBranch
+	sm.mutex.Unlock()
+
+	return nil
+}

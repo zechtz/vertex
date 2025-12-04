@@ -233,7 +233,7 @@ func GenerateMavenWrapper(serviceDir string) error {
 	log.Printf("[DEBUG] Using %s path: %s", mvnExecutable, mvnPath)
 
 	// Verify executable permissions
-	if info, err := os.Stat(mvnPath); err != nil || info.Mode().Perm()&0111 == 0 {
+	if info, err := os.Stat(mvnPath); err != nil || info.Mode().Perm()&0o111 == 0 {
 		return fmt.Errorf("%s path %s is not executable or inaccessible: %v", mvnExecutable, mvnPath, err)
 	}
 
@@ -268,7 +268,7 @@ func GenerateGradleWrapper(serviceDir string) error {
 
 	// Make gradlew executable on Unix systems
 	gradlewPath := filepath.Join(serviceDir, "gradlew")
-	if err := os.Chmod(gradlewPath, 0755); err != nil {
+	if err := os.Chmod(gradlewPath, 0o755); err != nil {
 		log.Printf("[WARN] Failed to make gradlew executable: %v", err)
 	}
 

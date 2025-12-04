@@ -26,6 +26,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Service } from "@/types";
 import { useState, useRef, useEffect } from "react";
+import { GitBranchSwitcher } from "@/components/GitBranchSwitcher/GitBranchSwitcher";
 
 interface ServiceCardProps {
   service: Service;
@@ -231,6 +232,18 @@ export function ServiceCard({
                   <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
                     {service.description}
                   </p>
+                )}
+
+                {/* Git Branch Switcher */}
+                {service.gitBranch && (
+                  <div className="mt-3">
+                    <GitBranchSwitcher
+                      serviceId={service.id}
+                      serviceName={service.name}
+                      currentBranch={service.gitBranch}
+                      isServiceRunning={service.status === "running"}
+                    />
+                  </div>
                 )}
               </div>
             </div>

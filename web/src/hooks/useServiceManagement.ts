@@ -42,6 +42,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
       isEnabled: true,
       buildSystem: "auto",
       verboseLogging: false,
+      gitBranch: "",
       envVars: {},
       logs: [],
       uptime: "",
