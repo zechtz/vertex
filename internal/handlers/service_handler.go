@@ -48,6 +48,11 @@ func registerServiceRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/services/{id}/wrapper/generate", h.generateWrapperHandler).Methods("POST")
 	r.HandleFunc("/api/services/{id}/wrapper/repair", h.repairWrapperHandler).Methods("POST")
 
+	// Git operations
+	r.HandleFunc("/api/services/{id}/git/info", h.getGitInfoHandler).Methods("GET")
+	r.HandleFunc("/api/services/{id}/git/branches", h.getGitBranchesHandler).Methods("GET")
+	r.HandleFunc("/api/services/{id}/git/switch", h.switchGitBranchHandler).Methods("POST")
+
 	// Utility endpoints
 	r.HandleFunc("/api/services/available-for-profile", h.getAvailableServicesForProfileHandler).Methods("GET")
 	r.HandleFunc("/api/services/normalize-order", h.normalizeServiceOrderHandler).Methods("POST")
@@ -1228,4 +1233,109 @@ func (h *Handler) repairWrapperHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+// Git operation handlers
+
+func (h *Handler) getGitInfoHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	vars := mux.Vars(r)
+	serviceUUID := vars["id"]
+
+	if serviceUUID == "" {
+		http.Error(w, "Service UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	_, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, "Service not found", http.StatusNotFound)
+		return
+	}
+
+	gitInfo, err := h.serviceManager.GetGitInfo(serviceUUID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get git info for service %s: %v", serviceUUID, err)
+		http.Error(w, fmt.Sprintf("Failed to get git info: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(gitInfo)
+}
+
+func (h *Handler) getGitBranchesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	vars := mux.Vars(r)
+	serviceUUID := vars["id"]
+
+	if serviceUUID == "" {
+		http.Error(w, "Service UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	_, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, "Service not found", http.StatusNotFound)
+		return
+	}
+
+	branches, err := h.serviceManager.GetGitBranches(serviceUUID)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get git branches for service %s: %v", serviceUUID, err)
+		http.Error(w, fmt.Sprintf("Failed to get git branches: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"branches": branches,
+	})
+}
+
+func (h *Handler) switchGitBranchHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	vars := mux.Vars(r)
+	serviceUUID := vars["id"]
+
+	if serviceUUID == "" {
+		http.Error(w, "Service UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	_, exists := h.serviceManager.GetServiceByUUID(serviceUUID)
+	if !exists {
+		http.Error(w, "Service not found", http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Branch string `json:"branch"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Branch == "" {
+		http.Error(w, "Branch name is required", http.StatusBadRequest)
+		return
+	}
+
+	err := h.serviceManager.SwitchGitBranch(serviceUUID, req.Branch)
+	if err != nil {
+		log.Printf("[ERROR] Failed to switch git branch for service %s: %v", serviceUUID, err)
+		http.Error(w, fmt.Sprintf("Failed to switch branch: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"branch":  req.Branch,
+		"message": fmt.Sprintf("Successfully switched to branch '%s'", req.Branch),
+	})
 }

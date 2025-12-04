@@ -153,7 +153,24 @@ func (sm *Manager) loadServices(config models.Config) error {
 		}
 	}
 
+	// Update git branch information for all services
+	sm.updateAllGitBranches()
+
 	return nil
+}
+
+// updateAllGitBranches updates git branch information for all loaded services
+func (sm *Manager) updateAllGitBranches() {
+	sm.mutex.RLock()
+	serviceIDs := make([]string, 0, len(sm.services))
+	for id := range sm.services {
+		serviceIDs = append(serviceIDs, id)
+	}
+	sm.mutex.RUnlock()
+
+	for _, serviceID := range serviceIDs {
+		_ = sm.UpdateServiceGitBranch(serviceID)
+	}
 }
 
 func (sm *Manager) loadConfigurations() error {
