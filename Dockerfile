@@ -26,7 +26,9 @@ RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o vertex
 FROM alpine:latest
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates sqlite
+# Use --no-scripts to avoid trigger issues in QEMU ARM64 builds
+RUN apk --no-cache --no-scripts add ca-certificates sqlite && \
+    update-ca-certificates 2>/dev/null || true
 
 WORKDIR /app
 
