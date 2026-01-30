@@ -15,7 +15,7 @@ import (
 	"github.com/zechtz/vertex/internal/models"
 )
 
-// XML structures for Eureka response
+// EurekaXMLInstanceInfo XML structures for Eureka response
 type EurekaXMLInstanceInfo struct {
 	InstanceID string `xml:"instanceId"`
 	App        string `xml:"app"`
@@ -41,7 +41,7 @@ type EurekaXMLApplications struct {
 	Applications []EurekaXMLApplication `xml:"application"`
 }
 
-// JSON structures for Eureka response (kept for compatibility)
+// EurekaInstanceInfo JSON structures for Eureka response (kept for compatibility)
 type EurekaInstanceInfo struct {
 	InstanceID string `json:"instanceId"`
 	App        string `json:"app"`

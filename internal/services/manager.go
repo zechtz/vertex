@@ -1145,8 +1145,22 @@ func (sm *Manager) UpdateServiceGitBranch(serviceUUID string) error {
 		return err
 	}
 
+	// Get comprehensive git status
+	gitStatus, err := GetGitStatus(fullPath)
+	if err != nil {
+		// Still update branch even if status fails
+		sm.mutex.Lock()
+		service.GitBranch = currentBranch
+		sm.mutex.Unlock()
+		return nil
+	}
+
 	sm.mutex.Lock()
 	service.GitBranch = currentBranch
+	service.GitHasUncommitted = gitStatus.HasUncommittedChanges
+	service.GitCommitsAhead = gitStatus.CommitsAhead
+	service.GitCommitsBehind = gitStatus.CommitsBehind
+	service.GitIsClean = gitStatus.IsClean
 	sm.mutex.Unlock()
 
 	return nil

@@ -16,22 +16,22 @@ type GitLabCIConfig struct {
 	ErrorMessage string                `json:"error_message,omitempty"`
 }
 
-// New models for library preview functionality
+// LibraryPreview New models for library preview functionality
 type LibraryPreview struct {
-	HasLibraries   bool                    `json:"hasLibraries"`
-	ServiceName    string                  `json:"serviceName"`
-	ServiceID      string                  `json:"serviceId"`
-	Environments   []EnvironmentLibraries  `json:"environments"`
-	TotalLibraries int                     `json:"totalLibraries"`
-	GitlabCIExists bool                    `json:"gitlabCIExists"`
-	ErrorMessage   string                  `json:"errorMessage,omitempty"`
+	HasLibraries   bool                   `json:"hasLibraries"`
+	ServiceName    string                 `json:"serviceName"`
+	ServiceID      string                 `json:"serviceId"`
+	Environments   []EnvironmentLibraries `json:"environments"`
+	TotalLibraries int                    `json:"totalLibraries"`
+	GitlabCIExists bool                   `json:"gitlabCIExists"`
+	ErrorMessage   string                 `json:"errorMessage,omitempty"`
 }
 
 type EnvironmentLibraries struct {
-	Environment string                  `json:"environment"`
-	JobName     string                  `json:"jobName"`
-	Libraries   []LibraryInstallation   `json:"libraries"`
-	Branches    []string                `json:"branches"`
+	Environment string                `json:"environment"`
+	JobName     string                `json:"jobName"`
+	Libraries   []LibraryInstallation `json:"libraries"`
+	Branches    []string              `json:"branches"`
 }
 
 type LibraryInstallRequest struct {
@@ -40,20 +40,20 @@ type LibraryInstallRequest struct {
 }
 
 type InstallProgress struct {
-	ServiceID     string                    `json:"serviceId"`
-	Status        string                    `json:"status"` // "started", "in_progress", "completed", "failed"
-	Environments  []EnvironmentProgress     `json:"environments"`
-	OverallProgress float64                 `json:"overallProgress"`
-	StartTime     string                    `json:"startTime"`
-	EndTime       string                    `json:"endTime,omitempty"`
-	ErrorMessage  string                    `json:"errorMessage,omitempty"`
+	ServiceID       string                `json:"serviceId"`
+	Status          string                `json:"status"` // "started", "in_progress", "completed", "failed"
+	Environments    []EnvironmentProgress `json:"environments"`
+	OverallProgress float64               `json:"overallProgress"`
+	StartTime       string                `json:"startTime"`
+	EndTime         string                `json:"endTime,omitempty"`
+	ErrorMessage    string                `json:"errorMessage,omitempty"`
 }
 
 type EnvironmentProgress struct {
-	Name            string   `json:"name"`
-	Status          string   `json:"status"` // "pending", "installing", "completed", "failed"
-	Total           int      `json:"total"`
-	Completed       int      `json:"completed"`
-	CurrentLibrary  string   `json:"currentLibrary,omitempty"`
-	Errors          []string `json:"errors,omitempty"`
+	Name           string   `json:"name"`
+	Status         string   `json:"status"` // "pending", "installing", "completed", "failed"
+	Total          int      `json:"total"`
+	Completed      int      `json:"completed"`
+	CurrentLibrary string   `json:"currentLibrary,omitempty"`
+	Errors         []string `json:"errors,omitempty"`
 }
