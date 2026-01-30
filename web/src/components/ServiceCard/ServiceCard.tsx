@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Service } from "@/types";
 import { useState, useRef, useEffect } from "react";
 import { GitBranchSwitcher } from "@/components/GitBranchSwitcher/GitBranchSwitcher";
+import { GitStatusBadge } from "@/components/GitStatusBadge/GitStatusBadge";
 
 interface ServiceCardProps {
   service: Service;
@@ -236,7 +237,15 @@ export function ServiceCard({
 
                 {/* Git Branch Switcher */}
                 {service.gitBranch && (
-                  <div className="mt-3">
+                  <div className="mt-3 space-y-2">
+                    {/* Git Status Badge */}
+                    <GitStatusBadge
+                      hasUncommitted={service.gitHasUncommitted}
+                      commitsAhead={service.gitCommitsAhead}
+                      commitsBehind={service.gitCommitsBehind}
+                      isClean={service.gitIsClean}
+                    />
+                    {/* Git Branch Switcher */}
                     <GitBranchSwitcher
                       serviceId={service.id}
                       serviceName={service.name}
