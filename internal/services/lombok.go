@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -39,7 +38,7 @@ func (sm *Manager) checkAndFixLombokCompatibility(serviceDir string, serviceName
 // handleMavenLombok handles Lombok configuration for Maven projects
 func (sm *Manager) handleMavenLombok(pomPath, serviceName string) error {
 	// Read pom.xml content
-	content, err := ioutil.ReadFile(pomPath)
+	content, err := os.ReadFile(pomPath)
 	if err != nil {
 		return fmt.Errorf("failed to read pom.xml for service %s: %w", serviceName, err)
 	}
@@ -78,7 +77,7 @@ func (sm *Manager) handleMavenLombok(pomPath, serviceName string) error {
 // handleGradleLombok handles Lombok configuration for Gradle projects
 func (sm *Manager) handleGradleLombok(gradlePath, serviceName string) error {
 	// Read build.gradle content
-	content, err := ioutil.ReadFile(gradlePath)
+	content, err := os.ReadFile(gradlePath)
 	if err != nil {
 		return fmt.Errorf("failed to read build.gradle for service %s: %w", serviceName, err)
 	}
@@ -167,21 +166,50 @@ func (sm *Manager) addCompilerPluginWithLombok(pomPath, pomContent, serviceName 
 
 // addLombokAnnotationProcessorToGradle adds Lombok annotation processor to build.gradle
 func (sm *Manager) addLombokAnnotationProcessorToGradle(gradlePath, gradleContent, serviceName string) error {
-	// Find the dependencies block
-	depsRegex := regexp.MustCompile(`(?s)(dependencies\s*\{)(.*?)(})`)
-	depsMatch := depsRegex.FindStringSubmatch(gradleContent)
-	if len(depsMatch) == 0 {
-		// If no dependencies block exists, append one
-		gradleContent += "\ndependencies {\n    annotationProcessor 'org.projectlombok:lombok'\n}\n"
+	// 1. Get Lombok version and prepare the line
+	lombokVersion := sm.extractLombokVersionFromGradle(gradleContent)
+	// Using a simpler string for the check to avoid whitespace issues
+	processorDependency := "org.projectlombok:lombok"
+	newLine := fmt.Sprintf("\n    annotationProcessor 'org.projectlombok:lombok:%s'", lombokVersion)
+
+	// 2. Find all dependencies blocks
+	// This regex captures: [0:1] full match, [2:3] "dependencies {", [4:5] internal content, [6:7] "}"
+	depsRegex := regexp.MustCompile(`(?s)(dependencies\s*\{)(.*?)(\})`)
+	matches := depsRegex.FindAllStringSubmatchIndex(gradleContent, -1)
+
+	if len(matches) == 0 {
+		// No dependencies block at all, append a new one at the end
+		gradleContent += fmt.Sprintf("\ndependencies {%s\n}\n", newLine)
 	} else {
-		// Get Lombok version from the dependency
-		lombokVersion := sm.extractLombokVersionFromGradle(gradleContent)
-		annotationProcessor := fmt.Sprintf("    annotationProcessor 'org.projectlombok:lombok:%s'\n", lombokVersion)
-		newContent := depsRegex.ReplaceAllString(gradleContent, "${1}${2}"+annotationProcessor+"${3}")
-		if newContent == gradleContent {
-			return fmt.Errorf("failed to add Lombok annotation processor to build.gradle for service %s", serviceName)
+		targetIndex := -1
+
+		for _, m := range matches {
+			// Check the text before the match
+			prefix := gradleContent[:m[0]]
+
+			// If open and closed braces are equal, we are at the ROOT level
+			// This successfully skips the 'buildscript { dependencies { ... } }' block
+			if strings.Count(prefix, "{") == strings.Count(prefix, "}") {
+				targetIndex = m[0]
+
+				// Check if Lombok processor already exists in THIS specific block
+				blockContent := gradleContent[m[4]:m[5]]
+				if strings.Contains(blockContent, processorDependency) && strings.Contains(blockContent, "annotationProcessor") {
+					return nil // Already configured, exit early
+				}
+
+				// Inject the new line at the start of the block content
+				newBlockContent := newLine + blockContent
+				gradleContent = gradleContent[:m[4]] + newBlockContent + gradleContent[m[5]:]
+				break
+			}
 		}
-		gradleContent = newContent
+
+		// If we found dependencies but they were all nested (unlikely),
+		// targetIndex remains -1 and we fall back to appending
+		if targetIndex == -1 {
+			gradleContent += fmt.Sprintf("\ndependencies {%s\n}\n", newLine)
+		}
 	}
 
 	return sm.writeGradleFile(gradlePath, gradleContent, serviceName)
@@ -225,7 +253,7 @@ func (sm *Manager) writePomFile(pomPath, newContent, serviceName string) error {
 	}
 
 	// Write new content
-	if err := ioutil.WriteFile(pomPath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(pomPath, []byte(newContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write updated pom.xml for service %s: %w", serviceName, err)
 	}
 
@@ -242,7 +270,7 @@ func (sm *Manager) writeGradleFile(gradlePath, newContent, serviceName string) e
 	}
 
 	// Write new content
-	if err := ioutil.WriteFile(gradlePath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(gradlePath, []byte(newContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write updated build.gradle for service %s: %w", serviceName, err)
 	}
 
@@ -257,12 +285,12 @@ func (sm *Manager) createBackup(sourcePath, backupPath string) error {
 		return nil
 	}
 
-	content, err := ioutil.ReadFile(sourcePath)
+	content, err := os.ReadFile(sourcePath)
 	if err != nil {
 		return err
 	}
 
-	return ioutil.WriteFile(backupPath, content, 0644)
+	return os.WriteFile(backupPath, content, 0o644)
 }
 
 // restorePomBackup restores pom.xml from backup if something goes wrong
@@ -273,12 +301,12 @@ func (sm *Manager) restorePomBackup(pomPath, serviceName string) error {
 		return fmt.Errorf("no backup found for service %s", serviceName)
 	}
 
-	content, err := ioutil.ReadFile(backupPath)
+	content, err := os.ReadFile(backupPath)
 	if err != nil {
 		return fmt.Errorf("failed to read backup for service %s: %w", serviceName, err)
 	}
 
-	if err := ioutil.WriteFile(pomPath, content, 0644); err != nil {
+	if err := os.WriteFile(pomPath, content, 0o644); err != nil {
 		return fmt.Errorf("failed to restore backup for service %s: %w", serviceName, err)
 	}
 
@@ -294,12 +322,12 @@ func (sm *Manager) restoreGradleBackup(gradlePath, serviceName string) error {
 		return fmt.Errorf("no backup found for service %s", serviceName)
 	}
 
-	content, err := ioutil.ReadFile(backupPath)
+	content, err := os.ReadFile(backupPath)
 	if err != nil {
 		return fmt.Errorf("failed to read backup for service %s: %w", serviceName, err)
 	}
 
-	if err := ioutil.WriteFile(gradlePath, content, 0644); err != nil {
+	if err := os.WriteFile(gradlePath, content, 0o644); err != nil {
 		return fmt.Errorf("failed to restore backup for service %s: %w", serviceName, err)
 	}
 

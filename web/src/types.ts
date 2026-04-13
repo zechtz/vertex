@@ -58,6 +58,10 @@ export interface Service {
   buildSystem: string; // "maven", "gradle", or "auto"
   verboseLogging: boolean; // Enable verbose/debug logging for build tools
   gitBranch: string; // Current git branch (if service is a git repo)
+  gitHasUncommitted: boolean; // Has uncommitted changes
+  gitCommitsAhead: number; // Commits ahead of remote
+  gitCommitsBehind: number; // Commits behind remote
+  gitIsClean: boolean; // No uncommitted changes and in sync
   envVars: { [key: string]: EnvVar };
   logs: LogEntry[];
   // Resource monitoring fields

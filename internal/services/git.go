@@ -16,6 +16,14 @@ type GitInfo struct {
 	HasUncommitted bool     `json:"hasUncommitted"`
 }
 
+// GitStatus holds detailed git status information for UI indicators
+type GitStatus struct {
+	HasUncommittedChanges bool `json:"hasUncommittedChanges"`
+	CommitsAhead          int  `json:"commitsAhead"`
+	CommitsBehind         int  `json:"commitsBehind"`
+	IsClean               bool `json:"isClean"` // No uncommitted changes and in sync with remote
+}
+
 // IsGitRepository checks if a directory is a git repository
 func IsGitRepository(dir string) bool {
 	gitDir := filepath.Join(dir, ".git")
@@ -215,4 +223,81 @@ func GetGitInfo(dir string) (*GitInfo, error) {
 	}
 
 	return info, nil
+}
+
+// GetCommitsAheadBehind returns how many commits the current branch is ahead/behind the remote
+func GetCommitsAheadBehind(dir string) (ahead int, behind int, err error) {
+	if !IsGitRepository(dir) {
+		return 0, 0, fmt.Errorf("not a git repository")
+	}
+
+	// Get current branch
+	currentBranch, err := GetCurrentBranch(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Try to get the upstream branch
+	upstreamCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "@{upstream}")
+	upstreamCmd.Dir = dir
+	upstreamOutput, err := upstreamCmd.Output()
+	if err != nil {
+		// No upstream set, return 0,0
+		return 0, 0, nil
+	}
+
+	upstream := strings.TrimSpace(string(upstreamOutput))
+	if upstream == "" {
+		return 0, 0, nil
+	}
+
+	// Get ahead count
+	aheadCmd := exec.Command("git", "rev-list", "--count", upstream+".."+currentBranch)
+	aheadCmd.Dir = dir
+	aheadOutput, err := aheadCmd.Output()
+	if err == nil {
+		fmt.Sscanf(strings.TrimSpace(string(aheadOutput)), "%d", &ahead)
+	}
+
+	// Get behind count
+	behindCmd := exec.Command("git", "rev-list", "--count", currentBranch+".."+upstream)
+	behindCmd.Dir = dir
+	behindOutput, err := behindCmd.Output()
+	if err == nil {
+		fmt.Sscanf(strings.TrimSpace(string(behindOutput)), "%d", &behind)
+	}
+
+	return ahead, behind, nil
+}
+
+// GetGitStatus returns comprehensive git status for UI indicators
+func GetGitStatus(dir string) (*GitStatus, error) {
+	status := &GitStatus{
+		HasUncommittedChanges: false,
+		CommitsAhead:          0,
+		CommitsBehind:         0,
+		IsClean:               false,
+	}
+
+	if !IsGitRepository(dir) {
+		return status, nil
+	}
+
+	// Check for uncommitted changes
+	hasChanges, err := HasUncommittedChanges(dir)
+	if err == nil {
+		status.HasUncommittedChanges = hasChanges
+	}
+
+	// Get ahead/behind status
+	ahead, behind, err := GetCommitsAheadBehind(dir)
+	if err == nil {
+		status.CommitsAhead = ahead
+		status.CommitsBehind = behind
+	}
+
+	// Determine if clean (no uncommitted changes and in sync with remote)
+	status.IsClean = !status.HasUncommittedChanges && status.CommitsAhead == 0 && status.CommitsBehind == 0
+
+	return status, nil
 }
