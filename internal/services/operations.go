@@ -350,10 +350,11 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
 
-	// Ensure Maven wrapper exists for Maven projects
-	if effectiveBuildSystem == BuildSystemMaven {
-		if err := EnsureMavenWrapper(serviceDir); err != nil {
-			log.Printf("[WARN] Failed to ensure Maven wrapper for service %s: %v", service.Name, err)
+	// Regenerate Maven wrapper only when ./mvnw and local mvn report different versions.
+	// If they already match the wrapper is correct and should not be touched.
+	if effectiveBuildSystem == BuildSystemMaven && !MavenVersionsMatch(serviceDir) {
+		if err := GenerateMavenWrapper(serviceDir); err != nil {
+			log.Printf("[WARN] Failed to update Maven wrapper for service %s: %v", service.Name, err)
 			// Continue with startup - this is not a critical failure
 		}
 	}
@@ -555,10 +556,11 @@ func (sm *Manager) startService(service *models.Service) error {
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, service.BuildSystem)
 	log.Printf("[INFO] Using build system '%s' for service %s", effectiveBuildSystem, service.Name)
 
-	// Ensure Maven wrapper exists for Maven projects
-	if effectiveBuildSystem == BuildSystemMaven {
-		if err := EnsureMavenWrapper(serviceDir); err != nil {
-			log.Printf("[WARN] Failed to ensure Maven wrapper for service %s: %v", service.Name, err)
+	// Regenerate Maven wrapper only when ./mvnw and local mvn report different versions.
+	// If they already match the wrapper is correct and should not be touched.
+	if effectiveBuildSystem == BuildSystemMaven && !MavenVersionsMatch(serviceDir) {
+		if err := GenerateMavenWrapper(serviceDir); err != nil {
+			log.Printf("[WARN] Failed to update Maven wrapper for service %s: %v", service.Name, err)
 			// Continue with startup - this is not a critical failure
 		}
 	}
