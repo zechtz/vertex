@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zechtz/vertex/internal/models"
@@ -835,7 +836,29 @@ func (sm *Manager) stopService(service *models.Service) error {
 	return nil
 }
 
+const (
+	// Log entries are persisted in batches. One INSERT per line turns every
+	// log-producing service into a continuous writer, and each write locks the
+	// database against readers for the duration of the transaction.
+	logFlushBatchSize = 200
+	logFlushInterval  = time.Second
+	logQueueSize      = 4096
+)
+
 func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
+	pending := make(chan models.LogEntry, logQueueSize)
+
+	var persisting sync.WaitGroup
+	persisting.Add(1)
+	go func() {
+		defer persisting.Done()
+		sm.persistLogEntries(service.ID, pending)
+	}()
+	defer func() {
+		close(pending)
+		persisting.Wait()
+	}()
+
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -850,13 +873,52 @@ func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
 		}
 		service.Mutex.Unlock()
 
-		// Store log entry in database for persistent storage
-		if err := sm.db.StoreLogEntry(service.ID, logEntry); err != nil {
-			log.Printf("Failed to store log entry for service %s: %v", service.ID, err)
+		// Queue for persistent storage. If the queue is full the database cannot
+		// keep up, and dropping the entry is better than stalling the service's
+		// stdout pipe, which would block the service itself.
+		select {
+		case pending <- logEntry:
+		default:
+			log.Printf("[WARN] Log persistence queue full for service %s, dropping entry", service.ID)
 		}
 
 		// Broadcast the new log entry
 		sm.broadcastLogEntry(service.ID, logEntry)
+	}
+}
+
+// persistLogEntries writes queued log entries to the database, grouping them
+// into one transaction per batch, until pending is closed.
+func (sm *Manager) persistLogEntries(serviceID string, pending <-chan models.LogEntry) {
+	batch := make([]models.LogEntry, 0, logFlushBatchSize)
+
+	ticker := time.NewTicker(logFlushInterval)
+	defer ticker.Stop()
+
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		if err := sm.db.StoreLogEntries(serviceID, batch); err != nil {
+			log.Printf("Failed to store %d log entries for service %s: %v", len(batch), serviceID, err)
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case logEntry, open := <-pending:
+			if !open {
+				flush()
+				return
+			}
+			batch = append(batch, logEntry)
+			if len(batch) >= logFlushBatchSize {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
+		}
 	}
 }
 
@@ -897,8 +959,23 @@ func (sm *Manager) ClearLogs(serviceID string) error {
 func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
 	results := make(map[string]string)
 
+	// Snapshot the tracked services and release the manager lock: the work below
+	// writes to the database and to websocket clients, and must not hold the
+	// manager - or wait on a service lock while holding it.
 	sm.mutex.RLock()
-	defer sm.mutex.RUnlock()
+	tracked := make([]*models.Service, 0, len(sm.services))
+	for _, service := range sm.services {
+		tracked = append(tracked, service)
+	}
+	sm.mutex.RUnlock()
+
+	clearLogs := func(service *models.Service) {
+		service.Mutex.Lock()
+		service.Logs = []models.LogEntry{}
+		service.Mutex.Unlock()
+
+		sm.broadcastUpdate(service)
+	}
 
 	// If no specific services provided, clear all services
 	if len(serviceNames) == 0 {
@@ -909,73 +986,55 @@ func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
 		}
 
 		// Clear in-memory logs for all services
-		for _, service := range sm.services {
-			service.Mutex.Lock()
-			service.Logs = []models.LogEntry{}
-			service.Mutex.Unlock()
-
-			sm.broadcastUpdate(service)
+		for _, service := range tracked {
+			clearLogs(service)
 			results[service.Name] = "Success"
 		}
-	} else {
-		// Clear logs for specific services by name
-		var serviceIDs []string
-		serviceNameToID := make(map[string]string)
 
-		// First, collect service IDs for database operation
-		for _, serviceName := range serviceNames {
-			found := false
-			for _, service := range sm.services {
-				if service.Name == serviceName {
-					serviceIDs = append(serviceIDs, service.ID)
-					serviceNameToID[serviceName] = service.ID
-					found = true
-					break
+		return results
+	}
+
+	// Clear logs for specific services by name
+	byName := make(map[string]*models.Service, len(tracked))
+	for _, service := range tracked {
+		byName[service.Name] = service
+	}
+
+	// First, collect service IDs for database operation
+	var serviceIDs []string
+	for _, serviceName := range serviceNames {
+		service, exists := byName[serviceName]
+		if !exists {
+			results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
+			continue
+		}
+		serviceIDs = append(serviceIDs, service.ID)
+	}
+
+	// Clear from database
+	if len(serviceIDs) > 0 {
+		dbResults, err := sm.db.ClearAllServiceLogs(serviceIDs)
+		if err != nil {
+			log.Printf("[ERROR] Failed to clear logs from database: %v", err)
+		} else {
+			// Log any database errors but don't fail the entire operation
+			for serviceID, dbErr := range dbResults {
+				if dbErr != nil {
+					log.Printf("[ERROR] Failed to clear logs from database for service %s: %v", serviceID, dbErr)
 				}
 			}
-			if !found {
-				results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
-			}
+		}
+	}
+
+	// Clear in-memory logs
+	for _, serviceName := range serviceNames {
+		service, exists := byName[serviceName]
+		if !exists {
+			continue // Already marked as not found
 		}
 
-		// Clear from database
-		if len(serviceIDs) > 0 {
-			dbResults, err := sm.db.ClearAllServiceLogs(serviceIDs)
-			if err != nil {
-				log.Printf("[ERROR] Failed to clear logs from database: %v", err)
-			} else if dbResults != nil {
-				// Log any database errors but don't fail the entire operation
-				for serviceID, dbErr := range dbResults {
-					if dbErr != nil {
-						log.Printf("[ERROR] Failed to clear logs from database for service %s: %v", serviceID, dbErr)
-					}
-				}
-			}
-		}
-
-		// Clear in-memory logs
-		for _, serviceName := range serviceNames {
-			if _, exists := results[serviceName]; exists {
-				continue // Already marked as not found
-			}
-
-			found := false
-			for _, service := range sm.services {
-				if service.Name == serviceName {
-					service.Mutex.Lock()
-					service.Logs = []models.LogEntry{}
-					service.Mutex.Unlock()
-
-					sm.broadcastUpdate(service)
-					results[serviceName] = "Success"
-					found = true
-					break
-				}
-			}
-			if !found {
-				results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
-			}
-		}
+		clearLogs(service)
+		results[serviceName] = "Success"
 	}
 
 	return results

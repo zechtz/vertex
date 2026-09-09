@@ -10,84 +10,74 @@ import (
 	"github.com/zechtz/vertex/internal/models"
 )
 
-// collectResourceMetrics collects CPU, memory, and network metrics for a service
-func (sm *Manager) collectResourceMetrics(service *models.Service) error {
-	if service.PID <= 0 {
-		// Reset metrics for stopped services
-		service.CPUPercent = 0
-		service.MemoryUsage = 0
-		service.MemoryPercent = 0
-		service.DiskUsage = 0
-		service.NetworkRx = 0
-		service.NetworkTx = 0
-		return nil
-	}
+// resourceMetrics is one sample of a process's resource usage.
+type resourceMetrics struct {
+	cpuPercent    float64
+	memoryUsage   uint64
+	memoryPercent float32
+	diskUsage     uint64
+	networkRx     uint64
+	networkTx     uint64
+}
+
+// collectResourceMetrics samples CPU, memory, and I/O for a running process. It
+// takes no locks: gopsutil reads can block on a busy system, and the service
+// lock must not be held while they do.
+func (sm *Manager) collectResourceMetrics(name string, pid int) (resourceMetrics, error) {
+	var metrics resourceMetrics
 
 	// Get process handle
-	proc, err := process.NewProcess(int32(service.PID))
+	proc, err := process.NewProcess(int32(pid))
 	if err != nil {
-		log.Printf("[DEBUG] Failed to get process handle for %s (PID %d): %v", service.Name, service.PID, err)
-		return err
+		log.Printf("[DEBUG] Failed to get process handle for %s (PID %d): %v", name, pid, err)
+		return metrics, err
 	}
 
 	// Check if process is still running
 	isRunning, err := proc.IsRunning()
 	if err != nil || !isRunning {
-		log.Printf("[DEBUG] Process %d for service %s is no longer running", service.PID, service.Name)
-		// Reset metrics for stopped processes
-		service.CPUPercent = 0
-		service.MemoryUsage = 0
-		service.MemoryPercent = 0
-		service.DiskUsage = 0
-		service.NetworkRx = 0
-		service.NetworkTx = 0
-		return fmt.Errorf("process no longer running")
+		log.Printf("[DEBUG] Process %d for service %s is no longer running", pid, name)
+		return metrics, fmt.Errorf("process no longer running")
 	}
 
 	// Collect CPU usage
 	cpuPercent, err := proc.CPUPercent()
 	if err != nil {
-		log.Printf("[DEBUG] Failed to get CPU usage for %s: %v", service.Name, err)
+		log.Printf("[DEBUG] Failed to get CPU usage for %s: %v", name, err)
 	} else {
-		service.CPUPercent = cpuPercent
+		metrics.cpuPercent = cpuPercent
 	}
 
 	// Collect memory usage
 	memInfo, err := proc.MemoryInfo()
 	if err != nil {
-		log.Printf("[DEBUG] Failed to get memory info for %s: %v", service.Name, err)
+		log.Printf("[DEBUG] Failed to get memory info for %s: %v", name, err)
 	} else {
-		service.MemoryUsage = memInfo.RSS // Resident Set Size (physical memory)
+		metrics.memoryUsage = memInfo.RSS // Resident Set Size (physical memory)
 	}
 
 	// Collect memory percentage
 	memPercent, err := proc.MemoryPercent()
 	if err != nil {
-		log.Printf("[DEBUG] Failed to get memory percentage for %s: %v", service.Name, err)
+		log.Printf("[DEBUG] Failed to get memory percentage for %s: %v", name, err)
 	} else {
-		service.MemoryPercent = memPercent
+		metrics.memoryPercent = memPercent
 	}
 
-	// Collect I/O statistics (disk usage) - Optional on some platforms
+	// Collect I/O statistics (disk usage) - not available on every platform
+	// (notably macOS), where the zero values above are the right answer
 	ioCounters, err := proc.IOCounters()
-	if err != nil {
-		// Only log this at TRACE level since it's expected on some platforms (like macOS)
-		// log.Printf("[TRACE] I/O counters not available for %s: %v", service.Name, err)
-		// Set default values for unsupported platforms
-		service.DiskUsage = 0
-		service.NetworkRx = 0
-		service.NetworkTx = 0
-	} else {
-		service.DiskUsage = ioCounters.ReadBytes + ioCounters.WriteBytes
+	if err == nil {
+		metrics.diskUsage = ioCounters.ReadBytes + ioCounters.WriteBytes
 		// Collect network statistics using I/O counters as a proxy
-		service.NetworkRx = ioCounters.ReadCount
-		service.NetworkTx = ioCounters.WriteCount
+		metrics.networkRx = ioCounters.ReadCount
+		metrics.networkTx = ioCounters.WriteCount
 	}
 
 	log.Printf("[DEBUG] Collected metrics for %s - CPU: %.2f%%, Memory: %d bytes (%.2f%%)",
-		service.Name, service.CPUPercent, service.MemoryUsage, service.MemoryPercent)
+		name, metrics.cpuPercent, metrics.memoryUsage, metrics.memoryPercent)
 
-	return nil
+	return metrics, nil
 }
 
 // startMetricsCollection starts periodic resource monitoring for all services
@@ -97,16 +87,16 @@ func (sm *Manager) startMetricsCollection() {
 
 	log.Printf("[INFO] Started resource metrics collection (10s interval)")
 
-	for {
-		select {
-		case <-ticker.C:
-			sm.collectAllServiceMetrics()
-		}
+	for range ticker.C {
+		sm.collectAllServiceMetrics()
 	}
 }
 
 // collectAllServiceMetrics collects metrics for all running services
 func (sm *Manager) collectAllServiceMetrics() {
+	// Snapshot the tracked services, then release the manager lock before
+	// touching any service lock - holding both lets one busy service block
+	// every reader of the manager.
 	sm.mutex.RLock()
 	services := make([]*models.Service, 0, len(sm.services))
 	for _, service := range sm.services {
@@ -115,40 +105,58 @@ func (sm *Manager) collectAllServiceMetrics() {
 	sm.mutex.RUnlock()
 
 	for _, service := range services {
-		service.Mutex.Lock()
-		if service.Status == "running" && service.PID > 0 {
-			if err := sm.collectResourceMetrics(service); err != nil {
-				// If metrics collection fails, the process might have stopped
-				if !sm.isProcessRunning(service.PID) {
-					log.Printf("[INFO] Process %d for service %s stopped, updating status", service.PID, service.Name)
-					service.Status = "stopped"
-					service.HealthStatus = "unknown"
-					service.PID = 0
-					service.Cmd = nil
-					service.Uptime = ""
+		service.Mutex.RLock()
+		name, status, pid := service.Name, service.Status, service.PID
+		service.Mutex.RUnlock()
 
-					// Record uptime event
-					uptimeTracker := GetUptimeTracker()
-					uptimeTracker.RecordEvent(service.ID, "stop", "stopped")
-
-					// Reset metrics
-					service.CPUPercent = 0
-					service.MemoryUsage = 0
-					service.MemoryPercent = 0
-					service.DiskUsage = 0
-					service.NetworkRx = 0
-					service.NetworkTx = 0
-					sm.updateServiceInDB(service)
-					sm.broadcastUpdate(service)
-				}
-			} else {
-				// Successful metrics collection, update uptime stats and broadcast update
-				uptimeTracker := GetUptimeTracker()
-				service.Metrics.UptimeStats = uptimeTracker.CalculateUptimeStats(service.ID, service)
-				sm.broadcastUpdate(service)
-			}
+		if status != "running" || pid <= 0 {
+			continue
 		}
+
+		metrics, err := sm.collectResourceMetrics(name, pid)
+		if err != nil {
+			// If metrics collection fails, the process might have stopped
+			if sm.isProcessRunning(pid) {
+				continue
+			}
+
+			log.Printf("[INFO] Process %d for service %s stopped, updating status", pid, name)
+
+			service.Mutex.Lock()
+			service.Status = "stopped"
+			service.HealthStatus = "unknown"
+			service.PID = 0
+			service.Cmd = nil
+			service.Uptime = ""
+			// Reset metrics
+			service.CPUPercent = 0
+			service.MemoryUsage = 0
+			service.MemoryPercent = 0
+			service.DiskUsage = 0
+			service.NetworkRx = 0
+			service.NetworkTx = 0
+			service.Mutex.Unlock()
+
+			// Record uptime event
+			GetUptimeTracker().RecordEvent(service.ID, "stop", "stopped")
+
+			sm.publishServiceState(service)
+			continue
+		}
+
+		uptimeStats := GetUptimeTracker().CalculateUptimeStats(service.ID, service)
+
+		service.Mutex.Lock()
+		service.CPUPercent = metrics.cpuPercent
+		service.MemoryUsage = metrics.memoryUsage
+		service.MemoryPercent = metrics.memoryPercent
+		service.DiskUsage = metrics.diskUsage
+		service.NetworkRx = metrics.networkRx
+		service.NetworkTx = metrics.networkTx
+		service.Metrics.UptimeStats = uptimeStats
 		service.Mutex.Unlock()
+
+		sm.publishServiceState(service)
 	}
 }
 
@@ -229,14 +237,19 @@ func (sm *Manager) collectPerformanceMetrics(service *models.Service) error {
 func (sm *Manager) getSystemResourceSummary() map[string]interface{} {
 	summary := make(map[string]interface{})
 
+	// Release the manager lock before taking any service lock
 	sm.mutex.RLock()
-	defer sm.mutex.RUnlock()
+	tracked := make([]*models.Service, 0, len(sm.services))
+	for _, service := range sm.services {
+		tracked = append(tracked, service)
+	}
+	sm.mutex.RUnlock()
 
 	var totalCPU float64
 	var totalMemory uint64
 	runningServices := 0
 
-	for _, service := range sm.services {
+	for _, service := range tracked {
 		service.Mutex.RLock()
 		if service.Status == "running" {
 			runningServices++
@@ -247,7 +260,7 @@ func (sm *Manager) getSystemResourceSummary() map[string]interface{} {
 	}
 
 	summary["runningServices"] = runningServices
-	summary["totalServices"] = len(sm.services)
+	summary["totalServices"] = len(tracked)
 	summary["totalCPU"] = totalCPU
 	summary["totalMemory"] = totalMemory
 	summary["timestamp"] = time.Now()
