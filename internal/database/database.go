@@ -58,10 +58,19 @@ func NewDatabaseWithPath(dbPath string) (*Database, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite3", finalPath)
+	// WAL keeps readers from being blocked by writers - without it every write
+	// takes an EXCLUSIVE lock on the whole file and stalls every concurrent read.
+	// The busy timeout bounds the wait when two writers do collide.
+	dsn := finalPath + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL"
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database at %s: %w", finalPath, err)
 	}
+
+	// SQLite allows one writer at a time, so a large pool only creates lock
+	// contention. A small pool still lets reads run concurrently under WAL.
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 
 	database := &Database{DB: db}
 	if err := database.initTables(); err != nil {

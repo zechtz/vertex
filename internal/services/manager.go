@@ -22,7 +22,7 @@ type Manager struct {
 	activeConfigID    string
 	db                *database.Database
 	mutex             sync.RWMutex
-	clients           map[*websocket.Conn]bool
+	clients           map[*websocket.Conn]*sync.Mutex
 	clientsMutex      sync.RWMutex
 	dependencyManager *DependencyManager
 	Id                int64
@@ -40,7 +40,7 @@ func NewManager(config models.Config, db *database.Database) (*Manager, error) {
 		configurations: make(map[string]*models.Configuration),
 		activeConfigID: "default",
 		db:             db,
-		clients:        make(map[*websocket.Conn]bool),
+		clients:        make(map[*websocket.Conn]*sync.Mutex),
 	}
 
 	// Initialize dependency manager
@@ -90,7 +90,9 @@ func NewManager(config models.Config, db *database.Database) (*Manager, error) {
 
 func (sm *Manager) AddWebSocketClient(conn *websocket.Conn) {
 	sm.clientsMutex.Lock()
-	sm.clients[conn] = true
+	// Each connection carries its own write lock: gorilla/websocket allows only
+	// one concurrent writer per connection, and broadcasts run outside clientsMutex.
+	sm.clients[conn] = &sync.Mutex{}
 	sm.clientsMutex.Unlock()
 }
 
@@ -194,38 +196,62 @@ func (sm *Manager) GetConfig() models.Config {
 	return sm.config
 }
 
-func (sm *Manager) broadcastUpdate(service *models.Service) {
-	sm.clientsMutex.Lock()
-	defer sm.clientsMutex.Unlock()
+// wsWriteTimeout bounds a single websocket write. Without it, a client whose
+// socket has stopped draining (backgrounded tab, slept laptop) blocks the
+// broadcasting goroutine forever, and with it every lock that goroutine holds.
+const wsWriteTimeout = 5 * time.Second
 
-	// Create a list of clients to remove (to avoid concurrent map modification)
+// broadcast delivers a message to every connected client. The client list is
+// snapshotted so that no network write happens while clientsMutex is held.
+func (sm *Manager) broadcast(message WebSocketMessage) {
+	sm.clientsMutex.RLock()
+	targets := make(map[*websocket.Conn]*sync.Mutex, len(sm.clients))
+	for client, writeMutex := range sm.clients {
+		targets[client] = writeMutex
+	}
+	sm.clientsMutex.RUnlock()
+
 	var clientsToRemove []*websocket.Conn
+	for client, writeMutex := range targets {
+		writeMutex.Lock()
+		client.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+		err := client.WriteJSON(message)
+		writeMutex.Unlock()
 
-	for client := range sm.clients {
-		if err := client.WriteJSON(WebSocketMessage{Type: "service_update", Payload: service}); err != nil {
-			// Mark client for removal
+		if err != nil {
 			clientsToRemove = append(clientsToRemove, client)
 		}
 	}
 
-	// Remove failed clients
-	for _, client := range clientsToRemove {
-		delete(sm.clients, client)
-		client.Close()
+	if len(clientsToRemove) == 0 {
+		return
 	}
+
+	sm.clientsMutex.Lock()
+	for _, client := range clientsToRemove {
+		if _, stillConnected := sm.clients[client]; stillConnected {
+			delete(sm.clients, client)
+			client.Close()
+		}
+	}
+	sm.clientsMutex.Unlock()
+}
+
+func (sm *Manager) broadcastUpdate(service *models.Service) {
+	sm.broadcast(WebSocketMessage{Type: "service_update", Payload: service})
 }
 
 func (sm *Manager) broadcastLogEntry(serviceUUID string, logEntry models.LogEntry) {
-	sm.clientsMutex.Lock()
-	defer sm.clientsMutex.Unlock()
-
+	sm.mutex.RLock()
 	_, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
+
 	if !exists {
 		log.Printf("[WARN] Service UUID %s not found for log broadcast", serviceUUID)
 		return
 	}
 
-	message := WebSocketMessage{
+	sm.broadcast(WebSocketMessage{
 		Type: "log_entry",
 		Payload: struct {
 			ServiceUUID string          `json:"serviceUUID"`
@@ -234,19 +260,7 @@ func (sm *Manager) broadcastLogEntry(serviceUUID string, logEntry models.LogEntr
 			ServiceUUID: serviceUUID,
 			LogEntry:    logEntry,
 		},
-	}
-
-	var clientsToRemove []*websocket.Conn
-	for client := range sm.clients {
-		if err := client.WriteJSON(message); err != nil {
-			clientsToRemove = append(clientsToRemove, client)
-		}
-	}
-
-	for _, client := range clientsToRemove {
-		delete(sm.clients, client)
-		client.Close()
-	}
+	})
 }
 
 func (sm *Manager) GracefulShutdown() {

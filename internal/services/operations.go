@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zechtz/vertex/internal/models"
@@ -789,7 +790,29 @@ func (sm *Manager) stopService(service *models.Service) error {
 	return nil
 }
 
+const (
+	// Log entries are persisted in batches. One INSERT per line turns every
+	// log-producing service into a continuous writer, and each write locks the
+	// database against readers for the duration of the transaction.
+	logFlushBatchSize = 200
+	logFlushInterval  = time.Second
+	logQueueSize      = 4096
+)
+
 func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
+	pending := make(chan models.LogEntry, logQueueSize)
+
+	var persisting sync.WaitGroup
+	persisting.Add(1)
+	go func() {
+		defer persisting.Done()
+		sm.persistLogEntries(service.ID, pending)
+	}()
+	defer func() {
+		close(pending)
+		persisting.Wait()
+	}()
+
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -804,13 +827,52 @@ func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
 		}
 		service.Mutex.Unlock()
 
-		// Store log entry in database for persistent storage
-		if err := sm.db.StoreLogEntry(service.ID, logEntry); err != nil {
-			log.Printf("Failed to store log entry for service %s: %v", service.ID, err)
+		// Queue for persistent storage. If the queue is full the database cannot
+		// keep up, and dropping the entry is better than stalling the service's
+		// stdout pipe, which would block the service itself.
+		select {
+		case pending <- logEntry:
+		default:
+			log.Printf("[WARN] Log persistence queue full for service %s, dropping entry", service.ID)
 		}
 
 		// Broadcast the new log entry
 		sm.broadcastLogEntry(service.ID, logEntry)
+	}
+}
+
+// persistLogEntries writes queued log entries to the database, grouping them
+// into one transaction per batch, until pending is closed.
+func (sm *Manager) persistLogEntries(serviceID string, pending <-chan models.LogEntry) {
+	batch := make([]models.LogEntry, 0, logFlushBatchSize)
+
+	ticker := time.NewTicker(logFlushInterval)
+	defer ticker.Stop()
+
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		if err := sm.db.StoreLogEntries(serviceID, batch); err != nil {
+			log.Printf("Failed to store %d log entries for service %s: %v", len(batch), serviceID, err)
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case logEntry, open := <-pending:
+			if !open {
+				flush()
+				return
+			}
+			batch = append(batch, logEntry)
+			if len(batch) >= logFlushBatchSize {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
+		}
 	}
 }
 

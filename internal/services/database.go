@@ -650,68 +650,72 @@ func (sm *Manager) UpdateGlobalEnvVars(envVars map[string]string) error {
 	return nil
 }
 
+// logCleanupBatchSize bounds how many rows one delete transaction touches, so
+// cleanup never holds the write lock long enough to stall API requests.
+const logCleanupBatchSize = 5000
+
 func (sm *Manager) CleanupOldLogs(maxDays int, maxLogsPerService int) error {
 	log.Printf("[INFO] Starting log cleanup - keeping logs from last %d days and max %d logs per service", maxDays, maxLogsPerService)
 
-	// Start a transaction for consistency
-	tx, err := sm.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
+	// Snapshot the service list before touching the database. Taking manager and
+	// per-service locks while a write transaction is open deadlocks against the
+	// health checker, which holds a service lock while writing to the database.
+	services := sm.GetServices()
 
-	// Count logs before cleanup
+	// Cleanup runs as a series of small transactions rather than one large one:
+	// pruning logs does not need to be atomic, and a single transaction over this
+	// table holds the database write lock long enough to block every reader.
 	var totalLogsBefore int
-	err = tx.QueryRow("SELECT COUNT(*) FROM service_logs").Scan(&totalLogsBefore)
-	if err != nil {
+	if err := sm.db.QueryRow("SELECT COUNT(*) FROM service_logs").Scan(&totalLogsBefore); err != nil {
 		return fmt.Errorf("failed to count logs before cleanup: %w", err)
 	}
 
 	// Delete logs older than maxDays
 	cutoffDate := time.Now().AddDate(0, 0, -maxDays)
-	result, err := tx.Exec(`
-		DELETE FROM service_logs 
-		WHERE created_at < ?`, cutoffDate)
+	deletedOld, err := sm.deleteLogsInBatches(`
+		DELETE FROM service_logs
+		WHERE id IN (SELECT id FROM service_logs WHERE created_at < ? LIMIT ?)`, cutoffDate)
 	if err != nil {
 		return fmt.Errorf("failed to delete old logs: %w", err)
 	}
 
-	deletedOld, _ := result.RowsAffected()
-
 	// For each service, keep only the most recent maxLogsPerService logs
-	services := sm.GetServices()
 	var deletedPerService int64 = 0
 
 	for _, service := range services {
-		// Delete excess logs for this service, keeping only the most recent ones
-		result, err := tx.Exec(`
-			DELETE FROM service_logs 
-			WHERE service_id = ? 
-			AND id NOT IN (
-				SELECT id FROM service_logs 
-				WHERE service_id = ? 
-				ORDER BY created_at DESC 
-				LIMIT ?
-			)`, service.ID, service.ID, maxLogsPerService)
+		// Find the newest id to discard. Ids are AUTOINCREMENT, so they order the
+		// same way created_at does, and comparing against one id replaces the
+		// full-table "id NOT IN (SELECT ...)" scan the old query performed.
+		var cutoffID int64
+		err := sm.db.QueryRow(`
+			SELECT id FROM service_logs
+			WHERE service_id = ?
+			ORDER BY id DESC
+			LIMIT 1 OFFSET ?`, service.ID, maxLogsPerService).Scan(&cutoffID)
+		if err == sql.ErrNoRows {
+			continue // service has fewer than maxLogsPerService logs
+		}
+		if err != nil {
+			log.Printf("[WARN] Failed to determine log cutoff for service UUID %s: %v", service.ID, err)
+			continue
+		}
+
+		deleted, err := sm.deleteLogsInBatches(`
+			DELETE FROM service_logs
+			WHERE id IN (SELECT id FROM service_logs WHERE service_id = ? AND id <= ? LIMIT ?)`,
+			service.ID, cutoffID)
 		if err != nil {
 			log.Printf("[WARN] Failed to cleanup logs for service UUID %s: %v", service.ID, err)
 			continue
 		}
 
-		deleted, _ := result.RowsAffected()
 		deletedPerService += deleted
 	}
 
 	// Count logs after cleanup
 	var totalLogsAfter int
-	err = tx.QueryRow("SELECT COUNT(*) FROM service_logs").Scan(&totalLogsAfter)
-	if err != nil {
+	if err := sm.db.QueryRow("SELECT COUNT(*) FROM service_logs").Scan(&totalLogsAfter); err != nil {
 		return fmt.Errorf("failed to count logs after cleanup: %w", err)
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit log cleanup transaction: %w", err)
 	}
 
 	totalDeleted := deletedOld + deletedPerService
@@ -719,6 +723,29 @@ func (sm *Manager) CleanupOldLogs(maxDays int, maxLogsPerService int) error {
 		totalDeleted, deletedOld, deletedPerService, totalLogsBefore, totalLogsAfter)
 
 	return nil
+}
+
+// deleteLogsInBatches repeats query until it stops matching rows. query must end
+// in a LIMIT placeholder, which is supplied here as the final argument.
+func (sm *Manager) deleteLogsInBatches(query string, args ...any) (int64, error) {
+	var total int64
+
+	for {
+		result, err := sm.db.Exec(query, append(args, logCleanupBatchSize)...)
+		if err != nil {
+			return total, err
+		}
+
+		deleted, err := result.RowsAffected()
+		if err != nil {
+			return total, err
+		}
+
+		total += deleted
+		if deleted < logCleanupBatchSize {
+			return total, nil
+		}
+	}
 }
 
 func (sm *Manager) AutoCleanupLogs() error {
