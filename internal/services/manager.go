@@ -102,15 +102,26 @@ func (sm *Manager) RemoveWebSocketClient(conn *websocket.Conn) {
 	sm.clientsMutex.Unlock()
 }
 
+// GetServices returns a snapshot of every tracked service.
+//
+// The manager lock is released before any service lock is taken. Holding both
+// is what made configuration reads hang: a service lock can be held across slow
+// work, and sync.RWMutex is writer-preferring, so a single waiting writer parks
+// every subsequent reader of the manager behind that one slow service.
 func (sm *Manager) GetServices() []models.Service {
 	sm.mutex.RLock()
-	services := make([]models.Service, 0, len(sm.services))
+	tracked := make([]*models.Service, 0, len(sm.services))
 	for _, service := range sm.services {
+		tracked = append(tracked, service)
+	}
+	sm.mutex.RUnlock()
+
+	services := make([]models.Service, 0, len(tracked))
+	for _, service := range tracked {
 		service.Mutex.RLock()
 		services = append(services, *service)
 		service.Mutex.RUnlock()
 	}
-	sm.mutex.RUnlock()
 
 	// Sort by order
 	sort.Slice(services, func(i, j int) bool {
@@ -266,17 +277,23 @@ func (sm *Manager) broadcastLogEntry(serviceUUID string, logEntry models.LogEntr
 func (sm *Manager) GracefulShutdown() {
 	log.Printf("[INFO] %s - Stopping all running services...", time.Now().Format("2006-01-02 15:04:05"))
 
-	// Get all running services
+	// Get all running services, releasing the manager lock before taking any
+	// service lock
 	sm.mutex.RLock()
-	runningServices := make([]*models.Service, 0)
+	tracked := make([]*models.Service, 0, len(sm.services))
 	for _, service := range sm.services {
+		tracked = append(tracked, service)
+	}
+	sm.mutex.RUnlock()
+
+	runningServices := make([]*models.Service, 0)
+	for _, service := range tracked {
 		service.Mutex.RLock()
 		if service.Status == "running" {
 			runningServices = append(runningServices, service)
 		}
 		service.Mutex.RUnlock()
 	}
-	sm.mutex.RUnlock()
 
 	if len(runningServices) == 0 {
 		log.Printf("[INFO] %s - No running services to stop", time.Now().Format("2006-01-02 15:04:05"))
@@ -976,6 +993,34 @@ func (sm *Manager) updateServiceInDB(service *models.Service) error {
 		return fmt.Errorf("failed to update service UUID %s in database: %w", service.ID, err)
 	}
 	return nil
+}
+
+// publishServiceState persists a service's runtime state and pushes it to
+// websocket clients. The fields are read - and the broadcast payload rendered -
+// under the service lock, so neither the database write nor the network send
+// holds it. Callers must not already hold the lock.
+func (sm *Manager) publishServiceState(service *models.Service) {
+	service.Mutex.RLock()
+	id, order := service.ID, service.Order
+	status, healthStatus := service.Status, service.HealthStatus
+	pid, lastStarted := service.PID, service.LastStarted
+	payload, marshalErr := json.Marshal(service)
+	service.Mutex.RUnlock()
+
+	if _, err := sm.db.Exec(`
+		UPDATE services
+		SET status = ?, health_status = ?, pid = ?, last_started = ?, service_order = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`,
+		status, healthStatus, pid, lastStarted, order, id); err != nil {
+		log.Printf("[WARN] Failed to update service UUID %s in database: %v", id, err)
+	}
+
+	if marshalErr != nil {
+		log.Printf("[WARN] Failed to serialize service UUID %s for broadcast: %v", id, marshalErr)
+		return
+	}
+
+	sm.broadcast(WebSocketMessage{Type: "service_update", Payload: json.RawMessage(payload)})
 }
 
 // Wrapper management methods - delegates to buildsystem.go functions

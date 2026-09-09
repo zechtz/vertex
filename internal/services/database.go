@@ -530,11 +530,14 @@ func (sm *Manager) UpdateServiceEnvVars(serviceUUID string, envVars map[string]m
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Update the in-memory service with new environment variables
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
+	// Update the in-memory service with new environment variables. Only the
+	// service is mutated, not the map, so the manager lock is taken for reading
+	// and released before the service lock.
+	sm.mutex.RLock()
+	service, exists := sm.services[serviceUUID]
+	sm.mutex.RUnlock()
 
-	if service, exists := sm.services[serviceUUID]; exists {
+	if exists {
 		service.Mutex.Lock()
 		service.EnvVars = envVars
 		service.Mutex.Unlock()

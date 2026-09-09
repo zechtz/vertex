@@ -11,8 +11,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/zechtz/vertex/internal/models"
 )
 
 // EurekaXMLInstanceInfo XML structures for Eureka response
@@ -76,19 +74,22 @@ type EurekaApplications struct {
 	} `json:"applications"`
 }
 
-// checkEurekaHealth checks service health via Eureka registry
-func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
+// checkEurekaHealth checks service health via Eureka registry. It reports the
+// status it found and whether the service was present in the registry at all,
+// leaving the caller to store the result; performing network I/O here means
+// this must not touch the live service.
+func (sm *Manager) checkEurekaHealth(name string, port int) (string, bool) {
 	// Only check Eureka for services that should be registered (not Eureka itself)
-	serviceName := strings.ToUpper(service.Name)
+	serviceName := strings.ToUpper(name)
 	if serviceName == "EUREKA" {
-		log.Printf("[DEBUG] Skipping Eureka health check for %s (is registry service itself)", service.Name)
-		return false // Use direct health check for Eureka itself
+		log.Printf("[DEBUG] Skipping Eureka health check for %s (is registry service itself)", name)
+		return "", false // Use direct health check for Eureka itself
 	}
 
 	// Get Eureka registry port from environment or use default
 	eurekaPort := 8800
-	if service.Name == "EUREKA" {
-		eurekaPort = service.Port
+	if name == "EUREKA" {
+		eurekaPort = port
 	}
 
 	// Add small random delay to stagger concurrent requests
@@ -97,7 +98,7 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 
 	// Query Eureka for all applications
 	eurekaURL := fmt.Sprintf("http://localhost:%d/eureka/apps", eurekaPort)
-	log.Printf("[DEBUG] Checking Eureka health for %s at %s (after %v delay)", service.Name, eurekaURL, delay)
+	log.Printf("[DEBUG] Checking Eureka health for %s at %s (after %v delay)", name, eurekaURL, delay)
 
 	// Use a client with reasonable timeout and keep-alive disabled to avoid connection pool issues
 	client := &http.Client{
@@ -109,8 +110,8 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 
 	req, err := http.NewRequest("GET", eurekaURL, nil)
 	if err != nil {
-		log.Printf("[DEBUG] Failed to create Eureka request for %s: %v", service.Name, err)
-		return false
+		log.Printf("[DEBUG] Failed to create Eureka request for %s: %v", name, err)
+		return "", false
 	}
 
 	// Request XML (since we know that's what Eureka returns)
@@ -119,27 +120,27 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("[DEBUG] Failed to query Eureka for %s: %v", service.Name, err)
-		return false
+		log.Printf("[DEBUG] Failed to query Eureka for %s: %v", name, err)
+		return "", false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		log.Printf("[DEBUG] Eureka returned status %d for %s", resp.StatusCode, service.Name)
-		return false
+		log.Printf("[DEBUG] Eureka returned status %d for %s", resp.StatusCode, name)
+		return "", false
 	}
 
 	// Read the entire response body at once
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("[DEBUG] Failed to read Eureka response for %s: %v", service.Name, err)
-		return false
+		log.Printf("[DEBUG] Failed to read Eureka response for %s: %v", name, err)
+		return "", false
 	}
 
 	// Try to parse as XML first (since that's what your Eureka returns)
 	var xmlResponse EurekaXMLApplications
 	if err := xml.Unmarshal(bodyBytes, &xmlResponse); err == nil {
-		log.Printf("[DEBUG] Successfully parsed Eureka XML response for %s, found %d applications", service.Name, len(xmlResponse.Applications))
+		log.Printf("[DEBUG] Successfully parsed Eureka XML response for %s, found %d applications", name, len(xmlResponse.Applications))
 
 		// Debug: List all applications found in Eureka
 		for i, app := range xmlResponse.Applications {
@@ -152,90 +153,70 @@ func (sm *Manager) checkEurekaHealth(service *models.Service) bool {
 		// Look for the service in Eureka registry using port-based matching
 		for _, app := range xmlResponse.Applications {
 			for _, instance := range app.Instances {
-				log.Printf("[DEBUG] Checking instance %s:%d against service %s:%d", app.Name, instance.Port.Port, service.Name, service.Port)
+				log.Printf("[DEBUG] Checking instance %s:%d against service %s:%d", app.Name, instance.Port.Port, name, port)
 				// Primary matching: by port (since ports are unique)
-				if instance.Port.Port == service.Port {
-					log.Printf("[DEBUG] Found %s in Eureka XML by port match - app: %s, status: %s", service.Name, app.Name, instance.Status)
+				if instance.Port.Port == port {
+					log.Printf("[DEBUG] Found %s in Eureka XML by port match - app: %s, status: %s", name, app.Name, instance.Status)
 
 					// Update service health based on Eureka status
 					switch strings.ToUpper(instance.Status) {
 					case "UP":
-						service.HealthStatus = "healthy"
-						log.Printf("[DEBUG] Updated %s health status to: healthy (from Eureka)", service.Name)
-						return true
+						return "healthy", true
 					case "DOWN":
-						service.HealthStatus = "unhealthy"
-						log.Printf("[DEBUG] Updated %s health status to: unhealthy (from Eureka)", service.Name)
-						return true
+						return "unhealthy", true
 					case "STARTING":
-						service.HealthStatus = "starting"
-						log.Printf("[DEBUG] Updated %s health status to: starting (from Eureka)", service.Name)
-						return true
+						return "starting", true
 					case "OUT_OF_SERVICE":
-						service.HealthStatus = "unhealthy"
-						log.Printf("[DEBUG] Updated %s health status to: unhealthy - out of service (from Eureka)", service.Name)
-						return true
+						return "unhealthy", true
 					default:
-						service.HealthStatus = "unknown"
-						log.Printf("[DEBUG] Updated %s health status to: unknown - unknown status '%s' (from Eureka)", service.Name, instance.Status)
-						return true
+						return "unknown", true
 					}
 				}
 			}
 		}
 		// Service not found in Eureka XML
-		log.Printf("[DEBUG] Service %s (port %d) not found in Eureka XML registry", service.Name, service.Port)
-		return false
+		log.Printf("[DEBUG] Service %s (port %d) not found in Eureka XML registry", name, port)
+		return "", false
 	} else {
-		log.Printf("[DEBUG] Failed to parse Eureka response as XML for %s: %v", service.Name, err)
+		log.Printf("[DEBUG] Failed to parse Eureka response as XML for %s: %v", name, err)
 	}
 
 	// Fallback to JSON parsing
 	var jsonResponse EurekaApplications
 	if err := json.Unmarshal(bodyBytes, &jsonResponse); err == nil {
-		log.Printf("[DEBUG] Successfully parsed Eureka JSON response for %s", service.Name)
+		log.Printf("[DEBUG] Successfully parsed Eureka JSON response for %s", name)
 		// Look for the service in Eureka registry using port-based matching
 		for _, app := range jsonResponse.Applications.Applications {
 			for _, instance := range app.Instances {
-				log.Printf("[DEBUG] Checking JSON instance %s:%d against service %s:%d", app.Name, instance.Port.Port, service.Name, service.Port)
+				log.Printf("[DEBUG] Checking JSON instance %s:%d against service %s:%d", app.Name, instance.Port.Port, name, port)
 				// Primary matching: by port (since ports are unique)
-				if instance.Port.Port == service.Port {
-					log.Printf("[DEBUG] Found %s in Eureka JSON by port match - app: %s, status: %s", service.Name, app.Name, instance.Status)
+				if instance.Port.Port == port {
+					log.Printf("[DEBUG] Found %s in Eureka JSON by port match - app: %s, status: %s", name, app.Name, instance.Status)
 
 					// Update service health based on Eureka status
 					switch strings.ToUpper(instance.Status) {
 					case "UP":
-						service.HealthStatus = "healthy"
-						log.Printf("[DEBUG] Updated %s health status to: healthy (from Eureka JSON)", service.Name)
-						return true
+						return "healthy", true
 					case "DOWN":
-						service.HealthStatus = "unhealthy"
-						log.Printf("[DEBUG] Updated %s health status to: unhealthy (from Eureka JSON)", service.Name)
-						return true
+						return "unhealthy", true
 					case "STARTING":
-						service.HealthStatus = "starting"
-						log.Printf("[DEBUG] Updated %s health status to: starting (from Eureka JSON)", service.Name)
-						return true
+						return "starting", true
 					case "OUT_OF_SERVICE":
-						service.HealthStatus = "unhealthy"
-						log.Printf("[DEBUG] Updated %s health status to: unhealthy - out of service (from Eureka JSON)", service.Name)
-						return true
+						return "unhealthy", true
 					default:
-						service.HealthStatus = "unknown"
-						log.Printf("[DEBUG] Updated %s health status to: unknown - unknown status '%s' (from Eureka JSON)", service.Name, instance.Status)
-						return true
+						return "unknown", true
 					}
 				}
 			}
 		}
 		// Service not found in Eureka JSON
-		log.Printf("[DEBUG] Service %s (port %d) not found in Eureka JSON registry", service.Name, service.Port)
-		return false
+		log.Printf("[DEBUG] Service %s (port %d) not found in Eureka JSON registry", name, port)
+		return "", false
 	}
 
 	// Neither XML nor JSON parsing succeeded
-	log.Printf("[DEBUG] Failed to parse Eureka response for %s as either XML or JSON", service.Name)
-	return false
+	log.Printf("[DEBUG] Failed to parse Eureka response for %s as either XML or JSON", name)
+	return "", false
 }
 
 // checkEurekaServiceRegistration checks if a service is properly registered with Eureka

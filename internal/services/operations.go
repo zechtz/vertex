@@ -913,8 +913,23 @@ func (sm *Manager) ClearLogs(serviceID string) error {
 func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
 	results := make(map[string]string)
 
+	// Snapshot the tracked services and release the manager lock: the work below
+	// writes to the database and to websocket clients, and must not hold the
+	// manager - or wait on a service lock while holding it.
 	sm.mutex.RLock()
-	defer sm.mutex.RUnlock()
+	tracked := make([]*models.Service, 0, len(sm.services))
+	for _, service := range sm.services {
+		tracked = append(tracked, service)
+	}
+	sm.mutex.RUnlock()
+
+	clearLogs := func(service *models.Service) {
+		service.Mutex.Lock()
+		service.Logs = []models.LogEntry{}
+		service.Mutex.Unlock()
+
+		sm.broadcastUpdate(service)
+	}
 
 	// If no specific services provided, clear all services
 	if len(serviceNames) == 0 {
@@ -925,73 +940,55 @@ func (sm *Manager) ClearAllLogs(serviceNames []string) map[string]string {
 		}
 
 		// Clear in-memory logs for all services
-		for _, service := range sm.services {
-			service.Mutex.Lock()
-			service.Logs = []models.LogEntry{}
-			service.Mutex.Unlock()
-
-			sm.broadcastUpdate(service)
+		for _, service := range tracked {
+			clearLogs(service)
 			results[service.Name] = "Success"
 		}
-	} else {
-		// Clear logs for specific services by name
-		var serviceIDs []string
-		serviceNameToID := make(map[string]string)
 
-		// First, collect service IDs for database operation
-		for _, serviceName := range serviceNames {
-			found := false
-			for _, service := range sm.services {
-				if service.Name == serviceName {
-					serviceIDs = append(serviceIDs, service.ID)
-					serviceNameToID[serviceName] = service.ID
-					found = true
-					break
+		return results
+	}
+
+	// Clear logs for specific services by name
+	byName := make(map[string]*models.Service, len(tracked))
+	for _, service := range tracked {
+		byName[service.Name] = service
+	}
+
+	// First, collect service IDs for database operation
+	var serviceIDs []string
+	for _, serviceName := range serviceNames {
+		service, exists := byName[serviceName]
+		if !exists {
+			results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
+			continue
+		}
+		serviceIDs = append(serviceIDs, service.ID)
+	}
+
+	// Clear from database
+	if len(serviceIDs) > 0 {
+		dbResults, err := sm.db.ClearAllServiceLogs(serviceIDs)
+		if err != nil {
+			log.Printf("[ERROR] Failed to clear logs from database: %v", err)
+		} else {
+			// Log any database errors but don't fail the entire operation
+			for serviceID, dbErr := range dbResults {
+				if dbErr != nil {
+					log.Printf("[ERROR] Failed to clear logs from database for service %s: %v", serviceID, dbErr)
 				}
 			}
-			if !found {
-				results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
-			}
+		}
+	}
+
+	// Clear in-memory logs
+	for _, serviceName := range serviceNames {
+		service, exists := byName[serviceName]
+		if !exists {
+			continue // Already marked as not found
 		}
 
-		// Clear from database
-		if len(serviceIDs) > 0 {
-			dbResults, err := sm.db.ClearAllServiceLogs(serviceIDs)
-			if err != nil {
-				log.Printf("[ERROR] Failed to clear logs from database: %v", err)
-			} else if dbResults != nil {
-				// Log any database errors but don't fail the entire operation
-				for serviceID, dbErr := range dbResults {
-					if dbErr != nil {
-						log.Printf("[ERROR] Failed to clear logs from database for service %s: %v", serviceID, dbErr)
-					}
-				}
-			}
-		}
-
-		// Clear in-memory logs
-		for _, serviceName := range serviceNames {
-			if _, exists := results[serviceName]; exists {
-				continue // Already marked as not found
-			}
-
-			found := false
-			for _, service := range sm.services {
-				if service.Name == serviceName {
-					service.Mutex.Lock()
-					service.Logs = []models.LogEntry{}
-					service.Mutex.Unlock()
-
-					sm.broadcastUpdate(service)
-					results[serviceName] = "Success"
-					found = true
-					break
-				}
-			}
-			if !found {
-				results[serviceName] = fmt.Sprintf("Service '%s' not found", serviceName)
-			}
-		}
+		clearLogs(service)
+		results[serviceName] = "Success"
 	}
 
 	return results

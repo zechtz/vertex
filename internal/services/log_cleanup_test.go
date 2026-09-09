@@ -3,8 +3,11 @@ package services
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 
 	"github.com/zechtz/vertex/internal/database"
 	"github.com/zechtz/vertex/internal/models"
@@ -19,7 +22,12 @@ func newTestManager(t *testing.T) *Manager {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	return &Manager{db: db, services: make(map[string]*models.Service)}
+	return &Manager{
+		db:             db,
+		services:       make(map[string]*models.Service),
+		configurations: make(map[string]*models.Configuration),
+		clients:        make(map[*websocket.Conn]*sync.Mutex),
+	}
 }
 
 // The database must open in WAL mode, otherwise every write blocks every read.
@@ -107,5 +115,60 @@ func TestCleanupOldLogs(t *testing.T) {
 	}
 	if want := fmt.Sprintf("line %d", logCleanupBatchSize*2+249); newest != want {
 		t.Errorf("newest surviving log = %q, want %q", newest, want)
+	}
+}
+
+// A service lock held by slow work (a health check mid-HTTP-request) must not
+// block reads of the manager. GetServices used to hold the manager lock while
+// waiting on a service lock; because sync.RWMutex is writer-preferring, a single
+// queued writer then parked every later reader behind that one slow service,
+// which is what made configuration fetches hang.
+func TestSlowServiceDoesNotBlockConfigurationReads(t *testing.T) {
+	sm := newTestManager(t)
+
+	slow := &models.Service{ID: "slow", Name: "slow"}
+	sm.services[slow.ID] = slow
+	sm.configurations["cfg"] = &models.Configuration{ID: "cfg", Name: "default"}
+
+	// Stand in for a health check holding the service lock across slow I/O.
+	slow.Mutex.Lock()
+	defer slow.Mutex.Unlock()
+
+	reading := make(chan struct{})
+	go func() {
+		close(reading)
+		sm.GetServices() // blocks on the service lock until this test returns
+	}()
+	<-reading
+
+	// Queue a writer on the manager lock. Under the old ordering this is what
+	// converted one stuck service into a manager-wide stall.
+	writing := make(chan struct{})
+	go func() {
+		defer close(writing)
+		if err := sm.SaveConfiguration(&models.Configuration{ID: "written", Name: "written"}); err != nil {
+			t.Errorf("SaveConfiguration failed: %v", err)
+		}
+	}()
+
+	// Let both goroutines reach their locks.
+	time.Sleep(100 * time.Millisecond)
+
+	read := make(chan int, 1)
+	go func() { read <- len(sm.GetConfigurations()) }()
+
+	select {
+	case count := <-read:
+		if count < 1 {
+			t.Errorf("GetConfigurations returned %d configurations, want at least 1", count)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("GetConfigurations blocked behind a held service lock")
+	}
+
+	select {
+	case <-writing:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SaveConfiguration blocked behind a held service lock")
 	}
 }
