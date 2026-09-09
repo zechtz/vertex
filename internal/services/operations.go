@@ -443,6 +443,29 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 		}
 	}
 
+	// Inject Eureka overrides as environment variables.
+	// Env vars are inherited by forked JVMs and would normally have higher priority than config-server.
+	// However, Spring Cloud Config defaults to override-system-properties=true, which places config-server
+	// properties ABOVE env vars. We counteract this by also setting
+	// SPRING_CLOUD_CONFIG_OVERRIDESYSTEMPROPERTIES=false — a client-side bootstrap property read before
+	// the config server is consulted, so the config server cannot override our env vars.
+	if service.EurekaPreferIPAddress != nil || service.EurekaHostname != "" {
+		cmd.Env = append(cmd.Env, "SPRING_CLOUD_CONFIG_OVERRIDESYSTEMPROPERTIES=false")
+		log.Printf("[INFO] Service %s: disabling config-server env var override (SPRING_CLOUD_CONFIG_OVERRIDESYSTEMPROPERTIES=false)", service.Name)
+	}
+	if service.EurekaPreferIPAddress != nil {
+		val := "false"
+		if *service.EurekaPreferIPAddress {
+			val = "true"
+		}
+		cmd.Env = append(cmd.Env, "EUREKA_INSTANCE_PREFERIPADDRESS="+val)
+		log.Printf("[INFO] Service %s: injecting EUREKA_INSTANCE_PREFERIPADDRESS=%s", service.Name, val)
+	}
+	if service.EurekaHostname != "" {
+		cmd.Env = append(cmd.Env, "EUREKA_INSTANCE_HOSTNAME="+service.EurekaHostname)
+		log.Printf("[INFO] Service %s: injecting EUREKA_INSTANCE_HOSTNAME=%s", service.Name, service.EurekaHostname)
+	}
+
 	// Detect and log Java version being used
 	logJavaVersion(cmd.Env, service.Name)
 
@@ -654,6 +677,29 @@ func (sm *Manager) startService(service *models.Service) error {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("ACTIVE_PROFILE=%s", activeProfile))
 			cmd.Env = append(cmd.Env, fmt.Sprintf("SPRING_PROFILES_ACTIVE=%s", activeProfile))
 		}
+	}
+
+	// Inject Eureka overrides as environment variables.
+	// Env vars are inherited by forked JVMs and would normally have higher priority than config-server.
+	// However, Spring Cloud Config defaults to override-system-properties=true, which places config-server
+	// properties ABOVE env vars. We counteract this by also setting
+	// SPRING_CLOUD_CONFIG_OVERRIDESYSTEMPROPERTIES=false — a client-side bootstrap property read before
+	// the config server is consulted, so the config server cannot override our env vars.
+	if service.EurekaPreferIPAddress != nil || service.EurekaHostname != "" {
+		cmd.Env = append(cmd.Env, "SPRING_CLOUD_CONFIG_OVERRIDESYSTEMPROPERTIES=false")
+		log.Printf("[INFO] Service %s: disabling config-server env var override (SPRING_CLOUD_CONFIG_OVERRIDESYSTEMPROPERTIES=false)", service.Name)
+	}
+	if service.EurekaPreferIPAddress != nil {
+		val := "false"
+		if *service.EurekaPreferIPAddress {
+			val = "true"
+		}
+		cmd.Env = append(cmd.Env, "EUREKA_INSTANCE_PREFERIPADDRESS="+val)
+		log.Printf("[INFO] Service %s: injecting EUREKA_INSTANCE_PREFERIPADDRESS=%s", service.Name, val)
+	}
+	if service.EurekaHostname != "" {
+		cmd.Env = append(cmd.Env, "EUREKA_INSTANCE_HOSTNAME="+service.EurekaHostname)
+		log.Printf("[INFO] Service %s: injecting EUREKA_INSTANCE_HOSTNAME=%s", service.Name, service.EurekaHostname)
 	}
 
 	// Detect and log Java version being used
@@ -1010,6 +1056,7 @@ func isPortEnvironmentVariable(key string) bool {
 	}
 	return false
 }
+
 
 // logJavaVersion detects and logs the Java version being used for a service
 func logJavaVersion(env []string, serviceName string) {

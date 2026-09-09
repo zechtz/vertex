@@ -392,6 +392,7 @@ func EnsureMavenWrapper(serviceDir string) error {
 func parseMavenVersion(output string) string {
 	line := strings.SplitN(output, "\n", 2)[0]
 	parts := strings.Fields(strings.TrimSpace(line))
+	// ["Apache", "Maven", "3.9.6", "(hash)"]
 	if len(parts) >= 3 && parts[0] == "Apache" && parts[1] == "Maven" {
 		return parts[2]
 	}
@@ -399,10 +400,11 @@ func parseMavenVersion(output string) string {
 }
 
 // MavenVersionsMatch reports whether ./mvnw and the locally installed mvn are the same version.
-// Returns true  — versions match, wrapper is correct, skip regeneration.
-// Returns false — versions differ or wrapper cannot run, regeneration needed.
-// If local mvn is not found we return true to avoid clobbering a working wrapper.
+// Returns true  → versions match, wrapper is already correct, skip regeneration.
+// Returns false → versions differ or wrapper cannot run, regeneration needed.
+// If the local mvn binary cannot be found we return true to avoid clobbering a working wrapper.
 func MavenVersionsMatch(serviceDir string) bool {
+	// --- wrapper version ---
 	wrapperCmd := exec.Command("./mvnw", "--version")
 	wrapperCmd.Dir = serviceDir
 	wrapperOut, err := wrapperCmd.Output()
@@ -415,16 +417,17 @@ func MavenVersionsMatch(serviceDir string) bool {
 		return false
 	}
 
+	// --- local mvn version ---
 	localCmd := exec.Command("mvn", "--version")
 	localOut, err := localCmd.Output()
 	if err != nil {
-		// mvn not on PATH — can't compare, leave wrapper untouched
+		// mvn not available — can't compare, leave wrapper untouched
 		log.Printf("[DEBUG] Local mvn not found; skipping wrapper version check")
 		return true
 	}
 	localVersion := parseMavenVersion(string(localOut))
 	if localVersion == "" {
-		return true
+		return true // can't parse — leave wrapper alone
 	}
 
 	match := wrapperVersion == localVersion
