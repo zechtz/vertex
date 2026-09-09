@@ -1,8 +1,8 @@
 # Optimized single-stage build for vertex
-FROM golang:1.23-bullseye AS builder
+FROM golang:1.23.10-bookworm AS builder
 
 # Install build dependencies in one layer
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libc6-dev \
     libsqlite3-dev \
