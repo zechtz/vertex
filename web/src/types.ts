@@ -247,3 +247,13 @@ export interface InstalledJdk {
   majorVersion: number;
   source: string;
 }
+
+/**
+ * Build information for the running Vertex binary, reported by the backend so
+ * the UI shows the version it is actually talking to.
+ */
+export interface BuildInfo {
+  version: string;
+  commit: string;
+  date: string;
+}

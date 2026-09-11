@@ -16,6 +16,7 @@ import (
 )
 
 func registerUtilityRoutes(h *Handler, r *mux.Router) {
+	r.HandleFunc("/api/version", h.getVersionHandler).Methods("GET")
 	r.HandleFunc("/api/system/metrics", h.getSystemMetricsHandler).Methods("GET")
 	r.HandleFunc("/api/system/logs/cleanup", h.cleanupLogsHandler).Methods("POST")
 
@@ -176,7 +177,7 @@ func (h *Handler) searchLogsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, serviceID := range profile.Services {
 			profileServiceMap[serviceID] = true
 		}
-		
+
 		for _, serviceID := range criteria.ServiceIDs {
 			if profileServiceMap[serviceID] {
 				filteredServiceIDs = append(filteredServiceIDs, serviceID)
@@ -354,7 +355,7 @@ func (h *Handler) exportLogsHandler(w http.ResponseWriter, r *http.Request) {
 		for _, serviceID := range profile.Services {
 			profileServiceMap[serviceID] = true
 		}
-		
+
 		for _, serviceID := range exportRequest.ServiceIDs {
 			if profileServiceMap[serviceID] {
 				filteredServiceIDs = append(filteredServiceIDs, serviceID)
@@ -368,7 +369,7 @@ func (h *Handler) exportLogsHandler(w http.ResponseWriter, r *http.Request) {
 		// Generate filename
 		timestamp := time.Now().Format("20060102_150405")
 		filename := fmt.Sprintf("vertex_logs_%s", timestamp)
-		
+
 		// Return empty export based on format
 		switch exportRequest.Format {
 		case "json":
@@ -691,7 +692,7 @@ func (h *Handler) scanAutoDiscoveryHandler(w http.ResponseWriter, r *http.Reques
 	} else {
 		discoveredServices, err = h.autoDiscoveryService.ScanDirectory(scanDir)
 	}
-	
+
 	if err != nil {
 		log.Printf("[ERROR] Auto-discovery scan failed: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to scan project directory: %v", err), http.StatusInternalServerError)
@@ -740,9 +741,9 @@ func (h *Handler) importDiscoveredServiceHandler(w http.ResponseWriter, r *http.
 	var service *models.Service
 	allServices := h.serviceManager.GetServices()
 	for _, existingService := range allServices {
-		if existingService.Dir == discoveredService.Path || 
-		   strings.TrimPrefix(existingService.Dir, "/") == strings.TrimPrefix(discoveredService.Path, "/") {
-			log.Printf("[INFO] Found existing service '%s' (UUID: %s) with same path '%s' - reusing existing service without modification", 
+		if existingService.Dir == discoveredService.Path ||
+			strings.TrimPrefix(existingService.Dir, "/") == strings.TrimPrefix(discoveredService.Path, "/") {
+			log.Printf("[INFO] Found existing service '%s' (UUID: %s) with same path '%s' - reusing existing service without modification",
 				existingService.Name, existingService.ID, existingService.Dir)
 			// Make a copy to avoid any modifications to the original
 			serviceCopy := existingService
@@ -754,7 +755,7 @@ func (h *Handler) importDiscoveredServiceHandler(w http.ResponseWriter, r *http.
 	// If no existing service found, create a new one
 	if service == nil {
 		log.Printf("[INFO] No existing service found with path '%s' - creating new service", discoveredService.Path)
-		
+
 		// Check for name conflicts and generate unique name if needed
 		originalName := discoveredService.Name
 		uniqueName := h.generateUniqueServiceName(originalName)
@@ -762,7 +763,7 @@ func (h *Handler) importDiscoveredServiceHandler(w http.ResponseWriter, r *http.
 			log.Printf("[INFO] Service name '%s' already exists, using unique name '%s'", originalName, uniqueName)
 			discoveredService.Name = uniqueName
 		}
-		
+
 		newService, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
 		if err != nil {
 			log.Printf("[ERROR] Failed to import discovered service %s: %v", discoveredService.Name, err)
@@ -856,9 +857,9 @@ func (h *Handler) importDiscoveredServicesBulkHandler(w http.ResponseWriter, r *
 		var service *models.Service
 		allServices := h.serviceManager.GetServices()
 		for _, existingService := range allServices {
-			if existingService.Dir == discoveredService.Path || 
-			   strings.TrimPrefix(existingService.Dir, "/") == strings.TrimPrefix(discoveredService.Path, "/") {
-				log.Printf("[INFO] Found existing service '%s' (UUID: %s) with same path '%s' - reusing existing service without modification", 
+			if existingService.Dir == discoveredService.Path ||
+				strings.TrimPrefix(existingService.Dir, "/") == strings.TrimPrefix(discoveredService.Path, "/") {
+				log.Printf("[INFO] Found existing service '%s' (UUID: %s) with same path '%s' - reusing existing service without modification",
 					existingService.Name, existingService.ID, existingService.Dir)
 				// Make a copy to avoid any modifications to the original
 				serviceCopy := existingService
@@ -870,7 +871,7 @@ func (h *Handler) importDiscoveredServicesBulkHandler(w http.ResponseWriter, r *
 		// If no existing service found, create a new one
 		if service == nil {
 			log.Printf("[INFO] No existing service found with path '%s' - creating new service", discoveredService.Path)
-			
+
 			// Check for name conflicts and generate unique name if needed
 			originalName := discoveredService.Name
 			uniqueName := h.generateUniqueServiceName(originalName)
@@ -878,7 +879,7 @@ func (h *Handler) importDiscoveredServicesBulkHandler(w http.ResponseWriter, r *
 				log.Printf("[INFO] Service name '%s' already exists, using unique name '%s'", originalName, uniqueName)
 				discoveredService.Name = uniqueName
 			}
-			
+
 			newService, err := h.autoDiscoveryService.CreateServiceFromDiscovered(discoveredService)
 			if err != nil {
 				log.Printf("[ERROR] Failed to import discovered service %s: %v", discoveredService.Name, err)
@@ -959,17 +960,17 @@ func (h *Handler) websocketHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) generateUniqueServiceName(baseName string) string {
 	allServices := h.serviceManager.GetServices()
 	existingNames := make(map[string]bool)
-	
+
 	// Build map of existing service names
 	for _, service := range allServices {
 		existingNames[service.Name] = true
 	}
-	
+
 	// If base name is unique, return it
 	if !existingNames[baseName] {
 		return baseName
 	}
-	
+
 	// Generate unique name with suffix
 	for i := 2; i <= 100; i++ { // Limit to prevent infinite loop
 		candidateName := fmt.Sprintf("%s-%d", baseName, i)
@@ -977,7 +978,7 @@ func (h *Handler) generateUniqueServiceName(baseName string) string {
 			return candidateName
 		}
 	}
-	
+
 	// Fallback: append timestamp if all numbered suffixes are taken
 	return fmt.Sprintf("%s-%d", baseName, time.Now().Unix())
 }
@@ -1010,6 +1011,19 @@ func (h *Handler) getInstalledJDKsHandler(w http.ResponseWriter, r *http.Request
 
 	if err := json.NewEncoder(w).Encode(services.DiscoverJDKs()); err != nil {
 		log.Printf("Failed to encode installed JDKs: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getVersionHandler reports the running binary's build information, so the UI
+// can show the version it is actually talking to.
+func (h *Handler) getVersionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if err := json.NewEncoder(w).Encode(h.buildInfo); err != nil {
+		log.Printf("Failed to encode version: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

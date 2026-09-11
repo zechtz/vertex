@@ -12,6 +12,17 @@ import {
   Monitor,
   Clock,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { SystemApi } from "@/services/systemApi";
+import type { BuildInfo } from "@/types";
+
+/**
+ * Renders a build version for display. The Makefile strips the "v" prefix on a
+ * tagged build but `git describe` keeps it off-tag, so normalise to exactly one.
+ */
+function formatVersion(version: string): string {
+  return `v${version.replace(/^v/, "")}`;
+}
 
 interface SidebarProps {
   activeSection: string;
@@ -33,6 +44,22 @@ export function Sidebar({
   className = "",
   isCollapsed = false,
 }: SidebarProps) {
+  const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    SystemApi.getBuildInfo()
+      .then((info) => active && setBuildInfo(info))
+      .catch(() => {
+        // Leave the version hidden; it is not worth an error for a footer.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const navigationItems: NavigationItem[] = [
     {
       id: "services",
@@ -166,7 +193,14 @@ export function Sidebar({
           <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
             <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
               <div className="font-medium">Vertex Service Manager</div>
-              <div>v2.0.0</div>
+              {/* Reported by the backend rather than hardcoded, so it cannot
+                  drift from the binary actually running. Omitted entirely if
+                  unavailable - a wrong version is worse than none. */}
+              {buildInfo && (
+                <div title={`${buildInfo.commit} - built ${buildInfo.date}`}>
+                  {formatVersion(buildInfo.version)}
+                </div>
+              )}
             </div>
           </div>
         )}

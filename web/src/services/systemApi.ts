@@ -1,4 +1,4 @@
-import type { EnvVar, InstalledJdk } from '@/types';
+import type { BuildInfo, EnvVar, InstalledJdk } from '@/types';
 
 /**
  * System-level API functions
@@ -98,5 +98,18 @@ export class SystemApi {
     if (!response.ok) {
       throw new Error(`Failed to set JAVA_HOME: ${response.status} ${response.statusText}`);
     }
+  }
+
+  /**
+   * Build information for the running binary.
+   */
+  static async getBuildInfo(): Promise<BuildInfo> {
+    const response = await fetch('/api/version');
+
+    if (!response.ok) {
+      throw new Error(`Failed to get version: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
   }
 }
