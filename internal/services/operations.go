@@ -513,6 +513,14 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 		service.Mutex.Lock()
 		defer service.Mutex.Unlock()
 
+		// A stop followed by a start replaces service.Cmd while this goroutine is
+		// still blocked in Wait. Without this guard the previous run's goroutine
+		// clears the new run's state, leaving a live service recorded as stopped.
+		if service.Cmd != cmd {
+			log.Printf("[DEBUG] Ignoring exit of superseded process for service %s", service.Name)
+			return
+		}
+
 		if err != nil {
 			log.Printf("Service %s exited with error: %v", service.Name, err)
 			if strings.Contains(err.Error(), "compilation") || strings.Contains(err.Error(), "cannot find symbol") {
@@ -754,6 +762,14 @@ func (sm *Manager) startService(service *models.Service) error {
 		err := cmd.Wait()
 		service.Mutex.Lock()
 		defer service.Mutex.Unlock()
+
+		// A stop followed by a start replaces service.Cmd while this goroutine is
+		// still blocked in Wait. Without this guard the previous run's goroutine
+		// clears the new run's state, leaving a live service recorded as stopped.
+		if service.Cmd != cmd {
+			log.Printf("[DEBUG] Ignoring exit of superseded process for service %s", service.Name)
+			return
+		}
 
 		if err != nil {
 			log.Printf("Service %s exited with error: %v", service.Name, err)
