@@ -28,6 +28,7 @@ func registerUtilityRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/environment/sync", h.syncEnvironmentHandler).Methods("POST")
 	r.HandleFunc("/api/environment/status", h.getEnvironmentStatusHandler).Methods("GET")
 	r.HandleFunc("/api/java/diagnostics", h.getJavaDiagnosticsHandler).Methods("GET")
+	r.HandleFunc("/api/java/jdks", h.getInstalledJDKsHandler).Methods("GET")
 
 	r.HandleFunc("/api/env-vars/global", h.getGlobalEnvVarsHandler).Methods("GET")
 	r.HandleFunc("/api/env-vars/global", h.updateGlobalEnvVarsHandler).Methods("PUT")
@@ -990,8 +991,25 @@ func (h *Handler) getJavaDiagnosticsHandler(w http.ResponseWriter, r *http.Reque
 	javaEnv := services.DetectJavaEnvironment()
 	diagnostics := javaEnv.GetDiagnostics()
 
+	// Knowing which JDK is in use is only half the picture: diagnosing a
+	// version mismatch also needs to show what else is available to switch to.
+	diagnostics["installed_jdks"] = services.DiscoverJDKs()
+
 	if err := json.NewEncoder(w).Encode(diagnostics); err != nil {
 		log.Printf("Failed to encode Java diagnostics: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// getInstalledJDKsHandler lists the JDKs available on this machine, so a service
+// that failed on a JDK mismatch can be pointed at a different one.
+func (h *Handler) getInstalledJDKsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if err := json.NewEncoder(w).Encode(services.DiscoverJDKs()); err != nil {
+		log.Printf("Failed to encode installed JDKs: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

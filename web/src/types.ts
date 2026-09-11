@@ -236,3 +236,14 @@ export interface UserProfileUpdateRequest {
   avatar: string;
   preferences: UserPreferences;
 }
+
+/**
+ * A JDK installed on the machine running Vertex. `path` is what belongs in a
+ * service's JAVA_HOME to pin that service to this JDK.
+ */
+export interface InstalledJdk {
+  path: string;
+  version: string;
+  majorVersion: number;
+  source: string;
+}

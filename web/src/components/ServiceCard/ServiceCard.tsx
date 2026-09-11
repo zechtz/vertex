@@ -28,6 +28,19 @@ import { Service } from "@/types";
 import { useState, useRef, useEffect } from "react";
 import { GitBranchSwitcher } from "@/components/GitBranchSwitcher/GitBranchSwitcher";
 import { GitStatusBadge } from "@/components/GitStatusBadge/GitStatusBadge";
+import { JdkPicker } from "@/components/JdkPicker/JdkPicker";
+
+/**
+ * Failure codes that pinning the service to a different JDK resolves. Other
+ * failures get the diagnosis and suggestion, but no JDK picker, since offering
+ * an action that cannot help is worse than offering none.
+ */
+const JDK_RELATED_FAILURES = new Set([
+  "lombok_jdk_incompatible",
+  "class_version_unsupported",
+  "jdk_too_old",
+  "compiler_crash",
+]);
 
 interface ServiceCardProps {
   service: Service;
@@ -258,6 +271,17 @@ export function ServiceCard({
                               {service.failureReason.detail}
                             </pre>
                           </details>
+                        )}
+
+                        {/* For the failures a different JDK resolves, make that
+                            the one action rather than something to go and
+                            configure elsewhere. */}
+                        {JDK_RELATED_FAILURES.has(service.failureReason.code) && (
+                          <JdkPicker
+                            serviceId={service.id}
+                            envVars={service.envVars}
+                            onApplied={onRestart}
+                          />
                         )}
                       </div>
                     </div>
