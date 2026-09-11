@@ -500,6 +500,8 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	service.Cmd = cmd
 	service.Uptime = ""
 	service.Logs = []models.LogEntry{}
+	// Each run is diagnosed from its own output
+	service.FailureReason = nil
 
 	// Save and broadcast
 	sm.updateServiceInDB(service)
@@ -748,6 +750,8 @@ func (sm *Manager) startService(service *models.Service) error {
 	service.Cmd = cmd
 	service.LastStarted = time.Now()
 	service.Logs = []models.LogEntry{}
+	// Each run is diagnosed from its own output
+	service.FailureReason = nil
 
 	// Record uptime event
 	uptimeTracker := GetUptimeTracker()
@@ -880,6 +884,13 @@ func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
 		line := scanner.Text()
 
 		logEntry := parseLogLine(line)
+
+		// The process exit code tells us nothing - it is always "exit status 1" -
+		// so the reason a start failed has to be read out of the output itself.
+		if reason := classifyFailure(line); reason != nil && recordFailureReason(service, reason) {
+			log.Printf("[INFO] Service %s failed: %s (%s)", service.Name, reason.Summary, reason.Code)
+			sm.publishServiceState(service)
+		}
 
 		service.Mutex.Lock()
 		// Keep in-memory logs for immediate access (last 1000 entries)

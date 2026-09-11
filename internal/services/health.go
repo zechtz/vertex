@@ -122,6 +122,11 @@ func (sm *Manager) applyHealthStatus(service *models.Service, healthStatus, upti
 	if uptime != "" {
 		service.Uptime = uptime
 	}
+	// Reaching healthy means the service started; a diagnosis carried over from
+	// an earlier attempt is no longer true.
+	if healthStatus == "healthy" {
+		service.FailureReason = nil
+	}
 	service.Mutex.Unlock()
 
 	sm.publishServiceState(service)
