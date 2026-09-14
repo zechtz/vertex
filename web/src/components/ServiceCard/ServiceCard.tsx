@@ -28,6 +28,19 @@ import { Service } from "@/types";
 import { useState, useRef, useEffect } from "react";
 import { GitBranchSwitcher } from "@/components/GitBranchSwitcher/GitBranchSwitcher";
 import { GitStatusBadge } from "@/components/GitStatusBadge/GitStatusBadge";
+import { JdkPicker } from "@/components/JdkPicker/JdkPicker";
+
+/**
+ * Failure codes that pinning the service to a different JDK resolves. Other
+ * failures get the diagnosis and suggestion, but no JDK picker, since offering
+ * an action that cannot help is worse than offering none.
+ */
+const JDK_RELATED_FAILURES = new Set([
+  "lombok_jdk_incompatible",
+  "class_version_unsupported",
+  "jdk_too_old",
+  "compiler_crash",
+]);
 
 interface ServiceCardProps {
   service: Service;
@@ -233,6 +246,46 @@ export function ServiceCard({
                   <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
                     {service.description}
                   </p>
+                )}
+
+                {/* Why the last start failed, and what to do about it. Without
+                    this the card shows only "stopped" and the cause is buried
+                    in the build log. */}
+                {service.failureReason && (
+                  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                          {service.failureReason.summary}
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-red-700 dark:text-red-300">
+                          {service.failureReason.suggestion}
+                        </p>
+                        {service.failureReason.detail && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-red-600 hover:underline dark:text-red-400">
+                              Show the failing line
+                            </summary>
+                            <pre className="mt-1 overflow-x-auto rounded bg-red-100 p-2 text-[11px] leading-relaxed text-red-900 dark:bg-red-900/40 dark:text-red-100">
+                              {service.failureReason.detail}
+                            </pre>
+                          </details>
+                        )}
+
+                        {/* For the failures a different JDK resolves, make that
+                            the one action rather than something to go and
+                            configure elsewhere. */}
+                        {JDK_RELATED_FAILURES.has(service.failureReason.code) && (
+                          <JdkPicker
+                            serviceId={service.id}
+                            envVars={service.envVars}
+                            onApplied={onRestart}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* Git Branch Switcher */}

@@ -17,7 +17,17 @@ import (
 	"github.com/zechtz/vertex/internal/services"
 )
 
+// BuildInfo identifies the running binary. It is populated from ldflags at build
+// time and served to the UI, so the version shown there is the one actually
+// running rather than a string someone has to remember to update.
+type BuildInfo struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	Date    string `json:"date"`
+}
+
 type Handler struct {
+	buildInfo            BuildInfo
 	serviceManager       *services.Manager
 	topologyService      *services.TopologyService
 	autoDiscoveryService *services.AutoDiscoveryService
@@ -26,8 +36,9 @@ type Handler struct {
 	upgrader             websocket.Upgrader
 }
 
-func NewHandler(sm *services.Manager) *Handler {
+func NewHandler(sm *services.Manager, buildInfo BuildInfo) *Handler {
 	return &Handler{
+		buildInfo:            buildInfo,
 		serviceManager:       sm,
 		topologyService:      services.NewTopologyService(sm),
 		autoDiscoveryService: services.NewAutoDiscoveryService(sm),

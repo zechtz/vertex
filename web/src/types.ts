@@ -39,6 +39,19 @@ export interface ServiceDependency {
   description: string;
 }
 
+/**
+ * Why a service's last start failed, classified from its build and startup
+ * output. The process exit code alone is always "exit status 1", so the cause
+ * is recovered from the output instead. Absent once a start succeeds.
+ */
+export interface FailureReason {
+  code: string;
+  summary: string;
+  detail: string;
+  suggestion: string;
+  detectedAt: string;
+}
+
 export interface Service {
   id: string; // UUID - unique identifier for the service
   name: string;
@@ -53,6 +66,7 @@ export interface Service {
   order: number;
   lastStarted: string;
   uptime: string;
+  failureReason?: FailureReason;
   description: string;
   isEnabled: boolean;
   buildSystem: string; // "maven", "gradle", or "auto"
@@ -221,4 +235,25 @@ export interface UserProfileUpdateRequest {
   displayName: string;
   avatar: string;
   preferences: UserPreferences;
+}
+
+/**
+ * A JDK installed on the machine running Vertex. `path` is what belongs in a
+ * service's JAVA_HOME to pin that service to this JDK.
+ */
+export interface InstalledJdk {
+  path: string;
+  version: string;
+  majorVersion: number;
+  source: string;
+}
+
+/**
+ * Build information for the running Vertex binary, reported by the backend so
+ * the UI shows the version it is actually talking to.
+ */
+export interface BuildInfo {
+  version: string;
+  commit: string;
+  date: string;
 }

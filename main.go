@@ -37,7 +37,7 @@ func parseSubcommands() {
 	}
 
 	subcommand := os.Args[1]
-	
+
 	// Skip if first arg is already a flag (starts with -)
 	if strings.HasPrefix(subcommand, "-") {
 		return
@@ -46,7 +46,7 @@ func parseSubcommands() {
 	// Map subcommands to their equivalent flags
 	subcommandMap := map[string]string{
 		"start":     "--start",
-		"stop":      "--stop", 
+		"stop":      "--stop",
 		"restart":   "--restart",
 		"status":    "--status",
 		"logs":      "--logs",
@@ -65,7 +65,7 @@ func parseSubcommands() {
 	if flag, exists := subcommandMap[subcommand]; exists {
 		// Replace the subcommand with the equivalent flag
 		os.Args[1] = flag
-		
+
 		// Handle special case for 'logs' subcommand with -f or --follow
 		if subcommand == "logs" && len(os.Args) > 2 {
 			for i := 2; i < len(os.Args); i++ {
@@ -80,7 +80,7 @@ func parseSubcommands() {
 func main() {
 	// Parse subcommands before flag parsing
 	parseSubcommands()
-	
+
 	// Handle command line flags
 	var showVersion bool
 	var install bool
@@ -112,7 +112,7 @@ func main() {
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (automatically installs with nginx when specified)")
 	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
-	
+
 	// Custom usage function to show both flag and subcommand syntax
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
@@ -165,7 +165,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --version\n")
 		fmt.Fprintf(os.Stderr, "    \tShow version information\n")
 	}
-	
+
 	flag.Parse()
 
 	if showVersion {
@@ -227,20 +227,20 @@ func main() {
 			domainWasExplicitlySet = true
 		}
 	})
-	
+
 	// Auto-enable HTTPS for .dev domains (Google-owned TLD requires HTTPS)
 	if strings.HasSuffix(domain, ".dev") && !enableHTTPS {
 		enableHTTPS = true
 		fmt.Printf("🔒 .dev domain detected (%s), automatically enabling HTTPS\n", domain)
 	}
-	
+
 	// Auto-install with nginx if domain is specified
 	if domainWasExplicitlySet && !install && !uninstall {
 		install = true
 		enableNginx = true
 		fmt.Printf("🌐 Domain specified (%s), automatically installing with nginx proxy\n", domain)
 	}
-	
+
 	// Auto-enable nginx if HTTPS is requested
 	if enableHTTPS && !enableNginx {
 		enableNginx = true
@@ -253,7 +253,7 @@ func main() {
 			enableNginx = true
 			fmt.Printf("🌐 Domain specified (%s), automatically enabling nginx proxy\n", domain)
 		}
-		
+
 		if err := installService(enableNginx, enableHTTPS, domain); err != nil {
 			log.Fatalf("Installation failed: %v", err)
 		}
@@ -329,7 +329,11 @@ func main() {
 	}
 
 	// Initialize handlers
-	handler := handlers.NewHandler(sm)
+	handler := handlers.NewHandler(sm, handlers.BuildInfo{
+		Version: version,
+		Commit:  commit,
+		Date:    date,
+	})
 
 	// Setup routes
 	r := mux.NewRouter()

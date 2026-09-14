@@ -500,6 +500,8 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	service.Cmd = cmd
 	service.Uptime = ""
 	service.Logs = []models.LogEntry{}
+	// Each run is diagnosed from its own output
+	service.FailureReason = nil
 
 	// Save and broadcast
 	sm.updateServiceInDB(service)
@@ -512,6 +514,14 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 		err := cmd.Wait()
 		service.Mutex.Lock()
 		defer service.Mutex.Unlock()
+
+		// A stop followed by a start replaces service.Cmd while this goroutine is
+		// still blocked in Wait. Without this guard the previous run's goroutine
+		// clears the new run's state, leaving a live service recorded as stopped.
+		if service.Cmd != cmd {
+			log.Printf("[DEBUG] Ignoring exit of superseded process for service %s", service.Name)
+			return
+		}
 
 		if err != nil {
 			log.Printf("Service %s exited with error: %v", service.Name, err)
@@ -740,6 +750,8 @@ func (sm *Manager) startService(service *models.Service) error {
 	service.Cmd = cmd
 	service.LastStarted = time.Now()
 	service.Logs = []models.LogEntry{}
+	// Each run is diagnosed from its own output
+	service.FailureReason = nil
 
 	// Record uptime event
 	uptimeTracker := GetUptimeTracker()
@@ -754,6 +766,14 @@ func (sm *Manager) startService(service *models.Service) error {
 		err := cmd.Wait()
 		service.Mutex.Lock()
 		defer service.Mutex.Unlock()
+
+		// A stop followed by a start replaces service.Cmd while this goroutine is
+		// still blocked in Wait. Without this guard the previous run's goroutine
+		// clears the new run's state, leaving a live service recorded as stopped.
+		if service.Cmd != cmd {
+			log.Printf("[DEBUG] Ignoring exit of superseded process for service %s", service.Name)
+			return
+		}
 
 		if err != nil {
 			log.Printf("Service %s exited with error: %v", service.Name, err)
@@ -864,6 +884,13 @@ func (sm *Manager) readLogs(service *models.Service, pipe io.Reader) {
 		line := scanner.Text()
 
 		logEntry := parseLogLine(line)
+
+		// The process exit code tells us nothing - it is always "exit status 1" -
+		// so the reason a start failed has to be read out of the output itself.
+		if reason := classifyFailure(line); reason != nil && recordFailureReason(service, reason) {
+			log.Printf("[INFO] Service %s failed: %s (%s)", service.Name, reason.Summary, reason.Code)
+			sm.publishServiceState(service)
+		}
 
 		service.Mutex.Lock()
 		// Keep in-memory logs for immediate access (last 1000 entries)

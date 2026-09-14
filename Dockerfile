@@ -1,12 +1,18 @@
-# Optimized single-stage build for vertex
-FROM golang:1.23.10-bookworm AS builder
+# Built on Alpine so the binary links against musl, matching the runtime stage
+# below. A cgo binary built on Debian links glibc and cannot exec on Alpine -
+# the loader it names, /lib64/ld-linux-*.so.2, does not exist there, and the
+# container fails at startup with "not found".
+FROM golang:1.23.10-alpine AS builder
 
-# Install build dependencies in one layer
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libc6-dev \
-    libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/*
+# cgo toolchain: required because mattn/go-sqlite3 is a cgo package. It compiles
+# its own SQLite, so no sqlite development headers are needed here.
+RUN apk add --no-cache gcc musl-dev
+
+# go-sqlite3 v1.14.17 predates musl dropping the LFS64 aliases, so its bundled
+# SQLite fails to compile with "pread64 undeclared" / "unknown type off64_t".
+# This restores those declarations. Removable once go-sqlite3 reaches v1.14.22+,
+# which supports musl directly.
+ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 
 WORKDIR /app
 
