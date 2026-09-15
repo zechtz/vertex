@@ -14,6 +14,7 @@ func registerUserRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/auth/register", h.registerHandler).Methods("POST")
 	r.HandleFunc("/api/auth/login", h.loginHandler).Methods("POST")
 	r.HandleFunc("/api/auth/user", h.getCurrentUserHandler).Methods("GET")
+	r.HandleFunc("/api/auth/refresh", h.refreshTokenHandler).Methods("POST")
 	r.HandleFunc("/api/user/profile", h.getUserProfileHandler).Methods("GET")
 	r.HandleFunc("/api/user/profile", h.updateUserProfileHandler).Methods("PUT")
 }
@@ -177,6 +178,34 @@ func (h *Handler) updateUserProfileHandler(w http.ResponseWriter, r *http.Reques
 
 	if err := json.NewEncoder(w).Encode(profile); err != nil {
 		log.Printf("[ERROR] Failed to encode profile response: %v", err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// refreshTokenHandler extends an active session, returning a new token and the
+// current user in the same shape as login, so the client can swap one for the
+// other without a special case.
+func (h *Handler) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// A still-valid token is required. Once it has expired the only way back is
+	// Login, so a forgotten tab cannot keep a session alive forever.
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+		return
+	}
+
+	auth, err := h.authService.RefreshToken(claims.UserID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(auth); err != nil {
+		log.Printf("Failed to encode refresh response: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}

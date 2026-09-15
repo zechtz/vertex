@@ -16,6 +16,7 @@ import {
 import { useAuth } from "./AuthContext";
 import { useTheme } from "./ThemeContext";
 
+import { apiFetch } from "@/services/apiFetch";
 interface ProfileContextType {
   // User Profile
   userProfile: UserProfile | null;
@@ -103,7 +104,7 @@ export function ProfileProvider({ children }: ProfileProviderProps) {
       throw new Error("No authentication token");
     }
 
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -114,10 +115,9 @@ export function ProfileProvider({ children }: ProfileProviderProps) {
 
     if (!response.ok) {
       // Handle authentication errors specifically
+      // apiFetch parks the first 401 and replays it after the user signs back
+      // in, so reaching here means the retry was rejected too.
       if (response.status === 401) {
-        console.warn("Authentication failed, token may be invalid");
-        // You could trigger a logout here if needed
-        // logout();
         throw new Error("Authentication failed. Please log in again.");
       }
 

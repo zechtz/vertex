@@ -4,6 +4,7 @@ import { ServiceOperations } from "@/services/serviceOperations";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useToast, toast } from "@/components/ui/toast";
 
+import { apiFetch } from "@/services/apiFetch";
 export function useServices() {
   const { activeProfile } = useProfile();
   const { addToast } = useToast();
@@ -66,7 +67,7 @@ export function useServices() {
 
   const fetchConfigurations = useCallback(async () => {
     try {
-      const response = await fetch("/api/configurations");
+      const response = await apiFetch("/api/configurations");
       if (!response.ok) {
         throw new Error(
           `Failed to fetch configurations: ${response.status} ${response.statusText}`,

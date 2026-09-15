@@ -1,5 +1,6 @@
 import { Service, Configuration } from '@/types';
 
+import { apiFetch } from "@/services/apiFetch";
 export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
@@ -15,7 +16,7 @@ export class ServiceApi {
    * Fetch all services
    */
   static async fetchServices(): Promise<Service[]> {
-    const response = await fetch('/api/services');
+    const response = await apiFetch('/api/services');
     if (!response.ok) {
       throw new Error(`Failed to fetch services: ${response.status} ${response.statusText}`);
     }
@@ -26,7 +27,7 @@ export class ServiceApi {
    * Fetch all configurations
    */
   static async fetchConfigurations(): Promise<Configuration[]> {
-    const response = await fetch('/api/configurations');
+    const response = await apiFetch('/api/configurations');
     if (!response.ok) {
       throw new Error(`Failed to fetch configurations: ${response.status} ${response.statusText}`);
     }
@@ -37,7 +38,7 @@ export class ServiceApi {
    * Create a new service
    */
   static async createService(serviceData: Partial<Service>): Promise<Service> {
-    const response = await fetch('/api/services', {
+    const response = await apiFetch('/api/services', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(serviceData),
@@ -54,7 +55,7 @@ export class ServiceApi {
    * Update an existing service
    */
   static async updateService(serviceName: string, serviceData: Partial<Service>): Promise<Service> {
-    const response = await fetch(`/api/services/${serviceName}`, {
+    const response = await apiFetch(`/api/services/${serviceName}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(serviceData),
@@ -71,7 +72,7 @@ export class ServiceApi {
    * Delete a service
    */
   static async deleteService(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}`, {
+    const response = await apiFetch(`/api/services/${serviceName}`, {
       method: 'DELETE',
     });
     
@@ -89,7 +90,7 @@ export class ServiceApi {
       throw new Error("No authentication token");
     }
 
-    const response = await fetch(`/api/services/${serviceName}/logs`, {
+    const response = await apiFetch(`/api/services/${serviceName}/logs`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -106,7 +107,7 @@ export class ServiceApi {
    * Copy service logs
    */
   static async copyServiceLogs(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/logs/copy`, {
+    const response = await apiFetch(`/api/services/${serviceName}/logs/copy`, {
       method: 'POST',
     });
     
@@ -124,7 +125,7 @@ export class ServiceApi {
       throw new Error("No authentication token");
     }
 
-    const response = await fetch(`/api/services/${serviceName}/logs`, {
+    const response = await apiFetch(`/api/services/${serviceName}/logs`, {
       method: 'DELETE',
       headers: {
         "Content-Type": "application/json",
@@ -141,7 +142,7 @@ export class ServiceApi {
    * Normalize service orders to be sequential from 1 to N
    */
   static async normalizeServiceOrders(): Promise<{ status: string; message: string; services: Service[] }> {
-    const response = await fetch('/api/services/normalize-order', {
+    const response = await apiFetch('/api/services/normalize-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });

@@ -118,6 +118,34 @@ func (as *AuthService) Login(login *models.UserLogin) (*models.AuthResponse, err
 	}, nil
 }
 
+// RefreshToken issues a new token for an already-authenticated user, so an
+// active session can be extended without asking for the password again. The
+// caller must have presented a still-valid token: an expired one has to go back
+// through Login, which is what keeps this a sliding window rather than a way to
+// revive a dead session indefinitely.
+func (as *AuthService) RefreshToken(userID string) (*models.AuthResponse, error) {
+	user, err := as.getUserByID(userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user no longer exists")
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	token, err := as.generateJWT(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	// Don't return password hash
+	user.Password = ""
+
+	return &models.AuthResponse{
+		User:  *user,
+		Token: token,
+	}, nil
+}
+
 // ValidateToken validates a JWT token and returns user claims
 func (as *AuthService) ValidateToken(tokenString string) (*models.JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &models.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {

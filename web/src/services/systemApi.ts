@@ -1,5 +1,6 @@
 import type { BuildInfo, EnvVar, InstalledJdk } from '@/types';
 
+import { apiFetch } from "@/services/apiFetch";
 /**
  * System-level API functions
  */
@@ -8,7 +9,7 @@ export class SystemApi {
    * Fix Lombok issues
    */
   static async fixLombok(): Promise<void> {
-    const response = await fetch('/api/services/fix-lombok', {
+    const response = await apiFetch('/api/services/fix-lombok', {
       method: 'POST',
     });
     
@@ -21,7 +22,7 @@ export class SystemApi {
    * Sync environment setup
    */
   static async syncEnvironment(): Promise<void> {
-    const response = await fetch('/api/environment/setup', {
+    const response = await apiFetch('/api/environment/setup', {
       method: 'POST',
     });
     
@@ -34,7 +35,7 @@ export class SystemApi {
    * Copy all logs
    */
   static async copyAllLogs(): Promise<void> {
-    const response = await fetch('/api/logs/copy-all', {
+    const response = await apiFetch('/api/logs/copy-all', {
       method: 'POST',
     });
     
@@ -47,7 +48,7 @@ export class SystemApi {
    * Clear all logs
    */
   static async clearAllLogs(): Promise<void> {
-    const response = await fetch('/api/system/logs/cleanup', {
+    const response = await apiFetch('/api/system/logs/cleanup', {
       method: 'POST',
     });
     
@@ -60,7 +61,7 @@ export class SystemApi {
    * List the JDKs installed on the machine running Vertex.
    */
   static async getInstalledJdks(): Promise<InstalledJdk[]> {
-    const response = await fetch('/api/java/jdks');
+    const response = await apiFetch('/api/java/jdks');
 
     if (!response.ok) {
       throw new Error(`Failed to list JDKs: ${response.status} ${response.statusText}`);
@@ -89,7 +90,7 @@ export class SystemApi {
       },
     };
 
-    const response = await fetch(`/api/services/${serviceId}/env-vars`, {
+    const response = await apiFetch(`/api/services/${serviceId}/env-vars`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ envVars }),
@@ -104,10 +105,30 @@ export class SystemApi {
    * Build information for the running binary.
    */
   static async getBuildInfo(): Promise<BuildInfo> {
-    const response = await fetch('/api/version');
+    const response = await apiFetch('/api/version');
 
     if (!response.ok) {
       throw new Error(`Failed to get version: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Extend the current session. Requires a still-valid token; an expired one
+   * must go back through login.
+   */
+  static async refreshSession(): Promise<{ token: string; user: unknown }> {
+    // Plain fetch: a failure here means the session is gone, and parking this
+    // request for replay after login would be circular.
+    const token = localStorage.getItem('authToken');
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to refresh session: ${response.status} ${response.statusText}`);
     }
 
     return response.json();
