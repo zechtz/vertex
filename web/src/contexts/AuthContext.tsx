@@ -5,6 +5,11 @@ import {
   useEffect,
   ReactNode,
 } from "react";
+import {
+  endSession,
+  onSessionExpired,
+  resumeSession,
+} from "@/services/apiFetch";
 
 interface User {
   id: string;
@@ -23,6 +28,13 @@ interface AuthContextType {
   login: (user: User, token: string) => void;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
+  /**
+   * True once a request has been rejected for an expired session. The app stays
+   * where it is; a prompt is shown over it rather than redirecting away.
+   */
+  sessionExpired: boolean;
+  /** Log back in without losing the page, replaying whatever was interrupted. */
+  resumeSession: (user: User, token: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,6 +55,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const isAuthenticated = !!user && !!token;
 
@@ -54,10 +67,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const logout = () => {
+    // Reject anything still waiting on a retry so callers stop hanging.
+    endSession();
+    setSessionExpired(false);
     setUser(null);
     setToken(null);
     localStorage.removeItem("authToken");
     localStorage.removeItem("user");
+  };
+
+  /**
+   * Restore an expired session in place: store the new token, then replay the
+   * requests that were parked when it expired.
+   */
+  const restoreSession = (userData: User, authToken: string) => {
+    login(userData, authToken);
+    setSessionExpired(false);
+    resumeSession();
   };
 
   const checkAuth = async (): Promise<boolean> => {
@@ -102,6 +128,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth();
   }, []);
 
+  // A token is only validated at mount, so expiry is discovered by a request
+  // failing. This is how the rest of the app hears about it.
+  useEffect(() => onSessionExpired(() => setSessionExpired(true)), []);
+
   const value: AuthContextType = {
     user,
     token,
@@ -110,6 +140,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     logout,
     checkAuth,
+    sessionExpired,
+    resumeSession: restoreSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

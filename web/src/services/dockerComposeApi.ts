@@ -1,3 +1,5 @@
+import { apiFetch } from "@/services/apiFetch";
+
 
 export interface DockerComposePreview {
   profileId: string;
@@ -59,7 +61,7 @@ class DockerComposeApiService {
       throw new Error('No authentication token available');
     }
 
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',

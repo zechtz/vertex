@@ -1,5 +1,6 @@
 import { Service } from "@/types";
 
+import { apiFetch } from "@/services/apiFetch";
 export class LogsOperations {
   static async copyLogsToClipboard(
     selectedService: Service,
@@ -39,7 +40,7 @@ export class LogsOperations {
         throw new Error("No authentication token");
       }
 
-      const response = await fetch(`/api/services/${serviceName}/logs`, {
+      const response = await apiFetch(`/api/services/${serviceName}/logs`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",

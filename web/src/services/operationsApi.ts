@@ -1,3 +1,5 @@
+import { apiFetch } from "@/services/apiFetch";
+
 /**
  * Service Operations API functions
  */
@@ -18,7 +20,7 @@ export class OperationsApi {
    * Start a service
    */
   static async startService(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/start`, {
+    const response = await apiFetch(`/api/services/${serviceName}/start`, {
       method: 'POST',
     });
     
@@ -31,7 +33,7 @@ export class OperationsApi {
    * Stop a service
    */
   static async stopService(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/stop`, {
+    const response = await apiFetch(`/api/services/${serviceName}/stop`, {
       method: 'POST',
     });
     
@@ -44,7 +46,7 @@ export class OperationsApi {
    * Restart a service
    */
   static async restartService(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/restart`, {
+    const response = await apiFetch(`/api/services/${serviceName}/restart`, {
       method: 'POST',
     });
     
@@ -57,7 +59,7 @@ export class OperationsApi {
    * Check service health
    */
   static async checkServiceHealth(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/health`, {
+    const response = await apiFetch(`/api/services/${serviceName}/health`, {
       method: 'POST',
     });
     
@@ -70,7 +72,7 @@ export class OperationsApi {
    * Install service libraries
    */
   static async installServiceLibraries(serviceName: string): Promise<void> {
-    const response = await fetch(`/api/services/${serviceName}/install-libraries`, {
+    const response = await apiFetch(`/api/services/${serviceName}/install-libraries`, {
       method: 'POST',
     });
     
@@ -83,7 +85,7 @@ export class OperationsApi {
    * Start all services (profile-aware)
    */
   static async startAllServices(token?: string | null): Promise<{ status: string; profile?: string }> {
-    const response = await fetch('/api/services/start-all-profile', {
+    const response = await apiFetch('/api/services/start-all-profile', {
       method: 'POST',
       headers: this.getAuthHeaders(token),
     });
@@ -99,7 +101,7 @@ export class OperationsApi {
    * Stop all services (profile-aware)
    */
   static async stopAllServices(token?: string | null): Promise<{ status: string; profile?: string }> {
-    const response = await fetch('/api/services/stop-all-profile', {
+    const response = await apiFetch('/api/services/stop-all-profile', {
       method: 'POST',
       headers: this.getAuthHeaders(token),
     });

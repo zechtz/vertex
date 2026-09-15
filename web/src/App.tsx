@@ -6,6 +6,7 @@ import { ToastProvider, ToastContainer } from "@/components/ui/toast";
 import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { AuthenticatedApp } from "@/containers/AuthenticatedApp";
+import { SessionExpiredModal } from "@/components/SessionExpiredModal/SessionExpiredModal";
 
 function AppContent() {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -31,7 +32,14 @@ function AppContent() {
     );
   }
 
-  return <AuthenticatedApp />;
+  return (
+    <>
+      <AuthenticatedApp />
+      {/* Rendered over the app rather than replacing it, so an expired session
+          costs the user their password and nothing else. */}
+      <SessionExpiredModal />
+    </>
+  );
 }
 
 function App() {

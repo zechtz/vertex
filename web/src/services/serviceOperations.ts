@@ -1,5 +1,6 @@
 import { Service } from "@/types";
 
+import { apiFetch } from "@/services/apiFetch";
 export interface ServiceLoadingStates {
   [serviceName: string]: {
     starting?: boolean;
@@ -24,7 +25,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/start`, {
+      const response = await apiFetch(`/api/services/${serviceId}/start`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -51,7 +52,7 @@ export class ServiceOperations {
 
   static async stopService(serviceId: string): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/stop`, {
+      const response = await apiFetch(`/api/services/${serviceId}/stop`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -80,7 +81,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/restart`, {
+      const response = await apiFetch(`/api/services/${serviceId}/restart`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -109,7 +110,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/health`, {
+      const response = await apiFetch(`/api/services/${serviceId}/health`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -138,7 +139,7 @@ export class ServiceOperations {
     service: Service,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/services/${service.id}/install-libraries`,
         {
           method: "POST",
@@ -178,7 +179,7 @@ export class ServiceOperations {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch("/api/services/start-all", {
+      const response = await apiFetch("/api/services/start-all", {
         method: "POST",
         headers,
       });
@@ -215,7 +216,7 @@ export class ServiceOperations {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const response = await fetch("/api/services/stop-all", {
+      const response = await apiFetch("/api/services/stop-all", {
         method: "POST",
         headers,
       });
@@ -243,7 +244,7 @@ export class ServiceOperations {
 
   static async fixLombok(): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch("/api/services/fix-lombok", {
+      const response = await apiFetch("/api/services/fix-lombok", {
         method: "POST",
       });
 
@@ -278,7 +279,7 @@ export class ServiceOperations {
 
   static async syncEnvironment(): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch("/api/environment/sync", {
+      const response = await apiFetch("/api/environment/sync", {
         method: "POST",
       });
 
@@ -308,7 +309,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}`, {
+      const response = await apiFetch(`/api/services/${serviceId}`, {
         method: "DELETE",
       });
       if (!response.ok) {
@@ -335,7 +336,7 @@ export class ServiceOperations {
 
   static async fetchServices(): Promise<Service[]> {
     try {
-      const response = await fetch("/api/services");
+      const response = await apiFetch("/api/services");
       if (!response.ok) {
         throw new Error(
           `Failed to fetch services: ${response.status} ${response.statusText}`,
@@ -358,7 +359,7 @@ export class ServiceOperations {
         throw new Error("No authentication token");
       }
 
-      const response = await fetch(`/api/services/${serviceId}/logs`, {
+      const response = await apiFetch(`/api/services/${serviceId}/logs`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -396,7 +397,7 @@ export class ServiceOperations {
         throw new Error("No authentication token");
       }
 
-      const response = await fetch("/api/services/logs/clear", {
+      const response = await apiFetch("/api/services/logs/clear", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -433,7 +434,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult & { data?: any }> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/wrapper/validate`);
+      const response = await apiFetch(`/api/services/${serviceId}/wrapper/validate`);
       if (!response.ok) {
         throw new Error(
           `Failed to validate wrapper: ${response.status} ${response.statusText}`,
@@ -462,7 +463,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/wrapper/generate`, {
+      const response = await apiFetch(`/api/services/${serviceId}/wrapper/generate`, {
         method: "POST",
       });
       if (!response.ok) {
@@ -490,7 +491,7 @@ export class ServiceOperations {
     serviceId: string,
   ): Promise<ServiceOperationResult> {
     try {
-      const response = await fetch(`/api/services/${serviceId}/wrapper/repair`, {
+      const response = await apiFetch(`/api/services/${serviceId}/wrapper/repair`, {
         method: "POST",
       });
       if (!response.ok) {

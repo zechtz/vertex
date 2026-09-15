@@ -5,6 +5,7 @@ import { useToast, toast } from "@/components/ui/toast";
 import { ServiceOperations } from "@/services/serviceOperations";
 import { useModalManager } from "./useModalManager";
 
+import { apiFetch } from "@/services/apiFetch";
 export function useServiceManagement(onServiceUpdated: () => void) {
   const { activeProfile, removeServiceFromProfile, refreshProfiles } =
     useProfile();
@@ -214,7 +215,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
 
         console.log("Payload to save service:", payload);
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method: method,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -233,7 +234,7 @@ export function useServiceManagement(onServiceUpdated: () => void) {
         // If creating a new service and a profile was selected, add it to the profile
         if (isCreate && profileId && savedService.id) {
           try {
-            const addToProfileResponse = await fetch(
+            const addToProfileResponse = await apiFetch(
               `/api/profiles/${profileId}/services`,
               {
                 method: "POST",
