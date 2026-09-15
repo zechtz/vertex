@@ -113,4 +113,24 @@ export class SystemApi {
 
     return response.json();
   }
+
+  /**
+   * Extend the current session. Requires a still-valid token; an expired one
+   * must go back through login.
+   */
+  static async refreshSession(): Promise<{ token: string; user: unknown }> {
+    // Plain fetch: a failure here means the session is gone, and parking this
+    // request for replay after login would be circular.
+    const token = localStorage.getItem('authToken');
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to refresh session: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
 }
