@@ -6,11 +6,15 @@ import {
   ReactNode,
 } from "react";
 import {
+  declareSessionExpired,
   endSession,
   onSessionExpired,
   resumeSession,
 } from "@/services/apiFetch";
-import { msUntilWarning } from "@/services/sessionExpiry";
+import {
+  SESSION_CHECK_INTERVAL_MS,
+  sessionPhase,
+} from "@/services/sessionExpiry";
 
 interface User {
   id: string;
@@ -144,17 +148,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // failing. This is how the rest of the app hears about it.
   useEffect(() => onSessionExpired(() => setSessionExpired(true)), []);
 
-  // The token states its own expiry, so the warning is scheduled locally rather
-  // than waiting for a request to fail. Rescheduled whenever the token changes,
-  // which is what makes renewal move the warning rather than repeat it.
+  // The token states its own expiry, so the app watches for it locally rather
+  // than waiting for a request to fail.
+  //
+  // Polled rather than scheduled: a timeout set hours ahead does not survive the
+  // machine sleeping. It fires late, after the token has already lapsed, and the
+  // renewal prompt would then be offered for a session that can no longer be
+  // renewed - the refresh endpoint requires a token that is still valid.
   useEffect(() => {
     if (!token) return;
 
-    const delay = msUntilWarning(token);
-    if (delay === null) return;
+    const check = () => {
+      const phase = sessionPhase(token);
 
-    const timer = setTimeout(() => setSessionExpiring(true), delay);
-    return () => clearTimeout(timer);
+      if (phase === "expired") {
+        // Nothing to renew. Hand over to the prompt that can actually recover
+        // the session rather than offering a button that cannot work.
+        setSessionExpiring(false);
+        declareSessionExpired();
+        return;
+      }
+
+      setSessionExpiring(phase === "expiring");
+    };
+
+    check();
+    const timer = setInterval(check, SESSION_CHECK_INTERVAL_MS);
+    return () => clearInterval(timer);
   }, [token]);
 
   const renewSession = (authToken: string) => {
