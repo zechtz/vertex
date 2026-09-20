@@ -331,6 +331,74 @@ export function ServiceConfigModal({
               </Label>
             </div>
 
+            {/* Eureka Configuration Override */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div>
+                <Label className="text-sm font-medium">
+                  Eureka Configuration Override
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Override config-server values via environment variables.
+                  Useful when switching WiFi networks causes stale IP
+                  registrations, or when working offline.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm">
+                    prefer-ip-address
+                  </Label>
+                  <Select
+                    value={
+                      editingService.eurekaPreferIpAddress == null
+                        ? "unset"
+                        : editingService.eurekaPreferIpAddress
+                          ? "true"
+                          : "false"
+                    }
+                    onValueChange={(value) =>
+                      setEditingService({
+                        ...editingService,
+                        eurekaPreferIpAddress:
+                          value === "unset" ? null : value === "true",
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Not set" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unset">
+                        Not set (use config-server)
+                      </SelectItem>
+                      <SelectItem value="false">
+                        false (use hostname)
+                      </SelectItem>
+                      <SelectItem value="true">
+                        true (use IP address)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="eurekaHostname" className="text-sm">
+                    hostname
+                  </Label>
+                  <Input
+                    id="eurekaHostname"
+                    value={editingService.eurekaHostname || ""}
+                    onChange={(e) =>
+                      setEditingService({
+                        ...editingService,
+                        eurekaHostname: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. nest-monitor"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Environment Variables */}
             <div>
               <div className="flex items-center justify-between mb-3">

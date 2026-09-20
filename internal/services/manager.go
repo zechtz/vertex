@@ -472,6 +472,8 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 	service.IsEnabled = serviceConfig.IsEnabled
 	service.BuildSystem = serviceConfig.BuildSystem
 	service.VerboseLogging = serviceConfig.VerboseLogging
+	service.EurekaPreferIPAddress = serviceConfig.EurekaPreferIPAddress
+	service.EurekaHostname = serviceConfig.EurekaHostname
 	service.EnvVars = serviceConfig.EnvVars
 
 	// Save to database

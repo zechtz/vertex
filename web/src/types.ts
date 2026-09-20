@@ -71,6 +71,8 @@ export interface Service {
   isEnabled: boolean;
   buildSystem: string; // "maven", "gradle", or "auto"
   verboseLogging: boolean; // Enable verbose/debug logging for build tools
+  eurekaPreferIpAddress: boolean | null; // null = no override; false/true overrides config-server
+  eurekaHostname: string; // Overrides eureka.instance.hostname
   gitBranch: string; // Current git branch (if service is a git repo)
   gitHasUncommitted: boolean; // Has uncommitted changes
   gitCommitsAhead: number; // Commits ahead of remote
@@ -109,6 +111,8 @@ export interface ServiceConfigRequest {
   isEnabled: boolean;
   buildSystem: string;
   verboseLogging: boolean;
+  eurekaPreferIpAddress: boolean | null;
+  eurekaHostname: string;
   envVars: Record<string, EnvVar>;
 }
 
