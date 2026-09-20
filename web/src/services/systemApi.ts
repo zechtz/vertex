@@ -1,5 +1,16 @@
 import type { BuildInfo, EnvVar, InstalledJdk } from '@/types';
 
+/**
+ * Carries the status so callers can tell a refused session (401 - sign in
+ * again) from a transient failure (retry), which need different handling.
+ */
+export class SessionRefreshError extends Error {
+  constructor(public readonly status: number) {
+    super(`Failed to refresh session: ${status}`);
+    this.name = 'SessionRefreshError';
+  }
+}
+
 import { apiFetch } from "@/services/apiFetch";
 /**
  * System-level API functions
@@ -128,7 +139,7 @@ export class SystemApi {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to refresh session: ${response.status} ${response.statusText}`);
+      throw new SessionRefreshError(response.status);
     }
 
     return response.json();

@@ -1,9 +1,9 @@
 /**
  * Knowing when the session ends, before it does.
  *
- * The token already carries its own expiry, so the app can schedule a warning
- * locally rather than discovering expiry by having a request fail. That makes
- * the reactive recovery in apiFetch a fallback for the case where nobody was
+ * The token already carries its own expiry, so the app can watch for it locally
+ * rather than discovering expiry by having a request fail. That makes the
+ * reactive recovery in apiFetch a fallback for the case where nobody was
  * watching the tab, instead of the normal path.
  */
 
@@ -40,26 +40,34 @@ export function tokenExpiresAt(token: string): Date | null {
 }
 
 /**
- * Milliseconds until the warning should appear, floored at zero so a token
- * already inside the warning window prompts immediately. Null when the token
- * has no expiry to schedule against.
+ * How often to re-examine the token.
+ *
+ * The phase is polled rather than scheduled with a single timeout hours ahead:
+ * a long timeout does not survive the machine sleeping, and fires late - after
+ * expiry - which offered a renewal prompt for a session that had already gone.
  */
-export function msUntilWarning(
-  token: string,
-  now: Date = new Date(),
-): number | null {
-  const expiry = tokenExpiresAt(token);
-  if (!expiry) return null;
+export const SESSION_CHECK_INTERVAL_MS = 30 * 1000;
 
-  return Math.max(0, expiry.getTime() - now.getTime() - EXPIRY_WARNING_LEAD_MS);
-}
+export type SessionPhase = "active" | "expiring" | "expired";
 
 /**
- * Whether the token is already past its expiry.
+ * Where the token stands right now. "expiring" can be renewed with a click;
+ * "expired" cannot, and needs the password prompt instead - the refresh
+ * endpoint requires a still-valid token by design.
+ *
+ * A token carrying no expiry is treated as active: the server is the authority,
+ * and guessing would log people out for no reason.
  */
-export function isTokenExpired(token: string, now: Date = new Date()): boolean {
+export function sessionPhase(
+  token: string,
+  now: Date = new Date(),
+): SessionPhase {
   const expiry = tokenExpiresAt(token);
-  if (!expiry) return false;
+  if (!expiry) return "active";
 
-  return expiry.getTime() <= now.getTime();
+  const remaining = expiry.getTime() - now.getTime();
+  if (remaining <= 0) return "expired";
+  if (remaining <= EXPIRY_WARNING_LEAD_MS) return "expiring";
+
+  return "active";
 }
