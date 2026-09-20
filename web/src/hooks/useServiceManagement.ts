@@ -43,6 +43,8 @@ export function useServiceManagement(onServiceUpdated: () => void) {
       isEnabled: true,
       buildSystem: "auto",
       verboseLogging: false,
+      eurekaPreferIpAddress: null,
+      eurekaHostname: "",
       gitBranch: "",
       gitHasUncommitted: false,
       gitCommitsAhead: 0,
@@ -209,6 +211,8 @@ export function useServiceManagement(onServiceUpdated: () => void) {
           isEnabled: service.isEnabled,
           buildSystem: service.buildSystem || "auto",
           verboseLogging: service.verboseLogging || false,
+          eurekaPreferIpAddress: service.eurekaPreferIpAddress ?? null,
+          eurekaHostname: service.eurekaHostname || "",
           envVars: service.envVars || {},
           startupDelay: service.startupDelay || 0,
         };

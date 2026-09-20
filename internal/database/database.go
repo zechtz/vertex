@@ -363,6 +363,11 @@ func (db *Database) initTables() error {
 		return fmt.Errorf("failed to add verbose_logging column: %w", err)
 	}
 
+	// Add eureka override columns for per-service registration overrides
+	if err := db.migrateAddEurekaColumns(); err != nil {
+		return fmt.Errorf("failed to add eureka columns: %w", err)
+	}
+
 	return nil
 }
 
@@ -984,5 +989,32 @@ func (db *Database) migrateAddVerboseLoggingColumn() error {
 	}
 
 	log.Println("[INFO] Successfully added 'verbose_logging' column to services table")
+	return nil
+}
+
+// migrateAddEurekaColumns adds the eureka override columns to the services
+// table. Both are nullable with no default: NULL means "no override", which is
+// what every existing row should mean after the upgrade.
+func (db *Database) migrateAddEurekaColumns() error {
+	var tableSQL string
+	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='services'").Scan(&tableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to query services table schema: %w", err)
+	}
+
+	if !strings.Contains(tableSQL, "eureka_prefer_ip_address") {
+		log.Println("[INFO] Adding 'eureka_prefer_ip_address' column to services table")
+		if _, err := db.Exec(`ALTER TABLE services ADD COLUMN eureka_prefer_ip_address BOOLEAN`); err != nil {
+			return fmt.Errorf("failed to add eureka_prefer_ip_address column: %w", err)
+		}
+	}
+
+	if !strings.Contains(tableSQL, "eureka_hostname") {
+		log.Println("[INFO] Adding 'eureka_hostname' column to services table")
+		if _, err := db.Exec(`ALTER TABLE services ADD COLUMN eureka_hostname TEXT`); err != nil {
+			return fmt.Errorf("failed to add eureka_hostname column: %w", err)
+		}
+	}
+
 	return nil
 }

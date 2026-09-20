@@ -37,8 +37,8 @@ type Service struct {
 	// Eureka instance overrides injected as environment variables at startup.
 	// Both are unset by default, leaving registration to the service's own
 	// configuration; see the injection in operations.go startService.
-	EurekaPreferIPAddress *bool               `json:"eurekaPreferIpAddress,omitempty"` // nil = do not override
-	EurekaHostname        string              `json:"eurekaHostname,omitempty"`        // "" = do not override
+	EurekaPreferIPAddress *bool               `json:"eurekaPreferIpAddress"` // nil = do not override
+	EurekaHostname        string              `json:"eurekaHostname"`        // "" = do not override
 	EnvVars               map[string]EnvVar   `json:"envVars"`
 	Cmd                   *exec.Cmd           `json:"-"`
 	Logs                  []LogEntry          `json:"logs"`

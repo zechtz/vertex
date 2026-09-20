@@ -90,6 +90,15 @@ export async function apiFetch(
 }
 
 /**
+ * Declare the session over without waiting for a request to fail - used when the
+ * token's own expiry has passed, or when renewing it was refused. Routes through
+ * the same signal as a 401 so there is one way the app learns this.
+ */
+export function declareSessionExpired(): void {
+  signalExpired();
+}
+
+/**
  * Called once the user has logged back in. Replays everything that was parked.
  */
 export function resumeSession(): void {

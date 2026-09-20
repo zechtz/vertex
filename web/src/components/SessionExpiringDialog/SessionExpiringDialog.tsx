@@ -2,14 +2,16 @@ import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { SystemApi } from "@/services/systemApi";
+import { SystemApi, SessionRefreshError } from "@/services/systemApi";
+import { declareSessionExpired } from "@/services/apiFetch";
 import { tokenExpiresAt } from "@/services/sessionExpiry";
 
 function formatRemaining(ms: number): string {
-  if (ms <= 0) return "less than a minute";
-
-  const minutes = Math.ceil(ms / 60000);
-  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  // An expired session is handled elsewhere and never reaches this dialog, so
+  // there is no wording here for it: saying "less than a minute" about a token
+  // that had already lapsed is what made a dead session look renewable.
+  const minutes = Math.max(1, Math.ceil(ms / 60000));
+  return minutes === 1 ? "less than a minute" : `${minutes} minutes`;
 }
 
 /**
@@ -51,8 +53,16 @@ export function SessionExpiringDialog() {
     try {
       const auth = await SystemApi.refreshSession();
       renewSession(auth.token);
-    } catch {
-      setError("Could not extend the session. You may need to sign in again.");
+    } catch (err) {
+      if (err instanceof SessionRefreshError && err.status === 401) {
+        // The session went while this was open. Hand over to the prompt that
+        // can recover it, rather than leaving an error the user cannot act on.
+        dismissExpiryWarning();
+        declareSessionExpired();
+        return;
+      }
+
+      setError("Could not reach the server. Try again in a moment.");
     } finally {
       setRenewing(false);
     }
