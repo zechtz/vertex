@@ -90,9 +90,11 @@ export function AutoDiscoveryModal({
       setHasScanned(true);
     } catch (error) {
       console.error("Failed to scan for services:", error);
-      alert(
-        "Failed to scan for services: " +
-          (error instanceof Error ? error.message : "Unknown error"),
+      addToast(
+        toast.error(
+          "Failed to scan for services",
+          error instanceof Error ? error.message : "Unknown error",
+        ),
       );
     } finally {
       setIsScanning(false);
