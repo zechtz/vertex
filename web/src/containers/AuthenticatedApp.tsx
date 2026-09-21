@@ -51,6 +51,7 @@ export function AuthenticatedApp() {
         onLogout={logout}
         onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         isSidebarCollapsed={isSidebarCollapsed}
+        isRealtimeConnected={servicesData.isRealtimeConnected}
       />
 
       {/* Sidebar */}
