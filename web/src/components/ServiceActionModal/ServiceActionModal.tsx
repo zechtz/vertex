@@ -1,5 +1,6 @@
-import { AlertTriangle, X, Trash2, UserMinus, Info } from "lucide-react";
+import { AlertTriangle, Trash2, UserMinus, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/Modal";
 import { Service, ServiceProfile } from "@/types";
 
 interface ServiceActionModalProps {
@@ -19,7 +20,7 @@ export function ServiceActionModal({
   onRemoveFromProfile,
   onDeleteGlobally,
 }: ServiceActionModalProps) {
-  if (!isOpen || !service) return null;
+  if (!service) return null;
 
   const handleRemoveFromProfile = async () => {
     await onRemoveFromProfile(service.id);
@@ -32,21 +33,18 @@ export function ServiceActionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-6 w-6 text-orange-600" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              Service Action
-            </h2>
-          </div>
-          <Button variant="ghost" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="md"
+      title={
+        <span className="flex items-center gap-3">
+          <AlertTriangle className="h-6 w-6 text-orange-600" />
+          Service Action
+        </span>
+      }
+    >
+      <>
         {/* Content */}
         <div className="p-6">
           <div className="mb-6">
@@ -134,7 +132,7 @@ export function ServiceActionModal({
             </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }
