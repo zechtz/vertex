@@ -379,8 +379,11 @@ export function CreateProfileModal({
                       onClick={() => {
                         // This would open the auto-discovery modal
                         // We'll implement this functionality
-                        alert(
-                          "Auto-discovery feature: Coming soon! This will scan your workspace for Maven/Gradle projects.",
+                        addToast(
+                          toast.info(
+                            "Auto-discovery is coming soon",
+                            "It will scan your workspace for Maven and Gradle projects.",
+                          ),
                         );
                       }}
                       className="flex items-center gap-2"
@@ -394,8 +397,11 @@ export function CreateProfileModal({
                       size="sm"
                       onClick={() => {
                         // This would open the service creation modal
-                        alert(
-                          "Custom service creation: Available through the main services interface after creating the profile.",
+                        addToast(
+                          toast.info(
+                            "Create services from the services page",
+                            "Custom services can be added there once this profile exists.",
+                          ),
                         );
                       }}
                       className="flex items-center gap-2"

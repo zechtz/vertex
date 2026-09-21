@@ -1,10 +1,35 @@
-import { useState, useEffect, useCallback } from "react";
-import { Service, Configuration } from "@/types";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Service, Configuration, LogEntry } from "@/types";
 import { ServiceOperations } from "@/services/serviceOperations";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useToast, toast } from "@/components/ui/toast";
 
 import { apiFetch } from "@/services/apiFetch";
+
+/**
+ * The realtime socket is the only thing telling the dashboard a service
+ * started, stopped or died. When it drops - a sleep, a server restart, a
+ * network blip - the UI keeps rendering the last states it heard, which look
+ * exactly like current ones. So the socket reconnects on its own, and says
+ * out loud when it is not connected.
+ */
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 30 * 1000;
+
+/**
+ * Log lines kept per service. Logs stream in for as long as the tab is open,
+ * so without a ceiling a chatty service grows this array until the tab slows
+ * down. The oldest lines go first - the tail is what anyone is reading.
+ */
+const MAX_LOG_ENTRIES = 1000;
+
+function appendLogEntry(logs: LogEntry[], entry: LogEntry): LogEntry[] {
+  const next = [...logs, entry];
+  return next.length > MAX_LOG_ENTRIES
+    ? next.slice(next.length - MAX_LOG_ENTRIES)
+    : next;
+}
+
 export function useServices() {
   const { activeProfile } = useProfile();
   const { addToast } = useToast();
@@ -17,6 +42,10 @@ export function useServices() {
   );
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Optimistic: the socket opens within milliseconds of mount, and starting
+  // at false makes every page load flash the reconnecting pill. A connection
+  // that genuinely fails closes right away, which corrects this.
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(true);
 
   const fetchServices = useCallback(async () => {
     try {
@@ -130,48 +159,109 @@ export function useServices() {
     }
   }, [activeProfile, allConfigurations, filterConfigurationsByProfile]);
 
-  // WebSocket handling
   useEffect(() => {
     fetchServices();
     fetchConfigurations();
+  }, [fetchServices, fetchConfigurations]);
 
-    // WebSocket connection for real-time updates
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+  // Reached from inside the socket, which is mounted once and so cannot close
+  // over a callback that changes with the active profile.
+  const fetchServicesRef = useRef(fetchServices);
+  useEffect(() => {
+    fetchServicesRef.current = fetchServices;
+  }, [fetchServices]);
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
+  // Realtime updates. Mounted once for the life of the hook: reconnecting is
+  // handled here rather than by re-running the effect, so selecting a service
+  // or switching profile no longer tears the connection down and rebuilds it.
+  useEffect(() => {
+    let socket: WebSocket | null = null;
+    let retryTimer: number | undefined;
+    let attempt = 0;
+    let unmounted = false;
+
+    const handleMessage = (raw: string) => {
+      let message: { type?: string; payload?: any };
+
+      try {
+        message = JSON.parse(raw);
+      } catch {
+        // One unreadable frame is not a reason to lose the stream.
+        console.error("Ignoring unreadable realtime message");
+        return;
+      }
 
       if (message.type === "service_update") {
         const updatedService: Service = message.payload;
+
         setServices((prev) =>
           prev.map((service) =>
             service.id === updatedService.id ? updatedService : service,
           ),
         );
-
-        if (selectedService && selectedService.id === updatedService.id) {
-          setSelectedService(updatedService);
-        }
+        setSelectedService((prev) =>
+          prev && prev.id === updatedService.id ? updatedService : prev,
+        );
       } else if (message.type === "log_entry") {
         const { serviceId, logEntry } = message.payload;
+
         setServices((prev) =>
           prev.map((service) =>
             service.id === serviceId
-              ? { ...service, logs: [...service.logs, logEntry] }
+              ? { ...service, logs: appendLogEntry(service.logs, logEntry) }
               : service,
           ),
         );
-        if (selectedService && selectedService.id === serviceId) {
-          setSelectedService((prev) =>
-            prev ? { ...prev, logs: [...prev.logs, logEntry] } : null,
-          );
-        }
+        setSelectedService((prev) =>
+          prev && prev.id === serviceId
+            ? { ...prev, logs: appendLogEntry(prev.logs, logEntry) }
+            : prev,
+        );
       }
     };
 
-    return () => ws.close();
-  }, [selectedService, fetchServices, fetchConfigurations]);
+    const connect = () => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+      socket.onopen = () => {
+        setIsRealtimeConnected(true);
+
+        // Whatever happened while the socket was down was never delivered, so
+        // what is on screen is stale. Reconnecting is only half the recovery.
+        if (attempt > 0) fetchServicesRef.current();
+        attempt = 0;
+      };
+
+      socket.onmessage = (event) => handleMessage(event.data);
+
+      // An error is always followed by a close, so the retry lives there only.
+      socket.onerror = () => socket?.close();
+
+      socket.onclose = () => {
+        if (unmounted) return;
+
+        setIsRealtimeConnected(false);
+
+        // Backoff, capped: a server that is down should not be hammered, but a
+        // machine waking from sleep should be back within a second or two.
+        const delay = Math.min(
+          RECONNECT_BASE_DELAY_MS * 2 ** attempt,
+          RECONNECT_MAX_DELAY_MS,
+        );
+        attempt += 1;
+        retryTimer = window.setTimeout(connect, delay);
+      };
+    };
+
+    connect();
+
+    return () => {
+      unmounted = true;
+      window.clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, []);
   return {
     // State
     services,
@@ -180,6 +270,7 @@ export function useServices() {
     allConfigurations,
     selectedService,
     isLoading,
+    isRealtimeConnected,
 
     // Actions
     setSelectedService,

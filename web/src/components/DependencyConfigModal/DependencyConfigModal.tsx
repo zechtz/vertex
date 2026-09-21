@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useToast, toast } from "@/components/ui/toast";
 import { Service } from "@/types";
 
 interface ServiceDependency {
@@ -39,6 +40,7 @@ export function DependencyConfigModal({
   onClose,
   services,
 }: DependencyConfigModalProps) {
+  const { addToast } = useToast();
   const [config, setConfig] = useState<DependencyConfig>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -211,9 +213,11 @@ export function DependencyConfigModal({
       onClose();
     } catch (error) {
       console.error("Failed to save dependencies:", error);
-      alert(
-        "Failed to save dependencies: " +
-          (error instanceof Error ? error.message : "Unknown error"),
+      addToast(
+        toast.error(
+          "Failed to save dependencies",
+          error instanceof Error ? error.message : "Unknown error",
+        ),
       );
     } finally {
       setIsSaving(false);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Save, User, Bell, Globe, Monitor, RefreshCw } from 'lucide-react';
+import { Save, User, Bell, Globe, Monitor, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Modal } from "@/components/ui/Modal";
 import { Input } from '@/components/ui/input';
 import { useProfile } from '@/contexts/ProfileContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -117,25 +118,19 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
     }));
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <User className="h-6 w-6 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              User Profile & Settings
-            </h2>
-          </div>
-          <Button variant="ghost" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Form */}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="2xl"
+      title={
+        <span className="flex items-center gap-3">
+          <User className="h-6 w-6 text-blue-600" />
+          User Profile &amp; Settings
+        </span>
+      }
+    >
+      {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Basic Information */}
@@ -350,7 +345,6 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

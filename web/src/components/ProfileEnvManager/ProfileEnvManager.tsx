@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProfile } from '@/contexts/ProfileContext';
 import { useToast, toast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ServiceProfile } from '@/types';
 
 interface ProfileEnvManagerProps {
@@ -32,6 +33,7 @@ interface EnvVar {
 export function ProfileEnvManager({ isOpen, onClose, profile }: ProfileEnvManagerProps) {
   const { getProfileEnvVars, setProfileEnvVar, deleteProfileEnvVar } = useProfile();
   const { addToast } = useToast();
+  const { showConfirm } = useConfirm();
   
   const [envVars, setEnvVars] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -156,9 +158,13 @@ export function ProfileEnvManager({ isOpen, onClose, profile }: ProfileEnvManage
   const handleDeleteVar = async (name: string) => {
     if (!profile) return;
 
-    if (!confirm(`Are you sure you want to delete the environment variable "${name}"?`)) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: "Delete environment variable",
+      description: `Are you sure you want to delete the environment variable "${name}"?`,
+      confirmText: "Delete",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
 
     try {
       await deleteProfileEnvVar(profile.id, name);

@@ -10,6 +10,7 @@ import {
   Activity,
   Shield,
   Clock,
+  WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,12 @@ interface ToolbarProps {
   onLogout: () => void;
   onToggleSidebar: () => void;
   isSidebarCollapsed: boolean;
+  /**
+   * Whether the realtime feed is live. When it is not, service states on
+   * screen are the last ones received and may be out of date - which is
+   * indistinguishable from current unless it is said.
+   */
+  isRealtimeConnected: boolean;
 }
 
 export function Toolbar({
@@ -36,6 +43,7 @@ export function Toolbar({
   onLogout,
   onToggleSidebar,
   isSidebarCollapsed,
+  isRealtimeConnected,
 }: ToolbarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -127,6 +135,17 @@ export function Toolbar({
 
         {/* Right Section */}
         <div className="flex items-center gap-3">
+          {/* Shown only while the feed is down - a permanent "connected" light
+              is noise, but silence while disconnected is misinformation. */}
+          <div role="status" aria-live="polite">
+            {!isRealtimeConnected && (
+              <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                <WifiOff className="h-3.5 w-3.5" />
+                Reconnecting&hellip;
+              </span>
+            )}
+          </div>
+
           {/* Profile Switcher */}
           <ProfileSwitcher />
 

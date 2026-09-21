@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useToast, toast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ServiceProfile } from "@/types";
 import { CreateProfileModal } from "./CreateProfileModal";
 import { EditProfileModal } from "./EditProfileModal";
@@ -45,6 +46,7 @@ export function ProfileManagement({
     activateProfile,
   } = useProfile();
   const { addToast } = useToast();
+  const { showConfirm } = useConfirm();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -72,20 +74,25 @@ export function ProfileManagement({
   };
 
   const handleDeleteProfile = async (profileId: string) => {
-    if (
-      window.confirm(
+    const confirmed = await showConfirm({
+      title: "Delete profile",
+      description:
         "Are you sure you want to delete this profile? This action cannot be undone.",
-      )
-    ) {
-      try {
-        setDeletingProfile(profileId);
-        await deleteProfile(profileId);
-      } catch (error) {
-        console.error("Failed to delete profile:", error);
-        alert("Failed to delete profile. Please try again.");
-      } finally {
-        setDeletingProfile(null);
-      }
+      confirmText: "Delete profile",
+      variant: "destructive",
+    });
+    if (!confirmed) return;
+
+    try {
+      setDeletingProfile(profileId);
+      await deleteProfile(profileId);
+    } catch (error) {
+      console.error("Failed to delete profile:", error);
+      addToast(
+        toast.error("Failed to delete profile", "Please try again."),
+      );
+    } finally {
+      setDeletingProfile(null);
     }
   };
 
