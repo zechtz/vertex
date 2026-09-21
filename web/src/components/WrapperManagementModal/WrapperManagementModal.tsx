@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wrench, Package, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { Wrench, Package, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Modal } from "@/components/ui/Modal";
 import { JavaHomeErrorDisplay } from './JavaHomeErrorDisplay';
 
 interface WrapperValidation {
@@ -147,32 +148,24 @@ const WrapperManagementModal: React.FC<WrapperManagementModalProps> = ({
     );
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <Package className="w-6 h-6 text-blue-500" />
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                Wrapper Management
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Manage build wrapper for {serviceName}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="2xl"
+      title={
+        <span className="flex items-center gap-3">
+          <Package className="w-6 h-6 text-blue-500" />
+          <span>
+            Wrapper Management
+            <span className="block text-sm font-normal text-gray-600 dark:text-gray-400">
+              Manage build wrapper for {serviceName}
+            </span>
+          </span>
+        </span>
+      }
+    >
+      <>
         {/* Content */}
         <div className="p-6 space-y-6">
           {loading ? (
@@ -267,8 +260,8 @@ const WrapperManagementModal: React.FC<WrapperManagementModalProps> = ({
             Close
           </Button>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 };
 
