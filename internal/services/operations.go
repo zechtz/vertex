@@ -502,6 +502,7 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	service.LastStarted = time.Now()
 	service.PID = cmd.Process.Pid
 	service.Cmd = cmd
+	service.DebugListenPort = activeDebugPort(service)
 	service.Uptime = ""
 	service.Logs = []models.LogEntry{}
 	// Each run is diagnosed from its own output
@@ -756,6 +757,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	service.HealthStatus = "starting"
 	service.PID = cmd.Process.Pid
 	service.Cmd = cmd
+	service.DebugListenPort = activeDebugPort(service)
 	service.LastStarted = time.Now()
 	service.Logs = []models.LogEntry{}
 	// Each run is diagnosed from its own output

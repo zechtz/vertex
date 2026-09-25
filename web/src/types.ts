@@ -73,6 +73,9 @@ export interface Service {
   verboseLogging: boolean; // Enable verbose/debug logging for build tools
   eurekaPreferIpAddress: boolean | null; // null = no override; false/true overrides config-server
   eurekaHostname: string; // Overrides eureka.instance.hostname
+  debugEnabled: boolean; // Open a JDWP debugger port at the next start
+  debugPort: number; // 0 = assigned when debugging is first enabled
+  debugListenPort: number; // Port the running JVM opened for a debugger; 0 = none
   gitBranch: string; // Current git branch (if service is a git repo)
   gitHasUncommitted: boolean; // Has uncommitted changes
   gitCommitsAhead: number; // Commits ahead of remote
@@ -113,6 +116,8 @@ export interface ServiceConfigRequest {
   verboseLogging: boolean;
   eurekaPreferIpAddress: boolean | null;
   eurekaHostname: string;
+  debugEnabled: boolean;
+  debugPort: number;
   envVars: Record<string, EnvVar>;
 }
 

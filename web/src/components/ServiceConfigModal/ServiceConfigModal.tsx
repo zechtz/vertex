@@ -331,6 +331,49 @@ export function ServiceConfigModal({
               </Label>
             </div>
 
+            {/* Debugging */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="debugEnabled"
+                  checked={editingService.debugEnabled || false}
+                  onCheckedChange={(checked) =>
+                    setEditingService({
+                      ...editingService,
+                      debugEnabled: checked === true,
+                    })
+                  }
+                />
+                <Label htmlFor="debugEnabled" className="text-sm font-medium">
+                  Allow a debugger to attach
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Opens a debug port on localhost when the service starts. Attach
+                with a Remote JVM Debug configuration in IntelliJ, nvim-dap, or{" "}
+                <code>jdb -attach</code>. Takes effect at the next start.
+              </p>
+              <div className="max-w-[12rem]">
+                <Label htmlFor="debugPort" className="text-sm">
+                  Debug port
+                </Label>
+                <Input
+                  id="debugPort"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={editingService.debugPort || ""}
+                  onChange={(e) =>
+                    setEditingService({
+                      ...editingService,
+                      debugPort: parseInt(e.target.value, 10) || 0,
+                    })
+                  }
+                  placeholder="Assigned automatically"
+                />
+              </div>
+            </div>
+
             {/* Eureka Configuration Override */}
             <div className="border rounded-lg p-4 space-y-3">
               <div>

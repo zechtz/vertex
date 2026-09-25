@@ -29,6 +29,7 @@ import { useState, useRef, useEffect } from "react";
 import { GitBranchSwitcher } from "@/components/GitBranchSwitcher/GitBranchSwitcher";
 import { GitStatusBadge } from "@/components/GitStatusBadge/GitStatusBadge";
 import { JdkPicker } from "@/components/JdkPicker/JdkPicker";
+import { DebugPortBadge } from "./DebugPortBadge";
 
 /**
  * Failure codes that pinning the service to a different JDK resolves. Other
@@ -240,6 +241,12 @@ export function ServiceCard({
                   >
                     {getStatusText()}
                   </span>
+                  {/* On the status line rather than beside the name: it is
+                      runtime state, and the title row has no room to spare. */}
+                  {service.status === "running" &&
+                    service.debugListenPort > 0 && (
+                      <DebugPortBadge port={service.debugListenPort} />
+                    )}
                 </div>
 
                 {service.description && (

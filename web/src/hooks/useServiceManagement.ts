@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { Service } from "@/types";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useToast, toast } from "@/components/ui/toast";
 import { ServiceOperations } from "@/services/serviceOperations";
 import { useModalManager } from "./useModalManager";
+import { RestartToApplyButton } from "@/components/ServiceConfigModal/RestartToApplyButton";
 
 import { apiFetch } from "@/services/apiFetch";
 export function useServiceManagement(onServiceUpdated: () => void) {
@@ -45,6 +46,9 @@ export function useServiceManagement(onServiceUpdated: () => void) {
       verboseLogging: false,
       eurekaPreferIpAddress: null,
       eurekaHostname: "",
+      debugEnabled: false,
+      debugPort: 0,
+      debugListenPort: 0,
       gitBranch: "",
       gitHasUncommitted: false,
       gitCommitsAhead: 0,
@@ -213,6 +217,8 @@ export function useServiceManagement(onServiceUpdated: () => void) {
           verboseLogging: service.verboseLogging || false,
           eurekaPreferIpAddress: service.eurekaPreferIpAddress ?? null,
           eurekaHostname: service.eurekaHostname || "",
+          debugEnabled: service.debugEnabled || false,
+          debugPort: service.debugPort || 0,
           envVars: service.envVars || {},
           startupDelay: service.startupDelay || 0,
         };
@@ -226,8 +232,12 @@ export function useServiceManagement(onServiceUpdated: () => void) {
         });
 
         if (!response.ok) {
+          // The server explains validation failures, such as a debug port
+          // already taken, in the body; the status line alone says nothing.
+          const reason = (await response.text()).trim();
           throw new Error(
-            `Failed to ${isCreate ? "create" : "save"} service: ${response.status} ${response.statusText}`,
+            reason ||
+              `Failed to ${isCreate ? "create" : "save"} service: ${response.status} ${response.statusText}`,
           );
         }
 
@@ -262,6 +272,37 @@ export function useServiceManagement(onServiceUpdated: () => void) {
             `${service.name} has been ${isCreate ? "created" : "updated"} successfully${profileId && isCreate ? " and added to profile" : ""}`,
           ),
         );
+
+        // Debug settings apply at the next start, so a running service keeps
+        // its old ones until it restarts. Offer that rather than doing it
+        // unasked: restarting drops whatever the service was in the middle of.
+        const original = modalManager.getModalData<Service>("serviceConfig");
+        const debugChanged =
+          original !== undefined &&
+          (original.debugEnabled !== service.debugEnabled ||
+            original.debugPort !== service.debugPort);
+        if (!isCreate && original?.status === "running" && debugChanged) {
+          addToast({
+            ...toast.info(
+              "Restart to apply debugging",
+              `${service.name} keeps its current debug setting until it restarts.`,
+            ),
+            duration: 10000,
+            action: React.createElement(RestartToApplyButton, {
+              onRestart: async () => {
+                const result = await ServiceOperations.restartService(
+                  service.id,
+                );
+                if (!result.success) {
+                  addToast(
+                    toast.error("Failed to restart service", result.error!),
+                  );
+                }
+              },
+            }),
+          });
+        }
+
         // Refresh both services and profile data
         await Promise.all([onServiceUpdated(), refreshProfiles()]);
         modalManager.closeModal("serviceConfig");
