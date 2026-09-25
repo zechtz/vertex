@@ -148,23 +148,31 @@ func ensureBootRunInitScript() (string, error) {
 	return path, nil
 }
 
-// GetStartCommand returns the appropriate start command for the service
-func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv string, verboseLogging bool) (string, error) {
+// GetStartCommand returns the appropriate start command for the service. A
+// non-zero debugPort opens a debugger port on the application's JVM; see
+// debugAgentArg.
+func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv string, verboseLogging bool, debugPort int) (string, error) {
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, buildSystem)
 	commands := GetBuildSystemCommands(effectiveBuildSystem)
 
+	// The debug agent goes to the application's JVM only. MAVEN_OPTS and
+	// GRADLE_OPTS below also receive javaOpts, and an agent there would open
+	// the port in the build tool's JVM first, leaving the application to fail
+	// with the port already taken.
+	appJVMArgs := strings.TrimSpace(javaOpts + " " + debugAgentArg(debugPort))
+
 	var baseCommand string
-	if javaOpts != "" {
+	if appJVMArgs != "" {
 		baseCommand = commands.StartWithOpts
 		if effectiveBuildSystem == BuildSystemMaven {
-			baseCommand = strings.Replace(baseCommand, "%s", javaOpts, 1)
+			baseCommand = strings.Replace(baseCommand, "%s", appJVMArgs, 1)
 		} else if effectiveBuildSystem == BuildSystemGradle {
 			initScript, err := ensureBootRunInitScript()
 			if err != nil {
 				return "", err
 			}
 			baseCommand = strings.Replace(commands.Start, "bootRun",
-				"-I \""+initScript+"\" bootRun -P"+bootRunJVMArgsProperty+"=\""+javaOpts+"\"", 1)
+				"-I \""+initScript+"\" bootRun -P"+bootRunJVMArgsProperty+"=\""+appJVMArgs+"\"", 1)
 		}
 	} else {
 		baseCommand = commands.Start

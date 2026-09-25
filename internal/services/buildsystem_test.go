@@ -22,7 +22,7 @@ func useTempCacheDir(t *testing.T) {
 func TestGradleStartCommandPassesJavaOptsAsJVMArgs(t *testing.T) {
 	useTempCacheDir(t)
 
-	cmd, err := GetStartCommand(t.TempDir(), "gradle", "-Xmx512m -Dfoo=bar", "", false)
+	cmd, err := GetStartCommand(t.TempDir(), "gradle", "-Xmx512m -Dfoo=bar", "", false, 0)
 	if err != nil {
 		t.Fatalf("GetStartCommand: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestGradleStartCommandWithoutJavaOptsIsUnchanged(t *testing.T) {
 	useTempCacheDir(t)
 
 	dir := t.TempDir()
-	cmd, err := GetStartCommand(dir, "gradle", "", "", false)
+	cmd, err := GetStartCommand(dir, "gradle", "", "", false, 0)
 	if err != nil {
 		t.Fatalf("GetStartCommand: %v", err)
 	}

@@ -361,7 +361,7 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	}
 
 	// Get start command
-	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging)
+	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging, activeDebugPort(service))
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
@@ -372,6 +372,10 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 		if err := CleanupPortBeforeStart(service.Port); err != nil {
 			log.Printf("[WARN] Port cleanup failed for service %s: %v", service.Name, err)
 		}
+	}
+
+	if err := ensureDebugPortFree(service); err != nil {
+		return err
 	}
 
 	cmd := exec.Command("bash", "-c", cmdString)
@@ -600,7 +604,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	}
 
 	// Get the start command for the detected build system
-	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging)
+	cmdString, err := GetStartCommand(serviceDir, string(effectiveBuildSystem), service.JavaOpts, service.ExtraEnv, service.VerboseLogging, activeDebugPort(service))
 	if err != nil {
 		return fmt.Errorf("failed to construct start command: %w", err)
 	}
@@ -612,6 +616,10 @@ func (sm *Manager) startService(service *models.Service) error {
 			log.Printf("[WARN] Port cleanup failed for service %s: %v", service.Name, err)
 			// Continue anyway - the service might still be able to start
 		}
+	}
+
+	if err := ensureDebugPortFree(service); err != nil {
+		return err
 	}
 
 	log.Printf("[INFO] Starting service %s with command: %s", service.Name, cmdString)

@@ -43,6 +43,11 @@ func TestClassifyFailure(t *testing.T) {
 			want: "port_in_use",
 		},
 		{
+			name: "debug port conflict",
+			line: "ERROR: transport error 202: bind failed: Address already in use",
+			want: "debug_port_in_use",
+		},
+		{
 			name: "plain build failure",
 			line: "\x1b[1;31mBUILD FAILURE\x1b[m",
 			want: "build_failure",

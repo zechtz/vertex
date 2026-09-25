@@ -461,6 +461,11 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 		}
 	}
 
+	debugPort, err := sm.resolveDebugPort(service.ID, serviceConfig.DebugEnabled, serviceConfig.DebugPort, serviceConfig.Port)
+	if err != nil {
+		return err
+	}
+
 	// Update service fields
 	service.Name = serviceConfig.Name
 	service.Dir = serviceConfig.Dir
@@ -474,6 +479,8 @@ func (sm *Manager) UpdateService(serviceConfig *models.ServiceConfigRequest) err
 	service.VerboseLogging = serviceConfig.VerboseLogging
 	service.EurekaPreferIPAddress = serviceConfig.EurekaPreferIPAddress
 	service.EurekaHostname = serviceConfig.EurekaHostname
+	service.DebugEnabled = serviceConfig.DebugEnabled
+	service.DebugPort = debugPort
 	service.EnvVars = serviceConfig.EnvVars
 
 	// Save to database
@@ -705,6 +712,12 @@ func (sm *Manager) AddService(service *models.Service) error {
 	if err := sm.ValidateServiceUniqueness(service.ID, service.Dir); err != nil {
 		return err
 	}
+
+	debugPort, err := sm.resolveDebugPort(service.ID, service.DebugEnabled, service.DebugPort, service.Port)
+	if err != nil {
+		return err
+	}
+	service.DebugPort = debugPort
 
 	// Initialize service fields if not set
 	if service.EnvVars == nil {

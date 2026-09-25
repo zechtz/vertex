@@ -53,6 +53,12 @@ type Service struct {
 	Dependencies          []ServiceDependency `json:"dependencies"`
 	DependentOn           []string            `json:"dependentOn"`  // Services that depend on this one
 	StartupDelay          time.Duration       `json:"startupDelay"` // Delay before starting after dependencies
+
+	// Debugging opens a JDWP port on localhost for an IDE or jdb to attach to.
+	// DebugPort is kept while debugging is off, so a saved attach configuration
+	// keeps working when it is turned back on; see debug.go.
+	DebugEnabled bool `json:"debugEnabled"`
+	DebugPort    int  `json:"debugPort"` // 0 = not yet assigned
 }
 
 // FailureReason is a classified explanation of why a service failed to start,
