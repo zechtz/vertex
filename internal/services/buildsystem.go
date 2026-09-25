@@ -40,12 +40,13 @@ func GetBuildSystemCommands(buildSystem BuildSystemType) BuildSystemCommands {
 			Package:       "./mvnw package",
 		}
 	case BuildSystemGradle:
+		// No StartWithOpts: the Maven-style jvmArguments property means nothing
+		// to bootRun. Gradle JVM options go through bootRunInitScript instead.
 		return BuildSystemCommands{
-			Start:         "./gradlew bootRun",
-			StartWithOpts: "./gradlew bootRun -Dspring-boot.run.jvmArguments=\"%s\"",
-			Clean:         "./gradlew clean",
-			Test:          "./gradlew test",
-			Package:       "./gradlew build",
+			Start:   "./gradlew bootRun",
+			Clean:   "./gradlew clean",
+			Test:    "./gradlew test",
+			Package: "./gradlew build",
 		}
 	default:
 		// For auto detection, we'll detect at runtime
@@ -106,6 +107,47 @@ func HasGradleWrapper(serviceDir string) bool {
 	return false
 }
 
+// bootRunJVMArgsProperty is the Gradle project property that carries JVM
+// options to the application started by bootRun.
+const bootRunJVMArgsProperty = "vertexAppJvmArgs"
+
+// bootRunInitScript hands JVM options to the bootRun task. Gradle has no
+// command-line flag for a JavaExec task's JVM arguments: --args sets the
+// program's arguments, and GRADLE_OPTS reaches only Gradle's own JVM. An init
+// script configures the task from outside, so the service's build files stay
+// untouched.
+const bootRunInitScript = `// Written by Vertex; rewritten on every start.
+allprojects {
+    tasks.matching { it.name == 'bootRun' }.configureEach {
+        def jvmArgsProperty = project.findProperty('` + bootRunJVMArgsProperty + `')
+        if (jvmArgsProperty) {
+            jvmArgs(jvmArgsProperty.toString().tokenize(' '))
+        }
+    }
+}
+`
+
+// ensureBootRunInitScript writes bootRunInitScript and returns its path. It
+// lives in the user's cache directory rather than a shared temp directory:
+// Gradle executes whatever is at this path, so no other user may write it.
+func ensureBootRunInitScript() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to locate cache directory for Gradle init script: %w", err)
+	}
+
+	dir := filepath.Join(cacheDir, "vertex", "gradle")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("failed to create Gradle init script directory: %w", err)
+	}
+
+	path := filepath.Join(dir, "bootrun-jvm-args.gradle")
+	if err := os.WriteFile(path, []byte(bootRunInitScript), 0o600); err != nil {
+		return "", fmt.Errorf("failed to write Gradle init script: %w", err)
+	}
+	return path, nil
+}
+
 // GetStartCommand returns the appropriate start command for the service
 func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv string, verboseLogging bool) (string, error) {
 	effectiveBuildSystem := GetEffectiveBuildSystem(serviceDir, buildSystem)
@@ -117,8 +159,12 @@ func GetStartCommand(serviceDir, buildSystem string, javaOpts string, extraEnv s
 		if effectiveBuildSystem == BuildSystemMaven {
 			baseCommand = strings.Replace(baseCommand, "%s", javaOpts, 1)
 		} else if effectiveBuildSystem == BuildSystemGradle {
-			// For Gradle, we use different JVM args format
-			baseCommand = strings.Replace(commands.Start, "bootRun", "bootRun --args=\""+javaOpts+"\"", 1)
+			initScript, err := ensureBootRunInitScript()
+			if err != nil {
+				return "", err
+			}
+			baseCommand = strings.Replace(commands.Start, "bootRun",
+				"-I \""+initScript+"\" bootRun -P"+bootRunJVMArgsProperty+"=\""+javaOpts+"\"", 1)
 		}
 	} else {
 		baseCommand = commands.Start
