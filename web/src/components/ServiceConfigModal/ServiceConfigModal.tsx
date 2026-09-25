@@ -16,6 +16,8 @@ import { Service, EnvVar } from "@/types";
 import { useProfile } from "@/contexts/ProfileContext";
 import { ButtonSpinner } from "@/components/ui/spinner";
 import { ErrorBoundarySection } from "@/components/ui/error-boundary";
+import { useToast, toast } from "@/components/ui/toast";
+import { ServiceOperations } from "@/services/serviceOperations";
 
 interface ServiceConfigModalProps {
   service: Service | null;
@@ -37,6 +39,8 @@ export function ServiceConfigModal({
   const [editingService, setEditingService] = useState<Service | null>(service);
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const { serviceProfiles, activeProfile } = useProfile();
+  const { addToast } = useToast();
+  const [isAddingAttachConfig, setIsAddingAttachConfig] = useState(false);
 
   React.useEffect(() => {
     setEditingService(service);
@@ -59,6 +63,28 @@ export function ServiceConfigModal({
   const handleSave = () => {
     if (editingService) {
       onSave(editingService, selectedProfileId || undefined);
+    }
+  };
+
+  // Uses the saved debug port, since that is the one the service will open.
+  const addIntelliJAttachConfig = async () => {
+    if (!service) return;
+
+    setIsAddingAttachConfig(true);
+    const result = await ServiceOperations.addIntelliJAttachConfig(service.id);
+    setIsAddingAttachConfig(false);
+
+    if (result.success) {
+      addToast(
+        toast.success(
+          "IntelliJ attach configuration added",
+          `Choose "Attach ${service.name}" from IntelliJ's run menu. Saved to ${result.path}`,
+        ),
+      );
+    } else {
+      addToast(
+        toast.error("Failed to add IntelliJ attach configuration", result.error),
+      );
     }
   };
 
@@ -372,6 +398,28 @@ export function ServiceConfigModal({
                   placeholder="Assigned automatically"
                 />
               </div>
+              {/* Only once a port is saved: the configuration needs one. */}
+              {!isCreateMode && service && service.debugPort > 0 && (
+                <div className="space-y-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addIntelliJAttachConfig}
+                    disabled={isAddingAttachConfig}
+                  >
+                    {isAddingAttachConfig
+                      ? "Adding..."
+                      : "Add IntelliJ attach configuration"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Writes <code>.run/Attach {service.name}.run.xml</code> for
+                    port {service.debugPort} into the service's directory.
+                    {editingService.debugPort !== service.debugPort &&
+                      " Save first to use the port you just changed."}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Eureka Configuration Override */}
