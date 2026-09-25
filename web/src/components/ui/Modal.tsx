@@ -7,6 +7,8 @@ export interface ModalProps {
   onClose: () => void;
   /** A node, not just a string: several dialogs pair their title with an icon. */
   title?: React.ReactNode;
+  /** Controls that sit beside the close button and stay put while the body scrolls. */
+  headerActions?: React.ReactNode;
   children: React.ReactNode;
   size?:
     | "sm"
@@ -60,6 +62,7 @@ export function Modal({
   isOpen,
   onClose,
   title,
+  headerActions,
   children,
   size = "md",
   showCloseButton = true,
@@ -176,7 +179,7 @@ export function Modal({
         >
           <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl flex flex-col max-h-[95vh]">
             {/* Header */}
-            {(title || showCloseButton) && (
+            {(title || headerActions || showCloseButton) && (
               <div className={`flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 ${headerClassName}`}>
                 {title && (
                   <h2
@@ -186,10 +189,15 @@ export function Modal({
                     {title}
                   </h2>
                 )}
-                {showCloseButton && (
-                  <Button variant="ghost" size="sm" onClick={onClose}>
-                    <X className="w-5 h-5" />
-                  </Button>
+                {(headerActions || showCloseButton) && (
+                  <div className="flex items-center gap-2">
+                    {headerActions}
+                    {showCloseButton && (
+                      <Button variant="ghost" size="sm" onClick={onClose}>
+                        <X className="w-5 h-5" />
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
