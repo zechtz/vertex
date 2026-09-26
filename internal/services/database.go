@@ -753,6 +753,11 @@ func (sm *Manager) CleanupOldLogs(maxDays int, maxLogsPerService int) error {
 	log.Printf("[INFO] Log cleanup completed - deleted %d logs (%d old, %d excess per service). Logs: %d -> %d",
 		totalDeleted, deletedOld, deletedPerService, totalLogsBefore, totalLogsAfter)
 
+	// Without this the deleted logs' space stays inside the file.
+	if err := sm.db.ReleaseFreePages(); err != nil {
+		log.Printf("[WARN] Log cleanup could not release free pages: %v", err)
+	}
+
 	return nil
 }
 

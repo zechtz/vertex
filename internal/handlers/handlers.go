@@ -115,7 +115,9 @@ func (h *Handler) getServiceProjectsDirForUser(serviceUUID, userID string) strin
 		return fallbackDir
 	}
 
-	log.Printf("[DEBUG] Active profile found: %+v", activeProfile)
+	if activeProfile != nil {
+		log.Printf("[DEBUG] Active profile found: %s (%s)", activeProfile.Name, activeProfile.ID)
+	}
 
 	// Check if the active profile contains this service and has a custom projects directory
 	if activeProfile != nil && activeProfile.ProjectsDir != "" {

@@ -476,12 +476,7 @@ func (sm *Manager) startServiceWithProjectsDir(service *models.Service, projects
 	// Log the final command and environment variables for profile services
 	log.Printf("[DEBUG] Starting profile service %s with command: %s", service.Name, cmdString)
 	log.Printf("[DEBUG] Working directory: %s", serviceDir)
-	log.Printf("[DEBUG] Environment variables for %s:", service.Name)
-	for _, env := range cmd.Env {
-		if strings.Contains(env, "ACTIVE_PROFILE") || strings.Contains(env, "SPRING_PROFILES") || strings.Contains(env, "SERVICE_PORT") || strings.Contains(env, "CONFIG_") || strings.Contains(env, "JAVA_HOME") {
-			log.Printf("[DEBUG]   %s", env)
-		}
-	}
+	logStartupEnvNames(service.Name, cmd.Env)
 
 	// Create stdout and stderr pipes
 	stdout, err := cmd.StdoutPipe()
@@ -727,12 +722,7 @@ func (sm *Manager) startService(service *models.Service) error {
 	// Log the final command and environment variables
 	// log.Printf("[DEBUG] Starting service %s with command: %s", service.Name, cmdString)
 	// log.Printf("[DEBUG] Working directory: %s", serviceDir)
-	// log.Printf("[DEBUG] Environment variables for %s:", service.Name)
-	for _, env := range cmd.Env {
-		if strings.Contains(env, "ACTIVE_PROFILE") || strings.Contains(env, "SPRING_PROFILES") || strings.Contains(env, "SERVICE_PORT") || strings.Contains(env, "CONFIG_") || strings.Contains(env, "JAVA_HOME") {
-			log.Printf("[DEBUG]   %s", env)
-		}
-	}
+	logStartupEnvNames(service.Name, cmd.Env)
 
 	// Create pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -1148,4 +1138,25 @@ func logJavaVersion(env []string, serviceName string) {
 	}
 
 	log.Printf("[INFO] Service %s: Using Java %s from %s (%s)", serviceName, version, source, javaHome)
+}
+
+// startupEnvPrefixes pick out the variables that shape how a Spring Boot
+// service starts, which are the ones worth seeing when a start goes wrong.
+var startupEnvPrefixes = []string{"ACTIVE_PROFILE", "SPRING_PROFILES", "SERVICE_PORT", "CONFIG_", "JAVA_HOME"}
+
+// logStartupEnvNames logs which startup variables a service is given, by name
+// only. Values stay out: CONFIG_ alone covers names like
+// CONFIG_SERVER_PASSWORD, and the log is a plain file that is kept for weeks.
+func logStartupEnvNames(serviceName string, env []string) {
+	var names []string
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, "=")
+		for _, prefix := range startupEnvPrefixes {
+			if strings.HasPrefix(name, prefix) {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	log.Printf("[DEBUG] Startup environment for %s sets: %s", serviceName, strings.Join(names, ", "))
 }

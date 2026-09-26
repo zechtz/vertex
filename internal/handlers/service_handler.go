@@ -323,7 +323,8 @@ func (h *Handler) updateServiceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[DEBUG] Received service config for UUID %s: %+v", serviceUUID, serviceConfig)
+	// Not the whole request: it carries env var values, which can be credentials.
+	log.Printf("[DEBUG] Received service config for UUID %s (%d env vars)", serviceUUID, len(serviceConfig.EnvVars))
 
 	if serviceConfig.ID != "" && serviceConfig.ID != serviceUUID {
 		log.Printf("[INFO] Renaming service UUID %s to %s", serviceUUID, serviceConfig.ID)
