@@ -50,6 +50,14 @@ var failureSignatures = []failureSignature{
 			"matching the project's target release.",
 	},
 	{
+		// The JVM's own report when its debug agent cannot open its port.
+		marker:  "transport error 202: bind failed",
+		code:    "debug_port_in_use",
+		summary: "The service's debug port is already taken",
+		suggestion: "Another process is listening on this service's debug port. Stop it, or " +
+			"change the debug port configured for this service.",
+	},
+	{
 		marker:  "was already in use",
 		code:    "port_in_use",
 		summary: "The service's port is already taken",

@@ -34,5 +34,7 @@ type ServiceConfigRequest struct {
 	// Eureka instance overrides; see models.Service for the injection contract.
 	EurekaPreferIPAddress *bool             `json:"eurekaPreferIpAddress"` // nil = do not override
 	EurekaHostname        string            `json:"eurekaHostname"`        // "" = do not override
+	DebugEnabled          bool              `json:"debugEnabled"`
+	DebugPort             int               `json:"debugPort"` // 0 = assign one when debugging is enabled
 	EnvVars               map[string]EnvVar `json:"envVars"`
 }

@@ -53,6 +53,16 @@ type Service struct {
 	Dependencies          []ServiceDependency `json:"dependencies"`
 	DependentOn           []string            `json:"dependentOn"`  // Services that depend on this one
 	StartupDelay          time.Duration       `json:"startupDelay"` // Delay before starting after dependencies
+
+	// Debugging opens a JDWP port on localhost for an IDE or jdb to attach to.
+	// DebugPort is kept while debugging is off, so a saved attach configuration
+	// keeps working when it is turned back on; see debug.go.
+	DebugEnabled bool `json:"debugEnabled"`
+	DebugPort    int  `json:"debugPort"` // 0 = not yet assigned
+	// DebugListenPort is the debug port the latest run's JVM opened, or 0 if it
+	// opened none. The two settings above take effect at the next start, so
+	// this, not they, says where a debugger can attach while the service runs.
+	DebugListenPort int `json:"debugListenPort"`
 }
 
 // FailureReason is a classified explanation of why a service failed to start,

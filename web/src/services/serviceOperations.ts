@@ -514,4 +514,38 @@ export class ServiceOperations {
       };
     }
   }
+
+  /**
+   * Writes an IntelliJ "Remote JVM Debug" run configuration into the service's
+   * .run directory, where IntelliJ lists it in the run menu. Resolves to the
+   * file's path.
+   */
+  static async addIntelliJAttachConfig(
+    serviceId: string,
+  ): Promise<ServiceOperationResult & { path?: string }> {
+    try {
+      const response = await apiFetch(
+        `/api/services/${serviceId}/intellij-attach-config`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        // The server says why, e.g. that the service has no debug port yet.
+        const reason = (await response.text()).trim();
+        throw new Error(
+          reason ||
+            `Failed to add IntelliJ attach configuration: ${response.status} ${response.statusText}`,
+        );
+      }
+      const result = await response.json();
+      return { success: true, path: result.path };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred",
+      };
+    }
+  }
 }

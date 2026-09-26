@@ -35,6 +35,7 @@ func registerServiceRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/services/{id}/libraries/install", h.installSelectedLibrariesHandler).Methods("POST")
 	r.HandleFunc("/api/services/{id}/files", h.getServiceFilesHandler).Methods("GET")
 	r.HandleFunc("/api/services/{id}/files/{filename}", h.updateServiceFileHandler).Methods("PUT")
+	r.HandleFunc("/api/services/{id}/intellij-attach-config", h.writeIntelliJAttachConfigHandler).Methods("POST")
 
 	r.HandleFunc("/api/services/start-all", h.startAllHandler).Methods("POST")
 	r.HandleFunc("/api/services/stop-all", h.stopAllHandler).Methods("POST")
@@ -873,6 +874,31 @@ func (h *Handler) getServiceFilesHandler(w http.ResponseWriter, r *http.Request)
 
 	log.Printf("[INFO] Found %d files for service %s", len(files), serviceUUID)
 	json.NewEncoder(w).Encode(map[string]any{"files": files})
+}
+
+// writeIntelliJAttachConfigHandler writes an IntelliJ run configuration that
+// attaches a debugger to the service. The service directory is resolved as for
+// its files, so the configuration lands in the checkout the user's active
+// profile runs.
+func (h *Handler) writeIntelliJAttachConfigHandler(w http.ResponseWriter, r *http.Request) {
+	serviceUUID := mux.Vars(r)["id"]
+
+	var projectsDir string
+	if claims, ok := extractClaimsFromRequest(r, h.authService); ok && claims != nil {
+		projectsDir = h.getServiceProjectsDirForUser(serviceUUID, claims.UserID)
+	} else {
+		projectsDir = h.getServiceProjectsDir(serviceUUID)
+	}
+
+	path, err := h.serviceManager.WriteIntelliJAttachConfig(serviceUUID, projectsDir)
+	if err != nil {
+		log.Printf("[ERROR] Failed to write IntelliJ attach configuration for %s: %v", serviceUUID, err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"path": path})
 }
 
 func (h *Handler) updateServiceFileHandler(w http.ResponseWriter, r *http.Request) {

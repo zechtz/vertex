@@ -368,6 +368,11 @@ func (db *Database) initTables() error {
 		return fmt.Errorf("failed to add eureka columns: %w", err)
 	}
 
+	// Add debug columns for attaching a debugger to a running service
+	if err := db.migrateAddDebugColumns(); err != nil {
+		return fmt.Errorf("failed to add debug columns: %w", err)
+	}
+
 	return nil
 }
 
@@ -1013,6 +1018,33 @@ func (db *Database) migrateAddEurekaColumns() error {
 		log.Println("[INFO] Adding 'eureka_hostname' column to services table")
 		if _, err := db.Exec(`ALTER TABLE services ADD COLUMN eureka_hostname TEXT`); err != nil {
 			return fmt.Errorf("failed to add eureka_hostname column: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// migrateAddDebugColumns adds the debug columns to the services table. Existing
+// rows migrate to debugging off with no port assigned; a port is assigned the
+// first time debugging is turned on.
+func (db *Database) migrateAddDebugColumns() error {
+	var tableSQL string
+	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='services'").Scan(&tableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to query services table schema: %w", err)
+	}
+
+	if !strings.Contains(tableSQL, "debug_enabled") {
+		log.Println("[INFO] Adding 'debug_enabled' column to services table")
+		if _, err := db.Exec(`ALTER TABLE services ADD COLUMN debug_enabled BOOLEAN NOT NULL DEFAULT FALSE`); err != nil {
+			return fmt.Errorf("failed to add debug_enabled column: %w", err)
+		}
+	}
+
+	if !strings.Contains(tableSQL, "debug_port") {
+		log.Println("[INFO] Adding 'debug_port' column to services table")
+		if _, err := db.Exec(`ALTER TABLE services ADD COLUMN debug_port INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("failed to add debug_port column: %w", err)
 		}
 	}
 

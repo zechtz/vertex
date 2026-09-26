@@ -46,7 +46,7 @@ func (sm *Manager) loadServices(config models.Config) error {
 		// Try to load existing service from database
 		var dbService models.Service
 		row := sm.db.QueryRow(`
-			SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system, verbose_logging, eureka_prefer_ip_address, eureka_hostname
+			SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system, verbose_logging, eureka_prefer_ip_address, eureka_hostname, debug_enabled, debug_port
 			FROM services WHERE id = ?`, service.ID)
 
 		var description sql.NullString
@@ -58,7 +58,7 @@ func (sm *Manager) loadServices(config models.Config) error {
 		err := row.Scan(&dbService.ID, &dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
 			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
 			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem, &verboseLogging,
-			&eurekaPreferIP, &eurekaHostname)
+			&eurekaPreferIP, &eurekaHostname, &dbService.DebugEnabled, &dbService.DebugPort)
 
 		if err == sql.ErrNoRows {
 			// Service doesn't exist in DB, insert it
@@ -330,7 +330,7 @@ func (sm *Manager) loadGlobalConfigFromDB() error {
 func (sm *Manager) loadDynamicServices() error {
 	// Query all services from database
 	rows, err := sm.db.Query(`
-		SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system, verbose_logging, eureka_prefer_ip_address, eureka_hostname
+		SELECT id, name, dir, extra_env, java_opts, status, health_status, health_url, port, pid, service_order, last_started, description, is_enabled, build_system, verbose_logging, eureka_prefer_ip_address, eureka_hostname, debug_enabled, debug_port
 		FROM services`)
 	if err != nil {
 		return fmt.Errorf("failed to query dynamic services: %w", err)
@@ -349,7 +349,7 @@ func (sm *Manager) loadDynamicServices() error {
 		err := rows.Scan(&dbService.ID, &dbService.Name, &dbService.Dir, &dbService.ExtraEnv, &dbService.JavaOpts,
 			&dbService.Status, &dbService.HealthStatus, &dbService.HealthURL, &dbService.Port,
 			&dbService.PID, &dbService.Order, &dbService.LastStarted, &description, &isEnabled, &buildSystem, &verboseLogging,
-			&eurekaPreferIP, &eurekaHostname)
+			&eurekaPreferIP, &eurekaHostname, &dbService.DebugEnabled, &dbService.DebugPort)
 		if err != nil {
 			log.Printf("[WARN] Failed to scan dynamic service: %v", err)
 			continue
@@ -418,12 +418,12 @@ func (sm *Manager) loadDynamicServices() error {
 
 func (sm *Manager) insertServiceInDB(service *models.Service) error {
 	_, err := sm.db.Exec(`
-		INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, verbose_logging, eureka_prefer_ip_address, eureka_hostname, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+		INSERT INTO services (id, name, dir, extra_env, java_opts, status, health_status, health_url, port, service_order, description, is_enabled, build_system, verbose_logging, eureka_prefer_ip_address, eureka_hostname, debug_enabled, debug_port, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 		service.ID, service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status,
 		service.HealthStatus, service.HealthURL, service.Port, service.Order,
 		service.Description, service.IsEnabled, service.BuildSystem, service.VerboseLogging,
-		service.EurekaPreferIPAddress, service.EurekaHostname)
+		service.EurekaPreferIPAddress, service.EurekaHostname, service.DebugEnabled, service.DebugPort)
 
 	return err
 }
@@ -434,12 +434,14 @@ func (sm *Manager) upsertServiceInDB(service *models.Service) error {
 		UPDATE services 
 		SET name = ?, dir = ?, extra_env = ?, java_opts = ?, status = ?, health_status = ?, health_url = ?, 
 		    port = ?, service_order = ?, description = ?, is_enabled = ?, build_system = ?, 
-		    pid = ?, last_started = ?, eureka_prefer_ip_address = ?, eureka_hostname = ?, updated_at = CURRENT_TIMESTAMP
+		    pid = ?, last_started = ?, eureka_prefer_ip_address = ?, eureka_hostname = ?,
+		    debug_enabled = ?, debug_port = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`,
 		service.Name, service.Dir, service.ExtraEnv, service.JavaOpts, service.Status, service.HealthStatus,
 		service.HealthURL, service.Port, service.Order, service.Description, service.IsEnabled,
 		service.BuildSystem, service.PID, service.LastStarted,
-		service.EurekaPreferIPAddress, service.EurekaHostname, service.ID)
+		service.EurekaPreferIPAddress, service.EurekaHostname,
+		service.DebugEnabled, service.DebugPort, service.ID)
 	if err != nil {
 		return err
 	}
@@ -473,11 +475,13 @@ func (sm *Manager) UpdateServiceConfigInDB(service *models.Service) error {
 		UPDATE services
 		SET name = ?, java_opts = ?, health_url = ?, port = ?, service_order = ?, description = ?,
 		    is_enabled = ?, build_system = ?, verbose_logging = ?,
-		    eureka_prefer_ip_address = ?, eureka_hostname = ?, updated_at = CURRENT_TIMESTAMP
+		    eureka_prefer_ip_address = ?, eureka_hostname = ?,
+		    debug_enabled = ?, debug_port = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?`,
 		service.Name, service.JavaOpts, service.HealthURL, service.Port, service.Order,
 		service.Description, service.IsEnabled, service.BuildSystem, service.VerboseLogging,
-		service.EurekaPreferIPAddress, service.EurekaHostname, service.ID)
+		service.EurekaPreferIPAddress, service.EurekaHostname,
+		service.DebugEnabled, service.DebugPort, service.ID)
 
 	return err
 }
