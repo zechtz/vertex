@@ -227,7 +227,7 @@ func (ps *ProfileService) CreateServiceProfile(userID string, req *models.Create
 	ps.mutex.Lock()
 	defer ps.mutex.Unlock()
 
-	log.Printf("[DEBUG] Creating profile for user %s: %+v", userID, req)
+	log.Printf("[DEBUG] Creating profile %q for user %s", req.Name, userID)
 
 	// Generate unique ID
 	profileID := uuid.New().String()
@@ -284,7 +284,7 @@ func (ps *ProfileService) UpdateServiceProfile(profileID, userID string, req *mo
 	ps.mutex.Lock()
 	defer ps.mutex.Unlock()
 
-	log.Printf("[DEBUG] Updating profile %s for user %s: %+v", profileID, userID, req)
+	log.Printf("[DEBUG] Updating profile %s for user %s", profileID, userID)
 
 	// Check if profile exists and belongs to user
 	log.Printf("[DEBUG] Checking if profile exists...")
@@ -332,7 +332,7 @@ func (ps *ProfileService) UpdateServiceProfile(profileID, userID string, req *mo
 		return nil, fmt.Errorf("failed to marshal env vars: %w", err)
 	}
 
-	log.Printf("[DEBUG] EnvVars JSON: %s", string(envVarsJSON))
+	log.Printf("[DEBUG] Marshaled %d env vars", len(envVars))
 
 	query := `UPDATE service_profiles 
 			  SET name = ?, description = ?, services_json = ?, env_vars_json = ?, projects_dir = ?, java_home_override = ?, is_default = ?, updated_at = CURRENT_TIMESTAMP 

@@ -216,14 +216,14 @@ func (dcs *DockerComposeService) buildEnvironmentVariables(service *models.Servi
 	for key, envValue := range profile.EnvVars {
 		envMap[key] = envValue
 		dcs.detectExternalServiceFromEnvVar(key, envValue, externalServices)
-		log.Printf("[DEBUG] Added profile env var: %s=%s", key, envValue)
+		log.Printf("[DEBUG] Added profile env var: %s", key)
 	}
 
 	// Then add service-specific environment variables (these override global ones)
 	for key, envVar := range service.EnvVars {
 		envMap[key] = envVar.Value  // This will override any profile-level env var with same key
 		dcs.detectExternalServiceFromEnvVar(key, envVar.Value, externalServices)
-		log.Printf("[DEBUG] Added service-specific env var: %s=%s (overrides global if exists)", key, envVar.Value)
+		log.Printf("[DEBUG] Added service-specific env var: %s (overrides global if exists)", key)
 	}
 
 	// Convert map to slice

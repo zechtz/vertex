@@ -139,7 +139,7 @@ func (h *Handler) createServiceProfileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	log.Printf("[DEBUG] Create profile request: %+v", req)
+	log.Printf("[DEBUG] Create profile request: %q", req.Name)
 
 	profile, err := h.profileService.CreateServiceProfile(claims.UserID, &req)
 	if err != nil {
@@ -183,7 +183,7 @@ func (h *Handler) updateServiceProfileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	log.Printf("[DEBUG] Update profile request for ID %s: %+v", profileID, req)
+	log.Printf("[DEBUG] Update profile request for ID %s", profileID)
 
 	profile, err := h.profileService.UpdateServiceProfile(profileID, claims.UserID, &req)
 	if err != nil {
