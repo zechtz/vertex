@@ -18,6 +18,7 @@ import (
 	"github.com/zechtz/vertex/internal/database"
 	"github.com/zechtz/vertex/internal/handlers"
 	"github.com/zechtz/vertex/internal/installer"
+	"github.com/zechtz/vertex/internal/logging"
 	"github.com/zechtz/vertex/internal/services"
 	"github.com/zechtz/vertex/web"
 )
@@ -286,6 +287,10 @@ func main() {
 	if dataDir != "" {
 		os.Setenv("VERTEX_DATA_DIR", dataDir)
 	}
+
+	// [DEBUG] lines are dropped unless VERTEX_DEBUG is set, and a log file the
+	// service manager appends to is kept to a bounded size.
+	log.SetOutput(logging.NewWriter(os.Stderr, os.Getenv("VERTEX_DEBUG") != ""))
 
 	// Display startup information
 	logMessage(fmt.Sprintf("Starting Vertex %s", version))
