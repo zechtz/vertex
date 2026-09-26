@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/zechtz/vertex/internal/models"
 )
 
@@ -62,7 +61,7 @@ func NewDatabaseWithPath(dbPath string) (*Database, error) {
 	// takes an EXCLUSIVE lock on the whole file and stalls every concurrent read.
 	// The busy timeout bounds the wait when two writers do collide.
 	dsn := finalPath + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL"
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database at %s: %w", finalPath, err)
 	}
