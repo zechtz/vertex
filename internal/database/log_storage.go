@@ -465,7 +465,10 @@ func (db *Database) ClearServiceLogs(serviceID string) error {
 	
 	rowsAffected, _ := result.RowsAffected()
 	log.Printf("[INFO] Cleared %d log entries for service %s", rowsAffected, serviceID)
-	
+
+	if err := db.ReleaseFreePages(); err != nil {
+		log.Printf("[WARN] Could not release free pages after clearing logs: %v", err)
+	}
 	return nil
 }
 
@@ -480,6 +483,10 @@ func (db *Database) ClearAllServiceLogs(serviceIDs []string) (map[string]error, 
 		
 		rowsAffected, _ := result.RowsAffected()
 		log.Printf("[INFO] Cleared all %d log entries from database", rowsAffected)
+
+		if err := db.ReleaseFreePages(); err != nil {
+			log.Printf("[WARN] Could not release free pages after clearing logs: %v", err)
+		}
 		return nil, nil
 	}
 	

@@ -82,6 +82,13 @@ func NewDatabaseWithPath(dbPath string) (*Database, error) {
 		return nil, fmt.Errorf("failed to initialize log tables: %w", err)
 	}
 
+	// Not fatal: a database that cannot be compacted, for want of disk space
+	// say, still works. It keeps growing, as it always has, until a later start
+	// manages it.
+	if err := database.enableIncrementalVacuum(); err != nil {
+		log.Printf("[WARN] Could not enable incremental vacuum; the database will not shrink: %v", err)
+	}
+
 	return database, nil
 }
 
