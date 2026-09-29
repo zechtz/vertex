@@ -97,7 +97,6 @@ open http://localhost:54321
 **Basic setup (localhost access only):**
 
 ```yaml
-version: "3.8"
 services:
   vertex:
     image: zechtz/vertex:latest
@@ -134,7 +133,6 @@ volumes:
 Create a `docker-compose.yml` file:
 
 ```yaml
-version: "3.8"
 services:
   vertex:
     image: zechtz/vertex:latest
@@ -206,7 +204,8 @@ http {
     }
 
     server {
-        listen 443 ssl http2;
+        listen 443 ssl;
+        http2 on;
         server_name vertex.dev;
 
         ssl_certificate /etc/nginx/ssl/vertex.dev.pem;
@@ -214,7 +213,7 @@ http {
 
         # Modern SSL configuration
         ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+        ssl_ciphers ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
         ssl_prefer_server_ciphers off;
 
         location / {
@@ -233,28 +232,68 @@ http {
 }
 ```
 
-**Generate SSL certificates (requires mkcert):**
+**Setup steps:**
 
-```bash
-# Install mkcert if not already installed
-# macOS: brew install mkcert
-# Ubuntu: apt install libnss3-tools && wget -O mkcert https://dl.filippo.io/mkcert/latest?for=linux/amd64 && chmod +x mkcert
+1. **Let your user talk to Docker (Linux).** Without this you get `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`:
 
-# Setup local CA and generate certificates
-mkcert -install
-mkdir ssl
-mkcert -cert-file ssl/vertex.dev.pem -key-file ssl/vertex.dev-key.pem vertex.dev
+   ```bash
+   sudo usermod -aG docker $USER
+   # Group changes apply on next login: log out of your desktop session (on
+   # Omarchy/Hyprland, exit the whole Hyprland session, not just the terminal)
+   # and back in, or run `newgrp docker` in the current terminal
+   id   # should now list "docker"
+   ```
 
-# Add to /etc/hosts
-echo "127.0.0.1 vertex.dev" | sudo tee -a /etc/hosts
+2. **Install mkcert** (plus NSS tools so browsers can trust the certificates):
 
-# Start services
-docker-compose up -d
+   ```bash
+   # macOS:  brew install mkcert nss
+   # Arch / Omarchy: sudo pacman -S mkcert nss
+   # Ubuntu: sudo apt install mkcert libnss3-tools
+   ```
 
-# Access at: https://vertex.dev
-```
+3. **Install the local CA and generate certificates.** Create `ssl/` yourself _before_ the first `docker compose up`, otherwise Docker creates it owned by root and mkcert can't write to it:
 
-Start with: `docker-compose up -d`
+   ```bash
+   # Linux + Chromium/Chrome/Brave (e.g. Omarchy, which ships Chromium as the
+   # default browser): these browsers use their own NSS store at
+   # ~/.pki/nssdb, and mkcert only installs into it if it already exists
+   mkdir -p ~/.pki/nssdb
+   [ -f ~/.pki/nssdb/cert9.db ] || certutil -d sql:$HOME/.pki/nssdb -N --empty-password
+
+   mkcert -install
+
+   mkdir -p ssl   # if Docker already created it: sudo chown $USER: ssl
+   mkcert -cert-file ssl/vertex.dev.pem -key-file ssl/vertex.dev-key.pem \
+          vertex.dev localhost 127.0.0.1
+   ```
+
+4. **Point the domain at localhost:**
+
+   ```bash
+   echo "127.0.0.1 vertex.dev" | sudo tee -a /etc/hosts
+   ```
+
+5. **Start the stack:**
+
+   ```bash
+   docker compose up -d
+   docker compose logs -f nginx   # should end with "Configuration complete; ready for start up"
+   ```
+
+6. **Open https://vertex.dev.** Fully restart your browser after `mkcert -install` so it picks up the new CA.
+
+**Docker troubleshooting:**
+
+| Symptom                                                                           | Cause / Fix                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permission denied ... /var/run/docker.sock`                                      | User not in the `docker` group, or the session predates it. See step 1.                                                                                                                                                                                                                                                           |
+| `ERROR: failed to save certificate: open ssl/...: permission denied`              | `ssl/` was created by Docker as root. Run `sudo chown $USER: ssl`.                                                                                                                                                                                                                                                                |
+| nginx restart loop with `SSL_CTX_set_cipher_list(...) failed ... no cipher match` | Invalid cipher names in `nginx.conf` (e.g. `...-GCM-SHA512`, which doesn't exist). Use the `...-GCM-SHA384` suites shown above.                                                                                                                                                                                                   |
+| nginx fails with `cannot load certificate "/etc/nginx/ssl/vertex.dev.pem"`        | Certificates not generated yet. See step 3.                                                                                                                                                                                                                                                                                       |
+| `curl https://vertex.dev` works but the browser shows a certificate error         | The mkcert CA isn't in the browser's trust store. On Linux Chromium (e.g. the default browser on a fresh Omarchy install, where `~/.pki/nssdb` doesn't exist yet), create `~/.pki/nssdb` (step 3), re-run `mkcert -install`, and restart the browser. `.dev` is HSTS-preloaded, so browsers won't let you click past the warning. |
+| `Java runtime not found` in the vertex logs                                       | The container has no JDK. Only matters for Java services you run through Vertex.                                                                                                                                                                                                                                                  |
+| `Using fallback JWT secret`                                                       | Fine for local use. Set `JWT_SECRET` under `environment:` for anything real.                                                                                                                                                                                                                                                      |
 
 #### Option 3: Build from Source
 
@@ -602,27 +641,29 @@ Vertex supports both modern subcommand syntax and traditional flag syntax:
 ```
 
 **Service Management Commands:**
-| Subcommand | Flag | Description |
-|------------|------|-------------|
-| `vertex start` | `--start` | Start the Vertex service |
-| `vertex stop` | `--stop` | Stop the Vertex service |
-| `vertex restart` | `--restart` | Restart the Vertex service |
-| `vertex status` | `--status` | Show service status and availability |
-| `vertex logs` | `--logs` | Show service logs |
-| `vertex logs -f` | `--logs --follow` | Follow log output (like tail -f) |
-| `vertex install` | `--install` | Install Vertex as a user service |
-| `vertex uninstall` | `--uninstall` | Uninstall Vertex service and data |
-| `vertex update` | `--update` | Update the Vertex binary and restart the service |
-| `vertex version` | `--version` | Show version information |
+
+| Subcommand         | Flag              | Description                                      |
+| ------------------ | ----------------- | ------------------------------------------------ |
+| `vertex start`     | `--start`         | Start the Vertex service                         |
+| `vertex stop`      | `--stop`          | Stop the Vertex service                          |
+| `vertex restart`   | `--restart`       | Restart the Vertex service                       |
+| `vertex status`    | `--status`        | Show service status and availability             |
+| `vertex logs`      | `--logs`          | Show service logs                                |
+| `vertex logs -f`   | `--logs --follow` | Follow log output (like tail -f)                 |
+| `vertex install`   | `--install`       | Install Vertex as a user service                 |
+| `vertex uninstall` | `--uninstall`     | Uninstall Vertex service and data                |
+| `vertex update`    | `--update`        | Update the Vertex binary and restart the service |
+| `vertex version`   | `--version`       | Show version information                         |
 
 **Configuration Commands:**
-| Subcommand | Flag | Default | Description |
-|------------|------|---------|-------------|
-| `vertex domain <name>` | `--domain <name>` | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
-| `vertex port <number>` | `--port <number>` | 54321 | Port to run the server on |
-| `vertex data-dir <path>` | `--data-dir <path>` | ~/.vertex | Directory to store application data |
-| `vertex nginx` | `--nginx` | - | Configure nginx proxy for domain access |
-| `vertex https` | `--https` | - | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains) |
+
+| Subcommand               | Flag                | Default    | Description                                                                      |
+| ------------------------ | ------------------- | ---------- | -------------------------------------------------------------------------------- |
+| `vertex domain <name>`   | `--domain <name>`   | vertex.dev | **🚀 Smart install**: Domain name for nginx proxy (auto-installs when specified) |
+| `vertex port <number>`   | `--port <number>`   | 54321      | Port to run the server on                                                        |
+| `vertex data-dir <path>` | `--data-dir <path>` | ~/.vertex  | Directory to store application data                                              |
+| `vertex nginx`           | `--nginx`           | -          | Configure nginx proxy for domain access                                          |
+| `vertex https`           | `--https`           | -          | Enable HTTPS with locally-trusted certificates (auto-enabled for .dev domains)   |
 
 #### Examples
 
