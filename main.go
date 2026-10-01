@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/zechtz/vertex/internal/account"
 	"github.com/zechtz/vertex/internal/config"
 	"github.com/zechtz/vertex/internal/database"
 	"github.com/zechtz/vertex/internal/handlers"
@@ -497,4 +498,9 @@ func showStatus() error {
 func showLogs(follow bool) error {
 	serviceManager := installer.NewServiceManager()
 	return serviceManager.ShowLogs(follow)
+}
+
+// resetPassword handles the --reset-password flag
+func resetPassword(email string) error {
+	return account.ResetPassword(email)
 }
