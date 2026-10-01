@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -170,6 +171,80 @@ func (as *AuthService) ValidateToken(tokenString string) (*models.JWTClaims, err
 	return nil, fmt.Errorf("invalid token")
 }
 
+// ErrIncorrectPassword is returned when the current password given to change
+// it does not match.
+var ErrIncorrectPassword = errors.New("current password is incorrect")
+
+// ErrUserNotFound is returned when no account has the email given.
+var ErrUserNotFound = errors.New("no account with that email")
+
+// ChangePassword replaces a signed-in user's password. The current password is
+// required as well as the session, so a session left open on someone else's
+// screen is not enough to take over the account.
+func (as *AuthService) ChangePassword(userID string, change *models.PasswordChange) error {
+	if err := models.ValidatePassword(change.NewPassword); err != nil {
+		return err
+	}
+
+	user, err := as.getUserByID(userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrUserNotFound
+		}
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(change.CurrentPassword)); err != nil {
+		return ErrIncorrectPassword
+	}
+
+	return as.setPassword(user.ID, change.NewPassword)
+}
+
+// ResetPassword sets a new password for the account with this email, without
+// the old one. It is reached only from the command line: being able to run
+// Vertex against its database is what proves the right to reset it.
+func (as *AuthService) ResetPassword(email, newPassword string) (*models.User, error) {
+	if err := models.ValidatePassword(newPassword); err != nil {
+		return nil, err
+	}
+
+	user, err := as.getUserByEmail(email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if err := as.setPassword(user.ID, newPassword); err != nil {
+		return nil, err
+	}
+
+	user.Password = ""
+	return user, nil
+}
+
+// ListUsers returns every account, ordered by email, without password hashes.
+func (as *AuthService) ListUsers() ([]models.User, error) {
+	rows, err := as.db.Query(`SELECT id, username, email, role, created_at FROM users ORDER BY email`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]models.User, 0)
+	for rows.Next() {
+		var user models.User
+		if err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to read user: %w", err)
+		}
+		users = append(users, user)
+	}
+
+	return users, rows.Err()
+}
+
 // GetUserByID retrieves a user by ID
 func (as *AuthService) GetUserByID(userID string) (*models.User, error) {
 	user, err := as.getUserByID(userID)
@@ -244,6 +319,20 @@ func (as *AuthService) getUserByID(userID string) (*models.User, error) {
 	}
 
 	return user, nil
+}
+
+func (as *AuthService) setPassword(userID, password string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	query := `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`
+	if _, err := as.db.Exec(query, string(hashedPassword), time.Now(), userID); err != nil {
+		return fmt.Errorf("failed to save password: %w", err)
+	}
+
+	return nil
 }
 
 func (as *AuthService) updateLastLogin(userID string) error {

@@ -46,20 +46,21 @@ func parseSubcommands() {
 
 	// Map subcommands to their equivalent flags
 	subcommandMap := map[string]string{
-		"start":     "--start",
-		"stop":      "--stop",
-		"restart":   "--restart",
-		"status":    "--status",
-		"logs":      "--logs",
-		"install":   "--install",
-		"uninstall": "--uninstall",
-		"update":    "--update",
-		"version":   "--version",
-		"domain":    "--domain",
-		"port":      "--port",
-		"data-dir":  "--data-dir",
-		"nginx":     "--nginx",
-		"https":     "--https",
+		"start":          "--start",
+		"stop":           "--stop",
+		"restart":        "--restart",
+		"status":         "--status",
+		"logs":           "--logs",
+		"install":        "--install",
+		"uninstall":      "--uninstall",
+		"update":         "--update",
+		"version":        "--version",
+		"domain":         "--domain",
+		"port":           "--port",
+		"data-dir":       "--data-dir",
+		"nginx":          "--nginx",
+		"https":          "--https",
+		"reset-password": "--reset-password",
 	}
 
 	// Check if the subcommand is valid
@@ -98,6 +99,7 @@ func main() {
 	var enableNginx bool
 	var enableHTTPS bool
 	var domain string
+	var resetPasswordEmail string
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&install, "install", false, "Install Vertex as a user service")
 	flag.BoolVar(&uninstall, "uninstall", false, "Uninstall Vertex service")
@@ -113,6 +115,7 @@ func main() {
 	flag.StringVar(&domain, "domain", "vertex.dev", "Domain name for nginx proxy (automatically installs with nginx when specified)")
 	flag.StringVar(&port, "port", "54321", "Port to run the server on (default: 54321)")
 	flag.StringVar(&dataDir, "data-dir", "", "Directory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory")
+	flag.StringVar(&resetPasswordEmail, "reset-password", "", "Reset the password of the account with this email")
 
 	// Custom usage function to show both flag and subcommand syntax
 	flag.Usage = func() {
@@ -134,6 +137,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  vertex data-dir <path>      Set data directory\n")
 		fmt.Fprintf(os.Stderr, "  vertex nginx                Enable nginx proxy\n")
 		fmt.Fprintf(os.Stderr, "  vertex https                Enable HTTPS\n")
+		fmt.Fprintf(os.Stderr, "  vertex reset-password <email>  Reset a forgotten password\n")
 		fmt.Fprintf(os.Stderr, "\nFlags (alternative syntax):\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir string\n")
 		fmt.Fprintf(os.Stderr, "    \tDirectory to store application data (database, logs, etc.). If not set, uses VERTEX_DATA_DIR environment variable or current directory\n")
@@ -151,6 +155,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "    \tConfigure nginx proxy for domain access (requires nginx to be installed)\n")
 		fmt.Fprintf(os.Stderr, "  --port string\n")
 		fmt.Fprintf(os.Stderr, "    \tPort to run the server on (default: 54321) (default \"54321\")\n")
+		fmt.Fprintf(os.Stderr, "  --reset-password string\n")
+		fmt.Fprintf(os.Stderr, "    \tReset the password of the account with this email\n")
 		fmt.Fprintf(os.Stderr, "  --restart\n")
 		fmt.Fprintf(os.Stderr, "    \tRestart the Vertex service\n")
 		fmt.Fprintf(os.Stderr, "  --start\n")
@@ -173,6 +179,17 @@ func main() {
 		fmt.Printf("Vertex %s\n", version)
 		fmt.Printf("Commit: %s\n", commit)
 		fmt.Printf("Built: %s\n", date)
+		os.Exit(0)
+	}
+
+	if resetPasswordEmail != "" {
+		if dataDir != "" {
+			os.Setenv("VERTEX_DATA_DIR", dataDir)
+		}
+		if err := resetPassword(resetPasswordEmail); err != nil {
+			fmt.Fprintf(os.Stderr, "❌ %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

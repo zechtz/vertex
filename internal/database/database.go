@@ -15,6 +15,13 @@ import (
 
 type Database struct {
 	*sql.DB
+	path string
+}
+
+// Path is the database file in use, worked out from the data directory
+// settings when no path was given.
+func (db *Database) Path() string {
+	return db.path
 }
 
 func NewDatabase() (*Database, error) {
@@ -71,7 +78,7 @@ func NewDatabaseWithPath(dbPath string) (*Database, error) {
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(4)
 
-	database := &Database{DB: db}
+	database := &Database{DB: db, path: finalPath}
 	if err := database.initTables(); err != nil {
 		return nil, fmt.Errorf("failed to initialize database tables: %w", err)
 	}
