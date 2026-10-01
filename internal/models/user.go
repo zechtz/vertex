@@ -31,13 +31,24 @@ func (ur *UserRegistration) Validate() error {
 	if ur.Username == "" {
 		return errors.New("username is required")
 	}
-	if ur.Password == "" {
+	return ValidatePassword(ur.Password)
+}
+
+// ValidatePassword is the rule every new password must meet, whether it is
+// chosen at registration, changed by its owner or reset from the command line.
+func ValidatePassword(password string) error {
+	if password == "" {
 		return errors.New("password is required")
 	}
-	if len(ur.Password) < 6 {
+	if len(password) < 6 {
 		return errors.New("password must be at least 6 characters long")
 	}
 	return nil
+}
+
+type PasswordChange struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
 }
 
 type UserLogin struct {

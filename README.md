@@ -797,6 +797,23 @@ xattr -d com.apple.quarantine ./vertex-darwin-arm64
 **For Developers:**
 Consider code signing your releases with an Apple Developer Certificate to eliminate this warning for users.
 
+### Forgot Your Password
+
+Vertex sends no email, so a password is reset from the machine Vertex runs on. Being able to run commands there is what proves the account is yours.
+
+```bash
+vertex reset-password you@example.com
+
+# Vertex in Docker
+docker exec -it vertex ./vertex reset-password you@example.com
+```
+
+It asks for the new password twice, without showing it. Without a terminal (a script, or `docker exec` without `-it`), it generates a password and prints it once; sign in with it and change it from the user menu (**Change Password**).
+
+If the email matches no account, it lists the accounts that exist and the database it looked in. If that database is empty, Vertex keeps its data somewhere else: pass the same `--data-dir` the server uses, or set `VERTEX_DATA_DIR`.
+
+Once signed in, you can change your password at any time from the user menu (**Change Password**).
+
 ### Service Won't Start
 
 1. **Check logs:**
