@@ -11,11 +11,13 @@ import {
   Shield,
   Clock,
   WifiOff,
+  KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DarkModeToggle } from "@/components/DarkModeToggle/DarkModeToggle";
 import { ProfileSwitcher } from "@/components/ProfileSwitcher";
+import { ChangePasswordModal } from "@/components/Auth/ChangePasswordModal";
 
 interface ToolbarUser {
   id: string;
@@ -46,6 +48,7 @@ export function Toolbar({
   isRealtimeConnected,
 }: ToolbarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const formatLastLogin = (lastLogin: string) => {
@@ -239,6 +242,16 @@ export function Toolbar({
                       <Settings className="h-4 w-4" />
                       Preferences
                     </button>
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        setShowChangePassword(true);
+                      }}
+                      className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      <KeyRound className="h-4 w-4" />
+                      Change Password
+                    </button>
                     <button className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
                       <Bell className="h-4 w-4" />
                       Notifications
@@ -272,6 +285,11 @@ export function Toolbar({
           onClick={() => setShowUserMenu(false)}
         />
       )}
+
+      <ChangePasswordModal
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
     </header>
   );
 }

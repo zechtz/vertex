@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/zechtz/vertex/internal/models"
+	"github.com/zechtz/vertex/internal/services"
 )
 
 func registerUserRoutes(h *Handler, r *mux.Router) {
@@ -15,6 +17,7 @@ func registerUserRoutes(h *Handler, r *mux.Router) {
 	r.HandleFunc("/api/auth/login", h.loginHandler).Methods("POST")
 	r.HandleFunc("/api/auth/user", h.getCurrentUserHandler).Methods("GET")
 	r.HandleFunc("/api/auth/refresh", h.refreshTokenHandler).Methods("POST")
+	r.HandleFunc("/api/auth/password", h.changePasswordHandler).Methods("POST")
 	r.HandleFunc("/api/user/profile", h.getUserProfileHandler).Methods("GET")
 	r.HandleFunc("/api/user/profile", h.updateUserProfileHandler).Methods("PUT")
 }
@@ -208,5 +211,45 @@ func (h *Handler) refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to encode refresh response: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
+	}
+}
+
+// changePasswordHandler replaces the signed-in user's password, given the
+// current one. A wrong current password is a 400, not a 401: the session is
+// still valid, and the client treats a 401 as the session having expired.
+func (h *Handler) changePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	claims, ok := extractClaimsFromRequest(r, h.authService)
+	if !ok || claims == nil {
+		http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+		return
+	}
+
+	var change models.PasswordChange
+	if err := json.NewDecoder(r.Body).Decode(&change); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := models.ValidatePassword(change.NewPassword); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.authService.ChangePassword(claims.UserID, &change); err != nil {
+		if errors.Is(err, services.ErrIncorrectPassword) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		log.Printf("[ERROR] Failed to change password for user %s: %v", claims.UserID, err)
+		http.Error(w, "Failed to change password", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Password changed for user %s", claims.Username)
+
+	if err := json.NewEncoder(w).Encode(map[string]bool{"success": true}); err != nil {
+		log.Printf("[ERROR] Failed to encode change password response: %v", err)
 	}
 }
