@@ -13,109 +13,23 @@ Welcome to Vertex! This guide will walk you through setting up and using Vertex 
 
 #### Option A: Docker (Recommended)
 
-**Quick Start:**
+The image includes JDK 17 and 21, Maven and Git, so your services run inside the container. Mount your projects at the same path they have on your machine:
+
 ```bash
-# Run with default settings
 docker run -d \
   --name vertex \
   -p 54321:54321 \
+  -p 8080-8099:8080-8099 \
   -v vertex-data:/app/data \
+  -v "$HOME/projects:$HOME/projects" \
+  -v "$HOME/.m2:/root/.m2" \
   zechtz/vertex:latest
 
 # Access the web interface
 open http://localhost:54321
 ```
 
-**Production Setup with Docker Compose:**
-
-**Basic setup (localhost only):**
-```yaml
-version: '3.8'
-services:
-  vertex:
-    image: zechtz/vertex:latest
-    container_name: vertex
-    ports:
-      - "54321:54321"
-    volumes:
-      - vertex-data:/app/data
-      - ./projects:/projects  # Mount your projects directory
-    environment:
-      - JAVA_HOME=/usr/lib/jvm/default-jvm
-      - VERTEX_DATA_DIR=/app/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:54321/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  vertex-data:
-```
-
-**Advanced setup with HTTPS domain (equivalent to `./vertex domain vertex.dev`):**
-
-This setup mimics the native `./vertex domain vertex.dev` experience using Docker containers:
-
-```yaml
-version: '3.8'
-services:
-  vertex:
-    image: zechtz/vertex:latest
-    container_name: vertex
-    expose:
-      - "54321"
-    volumes:
-      - vertex-data:/app/data
-      - ./projects:/projects
-    environment:
-      - JAVA_HOME=/usr/lib/jvm/default-jvm
-      - VERTEX_DATA_DIR=/app/data
-    restart: unless-stopped
-    networks:
-      - vertex-network
-
-  nginx:
-    image: nginx:alpine
-    container_name: vertex-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - vertex
-    restart: unless-stopped
-    networks:
-      - vertex-network
-
-networks:
-  vertex-network:
-
-volumes:
-  vertex-data:
-```
-
-**Setup SSL certificates and nginx:**
-```bash
-# Install mkcert and setup certificates (same as native setup)
-mkcert -install
-mkdir ssl
-mkcert -cert-file ssl/vertex.dev.pem -key-file ssl/vertex.dev-key.pem vertex.dev
-
-# Add to hosts file
-echo "127.0.0.1 vertex.dev" | sudo tee -a /etc/hosts
-
-# Create nginx.conf (see README.md for full config)
-# Start services
-docker-compose up -d
-
-# Access at: https://vertex.dev (same as native!)
-```
-
-Start with: `docker-compose up -d`
+See [Docker in the README](README.md#option-2-docker) for Docker Compose, choosing a Java version per service, networking, and HTTPS on a domain such as `vertex.dev`.
 
 #### Option B: Download Pre-built Binary
 
@@ -568,9 +482,10 @@ Manage global and service-specific environment variables.
    docker run --rm -v vertex-data:/data alpine ls -la /data
    ```
 
-4. **Java Not Found in Container**:
+4. **Wrong or Missing JDK in Container**: a service's `JAVA_HOME` must be a JDK inside the container (`/opt/java/17` or `/opt/java/21`), not a path from your machine
    ```bash
-   # Check Java installation in container
+   # List the JDKs in the container
+   docker exec vertex ls /opt/java
    docker exec vertex java -version
    ```
 

@@ -67,34 +67,35 @@ A powerful service management platform that provides a web-based interface for m
    ./vertex-linux-amd64 --install --nginx --domain vertex.local  # Full (traditional)
    ```
 
-#### Option 2: Docker (Recommended for Containers)
+#### Option 2: Docker
 
-Run Vertex in a Docker container with persistent data:
+Vertex starts your services inside its own container, so the image carries what they need: **JDK 17 and JDK 21** (21 is the default), Maven, Git and bash. Your projects are mounted in from the host.
 
 ```bash
-# Quick start - run with default settings
 docker run -d \
   --name vertex \
   -p 54321:54321 \
+  -p 8080-8099:8080-8099 \
   -v vertex-data:/app/data \
-  zechtz/vertex:latest
-
-# With custom configuration
-docker run -d \
-  --name vertex \
-  -p 54321:54321 \
-  -v vertex-data:/app/data \
-  -v /path/to/your/projects:/projects \
-  -e JAVA_HOME=/usr/lib/jvm/default-jvm \
+  -v "$HOME/projects:$HOME/projects" \
+  -v "$HOME/.m2:/root/.m2" \
   zechtz/vertex:latest
 
 # Access the web interface
 open http://localhost:54321
 ```
 
-**Docker Compose (recommended for production):**
+What each mount and port is for:
 
-**Basic setup (localhost access only):**
+| Option | Why |
+| --- | --- |
+| `-p 54321:54321` | The Vertex web interface |
+| `-p 8080-8099:8080-8099` | Your services' ports. They run inside the container, so publish the range they use |
+| `-v vertex-data:/app/data` | Vertex's database and logs, kept across container upgrades |
+| `-v "$HOME/projects:$HOME/projects"` | Your projects, mounted at **the same path** as on the host, so directories stored in Vertex and paths in IntelliJ run configurations stay valid |
+| `-v "$HOME/.m2:/root/.m2"` | Your Maven `settings.xml` (private repositories and their credentials) and dependency cache, so builds don't download everything again |
+
+**Docker Compose:**
 
 ```yaml
 services:
@@ -103,34 +104,54 @@ services:
     container_name: vertex
     ports:
       - "54321:54321"
+      - "8080-8099:8080-8099" # your services' ports
     volumes:
       - vertex-data:/app/data
-      - ./projects:/projects
-    environment:
-      - JAVA_HOME=/usr/lib/jvm/default-jvm
-      - VERTEX_DATA_DIR=/app/data
+      - ${HOME}/projects:${HOME}/projects # same path as on the host
+      - ${HOME}/.m2:/root/.m2
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:54321/",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
 volumes:
   vertex-data:
 ```
 
-**Advanced setup with domain access (like native `./vertex domain vertex.dev`):**
+##### Java in the container
 
-Create a `docker-compose.yml` file:
+A service runs on a JDK **inside the container**. It cannot use the JDK installed on your machine: on macOS, Docker runs Linux, which cannot run a macOS JDK.
+
+| JDK | `JAVA_HOME` |
+| --- | --- |
+| 21 (default) | `/opt/java/21` |
+| 17 | `/opt/java/17` |
+
+- A service with no `JAVA_HOME` runs on JDK 21.
+- To run a service on JDK 17, set its `JAVA_HOME` environment variable to `/opt/java/17`. The JDK picker lists the JDKs in the container.
+- A `JAVA_HOME` copied from your machine, such as `/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home`, does not exist in the container, and a service using it will not start. The same applies to a profile's Java Home override.
+- The IntelliJ import resolves a run configuration's JDK against the JDKs in the container. A configuration that names a JDK version the container doesn't have is reported, not guessed.
+
+**Need another Java version?** Build a small image on top of Vertex's:
+
+```dockerfile
+FROM zechtz/vertex:latest
+COPY --from=eclipse-temurin:11-jdk /opt/java/openjdk /opt/java/11
+```
+
+Then set `JAVA_HOME=/opt/java/11` on the services that need it.
+
+##### Networking
+
+- **Services reaching each other** works as usual: they all run in the same container, so `localhost` reaches them.
+- **Services reaching something on your machine**, such as a database, need `host.docker.internal` instead of `localhost`. On Linux, also add `--add-host=host.docker.internal:host-gateway` (Compose: `extra_hosts: ["host.docker.internal:host-gateway"]`).
+- **On Linux**, `--network host` (Compose: `network_mode: host`) avoids both: services share the host's network, and no ports need publishing.
+
+##### Other notes
+
+- **Git over SSH:** mount your keys read-only with `-v "$HOME/.ssh:/root/.ssh:ro"`.
+- **File ownership on Linux:** Vertex runs as root in the container, so build output it writes into your projects (`target/`, `build/`) is owned by root on the host. Docker Desktop on macOS and Windows maps ownership to your user, so this only affects Linux.
+
+##### HTTPS on a domain (like native `./vertex domain vertex.dev`)
+
+Put nginx in front of Vertex. Vertex no longer publishes its own port; the services' ports still need publishing:
 
 ```yaml
 services:
@@ -139,26 +160,13 @@ services:
     container_name: vertex
     expose:
       - "54321"
+    ports:
+      - "8080-8099:8080-8099" # your services' ports
     volumes:
       - vertex-data:/app/data
-      - ./projects:/projects
-    environment:
-      - JAVA_HOME=/usr/lib/jvm/default-jvm
-      - VERTEX_DATA_DIR=/app/data
+      - ${HOME}/projects:${HOME}/projects
+      - ${HOME}/.m2:/root/.m2
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:54321/",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     networks:
       - vertex-network
 
@@ -292,7 +300,7 @@ http {
 | nginx restart loop with `SSL_CTX_set_cipher_list(...) failed ... no cipher match` | Invalid cipher names in `nginx.conf` (e.g. `...-GCM-SHA512`, which doesn't exist). Use the `...-GCM-SHA384` suites shown above.                                                                                                                                                                                                   |
 | nginx fails with `cannot load certificate "/etc/nginx/ssl/vertex.dev.pem"`        | Certificates not generated yet. See step 3.                                                                                                                                                                                                                                                                                       |
 | `curl https://vertex.dev` works but the browser shows a certificate error         | The mkcert CA isn't in the browser's trust store. On Linux Chromium (e.g. the default browser on a fresh Omarchy install, where `~/.pki/nssdb` doesn't exist yet), create `~/.pki/nssdb` (step 3), re-run `mkcert -install`, and restart the browser. `.dev` is HSTS-preloaded, so browsers won't let you click past the warning. |
-| `Java runtime not found` in the vertex logs                                       | The container has no JDK. Only matters for Java services you run through Vertex.                                                                                                                                                                                                                                                  |
+| A service fails with `The JAVA_HOME environment variable is not defined correctly` (Maven) or `JAVA_HOME is set to an invalid directory` (Gradle) | Its `JAVA_HOME` (or the profile's Java Home override) is a path from your machine. Set it to a JDK in the container, such as `/opt/java/17` — see [Java in the container](#java-in-the-container).                                                                                                                                |
 | `Using fallback JWT secret`                                                       | Fine for local use. Set `JWT_SECRET` under `environment:` for anything real.                                                                                                                                                                                                                                                      |
 
 #### Option 3: Build from Source
